@@ -1,0 +1,27 @@
+import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
+
+import '../../cart/controllers/cart_controller.dart';
+import '../../order_controller.dart';
+import '../../package/controllers/package_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
+import '../controllers/dashboard_controller.dart';
+
+class DashboardBinding extends Bindings {
+  @override
+  void dependencies() {
+    if (!Get.isRegistered<CartController>()) {
+      Get.put(CartController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<OrderController>()) {
+      Get.put(OrderController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<PackageController>()) {
+      Get.put(PackageController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<ProfileController>()) {
+      Get.put(ProfileController(GetStorage()), permanent: true);
+    }
+    Get.lazyPut(DashboardController.new);
+  }
+}
