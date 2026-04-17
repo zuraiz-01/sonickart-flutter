@@ -6,12 +6,16 @@ import '../modules/categories/bindings/categories_binding.dart';
 import '../modules/categories/views/categories_view.dart';
 import '../modules/customer_order_details_view.dart';
 import '../modules/customer_orders_view.dart';
+import '../modules/buy_again_view.dart';
 import '../modules/dashboard/bindings/dashboard_binding.dart';
 import '../modules/dashboard/views/dashboard_view.dart';
+import '../modules/live_tracking_view.dart';
 import '../modules/order_checkout_view.dart';
 import '../modules/order_success_view.dart';
 import '../modules/package/package_order_details_view.dart';
+import '../modules/product_detail_view.dart';
 import '../modules/profile/address_book_view.dart';
+import '../modules/search_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/views/splash_view.dart';
 import 'app_routes.dart';
@@ -50,6 +54,26 @@ class AppPages {
       name: AppRoutes.categories,
       page: CategoriesView.new,
       binding: CategoriesBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.search,
+      page: SearchView.new,
+      binding: CategoriesBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.productDetail,
+      page: ProductDetailView.new,
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.buyAgain,
+      page: BuyAgainView.new,
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.liveTracking,
+      page: LiveTrackingView.new,
+      binding: DashboardBinding(),
     ),
     GetPage(
       name: AppRoutes.packageDetails,

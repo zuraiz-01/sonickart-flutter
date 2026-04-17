@@ -12,6 +12,7 @@ class AuthController extends GetxController {
   AuthController(this._repository);
 
   static const int otpResendSeconds = 60;
+  static const int phoneDigitLength = 10;
   static const String dialCode = '+91';
 
   final AuthRepository _repository;
@@ -22,12 +23,14 @@ class AuthController extends GetxController {
   final otpController = TextEditingController();
 
   final isOtpSent = false.obs;
-  final agreementChecked = false.obs;
+  final agreementChecked = true.obs;
   final isSendingOtp = false.obs;
   final isVerifyingOtp = false.obs;
   final resendTimer = 0.obs;
   final pendingPhone = ''.obs;
   final pendingUser = Rxn<UserModel>();
+  final phoneInput = ''.obs;
+  final otpInput = ''.obs;
 
   Timer? _resendTimerTicker;
 
@@ -41,16 +44,42 @@ class AuthController extends GetxController {
 
   bool get isLoggedIn => _storage.read('isLoggedIn') == true;
 
-  String get normalizedPhone => phoneController.text.replaceAll(RegExp(r'\D'), '');
+  String get enteredPhoneDigits => phoneController.text.replaceAll(RegExp(r'\D'), '');
+
+  String get normalizedPhone {
+    final digits = enteredPhoneDigits;
+    if (digits.length == phoneDigitLength + 1 && digits.startsWith('0')) {
+      return digits.substring(1);
+    }
+    if (digits.length > phoneDigitLength) {
+      return digits.substring(digits.length - phoneDigitLength);
+    }
+    return digits;
+  }
 
   String get fullPhone => '$dialCode$normalizedPhone';
+
+  bool get canSubmitPhone =>
+      normalizedPhone.length == phoneDigitLength &&
+      agreementChecked.value &&
+      !isSendingOtp.value &&
+      !isVerifyingOtp.value;
+
+  bool get canSubmitOtp =>
+      otpController.text.replaceAll(RegExp(r'\D'), '').length == 6 &&
+      agreementChecked.value &&
+      !isSendingOtp.value &&
+      !isVerifyingOtp.value;
 
   String? validatePhone(String? value) {
     final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) {
       return 'Phone number required hai.';
     }
-    if (digits.length != 10) {
+    final normalized = (digits.length == phoneDigitLength + 1 && digits.startsWith('0'))
+        ? digits.substring(1)
+        : digits;
+    if (normalized.length != phoneDigitLength) {
       return 'Valid 10 digit mobile number enter karo.';
     }
     return null;
@@ -80,41 +109,23 @@ class AuthController extends GetxController {
   }
 
   Future<void> sendOtp() async {
+    if (!agreementChecked.value) {
+      agreementChecked.value = true;
+    }
+
     if (!(loginFormKey.currentState?.validate() ?? false)) return;
 
-    if (!agreementChecked.value) {
-      Get.snackbar(
-        'Agreement Required',
-        'Please agree to Terms & Conditions and Privacy Policy to continue.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
     if (isSendingOtp.value || isVerifyingOtp.value) return;
-
-    isSendingOtp.value = true;
-    try {
-      await _repository.sendOtp(phone: fullPhone);
-      pendingPhone.value = fullPhone;
-      pendingUser.value = _repository.buildPendingUser(phone: fullPhone);
-      isOtpSent.value = true;
-      otpController.clear();
-      _startResendTimer();
-
-      Get.snackbar(
-        'OTP Sent',
-        'A verification code has been sent to $fullPhone. Demo OTP 123456 hai.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } finally {
-      isSendingOtp.value = false;
-    }
+    await _requestOtp(phone: fullPhone);
   }
 
   Future<void> resendOtp() async {
-    if (resendTimer.value > 0) return;
-    await sendOtp();
+    if (resendTimer.value > 0 || isSendingOtp.value || isVerifyingOtp.value) return;
+
+    final phone = pendingPhone.value.isNotEmpty ? pendingPhone.value : fullPhone;
+    if (phone.isEmpty) return;
+
+    await _requestOtp(phone: phone, showResentMessage: true);
   }
 
   Future<void> verifyOtp() async {
@@ -138,11 +149,24 @@ class AuthController extends GetxController {
 
     if (isVerifyingOtp.value || isSendingOtp.value) return;
 
+    final phoneForVerification =
+        pendingPhone.value.isNotEmpty ? pendingPhone.value : fullPhone;
+    final otpCode = otpController.text.replaceAll(RegExp(r'\D'), '');
+
+    if (phoneForVerification.replaceAll(RegExp(r'\D'), '').length < phoneDigitLength) {
+      Get.snackbar(
+        'Invalid Number',
+        'Mobile number incomplete hai. Number dobara enter karo.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
     isVerifyingOtp.value = true;
     try {
       final user = await _repository.verifyOtp(
-        phone: pendingPhone.value,
-        otp: otpController.text.replaceAll(RegExp(r'\D'), ''),
+        phone: phoneForVerification,
+        otp: otpCode,
       );
 
       if (user == null) {
@@ -178,8 +202,42 @@ class AuthController extends GetxController {
   void clearForms() {
     phoneController.clear();
     otpController.clear();
-    agreementChecked.value = false;
+    agreementChecked.value = true;
     resetOtpFlow();
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    phoneController.addListener(() {
+      phoneInput.value = phoneController.text;
+    });
+    otpController.addListener(() {
+      otpInput.value = otpController.text;
+    });
+  }
+
+  Future<void> _requestOtp({
+    required String phone,
+    bool showResentMessage = false,
+  }) async {
+    isSendingOtp.value = true;
+    try {
+      await _repository.sendOtp(phone: phone);
+      pendingPhone.value = phone;
+      pendingUser.value = _repository.buildPendingUser(phone: phone);
+      isOtpSent.value = true;
+      otpController.clear();
+      _startResendTimer();
+
+      Get.snackbar(
+        showResentMessage ? 'OTP Resent' : 'OTP Sent',
+        'A verification code has been sent to $phone. Demo OTP 123456 hai.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isSendingOtp.value = false;
+    }
   }
 
   void _startResendTimer() {

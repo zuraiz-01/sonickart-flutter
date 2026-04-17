@@ -25,26 +25,21 @@ class CartItemModel {
 
   Map<String, dynamic> toJson() {
     return {
-      'product': {
-        'id': product.id,
-        'categoryId': product.categoryId,
-        'name': product.name,
-        'description': product.description,
-        'unit': product.unit,
-        'price': product.price,
-        'mrp': product.mrp,
-        'emoji': product.emoji,
-      },
+      'product': product.toJson(),
       'quantity': quantity,
+      'count': quantity,
     };
   }
 
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
+    final productJson = json['product'] ?? json['item'] ?? json;
     return CartItemModel(
       product: ProductModel.fromJson(
-        Map<String, dynamic>.from(json['product'] as Map? ?? const {}),
+        Map<String, dynamic>.from(productJson as Map? ?? const {}),
       ),
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ??
+          (json['count'] as num?)?.toInt() ??
+          0,
     );
   }
 }

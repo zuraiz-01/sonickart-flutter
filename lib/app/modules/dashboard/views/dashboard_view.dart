@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../data/models/category_model.dart';
+import '../../../data/models/product_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../cart/widgets/cart_summary_bar.dart';
+import '../../cart/widgets/universal_add.dart';
 import '../../cart/views/cart_view.dart';
 import '../../package/package_view.dart';
 import '../../profile/profile_view.dart';
@@ -40,6 +44,12 @@ class DashboardView extends GetView<DashboardController> {
               ),
             ),
             SafeArea(child: tabs[controller.currentIndex.value]),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: CartSummaryBar(),
+            ),
           ],
         ),
         bottomNavigationBar: _BottomNav(
@@ -79,11 +89,21 @@ class _HomeTab extends StatelessWidget {
         const SizedBox(height: 16),
         _SectionTitle('Featured Products'),
         const SizedBox(height: 10),
-        _GridCards(items: controller.featuredProducts, showPrice: true),
+        Obx(
+          () => _ProductGrid(
+            products: controller.featuredProducts,
+            loading: controller.isCatalogLoading.value,
+          ),
+        ),
         const SizedBox(height: 16),
         _SectionTitle('Categories'),
         const SizedBox(height: 10),
-        _GridCards(items: controller.categories),
+        Obx(
+          () => _CategoryGrid(
+            categories: controller.categories,
+            loading: controller.isCatalogLoading.value,
+          ),
+        ),
         const SizedBox(height: 16),
         _ActiveOrderCard(order: controller.activeOrder),
       ],
@@ -141,30 +161,34 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 6))],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: AppColors.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Obx(() => AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Text(
-                    controller.searchHints[controller.currentSearchHintIndex.value],
-                    key: ValueKey(controller.currentSearchHintIndex.value),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                  ),
-                )),
-          ),
-        ],
+    return InkWell(
+      onTap: () => Get.toNamed(AppRoutes.search),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+          boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 6))],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Obx(() => AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Text(
+                      controller.searchHints[controller.currentSearchHintIndex.value],
+                      key: ValueKey(controller.currentSearchHintIndex.value),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  )),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -181,52 +205,32 @@ class _PromoSection extends StatelessWidget {
         SizedBox(
           height: 160,
           child: Obx(() {
-            final item = controller.promoCards[controller.currentPromoIndex.value];
+            final imagePath = controller.promoCards[controller.currentPromoIndex.value];
             return AnimatedSwitcher(
               duration: const Duration(milliseconds: 350),
-              child: Container(
+              child: ClipRRect(
                 key: ValueKey(controller.currentPromoIndex.value),
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondaryBlue],
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x12000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        item['highlight']!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      item['title']!,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      item['subtitle']!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.92),
-                          ),
-                    ),
-                  ],
+                  child: Image.asset(
+                    imagePath,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
                 ),
               ),
             );
@@ -261,35 +265,46 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700));
 }
 
-class _GridCards extends StatelessWidget {
-  const _GridCards({required this.items, this.showPrice = false});
-  final List<Map<String, String>> items;
-  final bool showPrice;
+class _ProductGrid extends StatelessWidget {
+  const _ProductGrid({
+    required this.products,
+    required this.loading,
+  });
+
+  final List<ProductModel> products;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    if (loading && products.isEmpty) {
+      return const SizedBox(
+        height: 130,
+        child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+    if (products.isEmpty) {
+      return const Text(
+        'Featured products will appear here.',
+        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+      );
+    }
     return LayoutBuilder(builder: (context, constraints) {
       final compact = constraints.maxWidth < 380;
       final width = compact ? (constraints.maxWidth - 8) / 2 : (constraints.maxWidth - 24) / 4;
       return Wrap(
         spacing: 8,
         runSpacing: 10,
-        children: items.map((item) {
+        children: products.map((product) {
           return SizedBox(
             width: width,
               child: InkWell(
-              onTap: () {
-                final categoryId = item['categoryId'] ?? item['id'];
-                if (categoryId != null && categoryId.isNotEmpty) {
-                  Get.toNamed(
-                    AppRoutes.categories,
-                    arguments: {'categoryId': categoryId},
-                  );
-                }
-              },
+              onTap: () => Get.toNamed(
+                AppRoutes.productDetail,
+                arguments: {'product': product},
+              ),
               borderRadius: BorderRadius.circular(12),
               child: Container(
-              height: showPrice ? 150 : 130,
+              height: 184,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: AppColors.white,
@@ -299,19 +314,16 @@ class _GridCards extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  Container(
-                    height: 62,
-                    width: double.infinity,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                    child: Text(item['emoji']!, style: const TextStyle(fontSize: 28)),
-                  ),
+                  _DashboardImageBox(product: product),
                   const SizedBox(height: 8),
-                  Expanded(child: Center(child: Text(item['name']!, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)))),
-                  if (showPrice) ...[
-                    Text(item['unit']!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
-                    Text('Rs ${item['price']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
-                  ],
+                  Expanded(child: Center(child: Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)))),
+                  Text(product.unit, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
+                  Text('Rs ${product.price}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 58,
+                    child: UniversalAdd(product: product),
+                  ),
                 ],
               ),
             )),
@@ -322,13 +334,151 @@ class _GridCards extends StatelessWidget {
   }
 }
 
+class _CategoryGrid extends StatelessWidget {
+  const _CategoryGrid({required this.categories, required this.loading});
+
+  final List<CategoryModel> categories;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading && categories.isEmpty) {
+      return const SizedBox(
+        height: 110,
+        child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 380;
+      final width = compact ? (constraints.maxWidth - 8) / 2 : (constraints.maxWidth - 24) / 4;
+      return Wrap(
+        spacing: 8,
+        runSpacing: 10,
+        children: categories.map((category) {
+          return SizedBox(
+            width: width,
+            child: InkWell(
+              onTap: () => Get.toNamed(
+                AppRoutes.categories,
+                arguments: {'categoryId': category.id},
+              ),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                height: 130,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                  boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 2))],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 62,
+                      width: double.infinity,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                      child: _CategoryImageBox(category: category),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(child: Center(child: Text(category.name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      );
+    });
+  }
+}
+
+class _DashboardImageBox extends StatelessWidget {
+  const _DashboardImageBox({required this.product});
+
+  final ProductModel product;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = product.resolvedFeaturedImageUrl;
+    return Container(
+      height: 62,
+      width: double.infinity,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              width: double.infinity,
+              height: 62,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _fallback(),
+            )
+          : _fallback(),
+    );
+  }
+
+  Widget _fallback() {
+    return Text(
+      product.emoji.isEmpty ? _initial(product.name) : product.emoji,
+      style: const TextStyle(
+        fontSize: 28,
+        color: AppColors.primary,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _CategoryImageBox extends StatelessWidget {
+  const _CategoryImageBox({required this.category});
+
+  final CategoryModel category;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = category.resolvedImageUrl;
+    if (imageUrl.isEmpty) return _fallback();
+    return Image.network(
+      imageUrl,
+      width: double.infinity,
+      height: 62,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => _fallback(),
+    );
+  }
+
+  Widget _fallback() {
+    return Text(
+      category.emoji.isEmpty ? _initial(category.name) : category.emoji,
+      style: const TextStyle(
+        fontSize: 28,
+        color: AppColors.primary,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+String _initial(String value) => value.trim().isEmpty
+    ? 'P'
+    : value.trim().characters.first.toUpperCase();
+
 class _ActiveOrderCard extends StatelessWidget {
   const _ActiveOrderCard({required this.order});
   final Map<String, Object> order;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: () => Get.toNamed(AppRoutes.liveTracking, arguments: {'orderId': order['id']}),
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -356,6 +506,7 @@ class _ActiveOrderCard extends StatelessWidget {
           const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
         ]),
       ]),
+      ),
     );
   }
 }

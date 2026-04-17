@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_service.dart';
 import '../../../data/models/cart_item_model.dart';
 import '../../../data/models/product_model.dart';
 
@@ -47,7 +49,8 @@ class CartController extends GetxController {
           )
           .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
           .toList();
-      items.assignAll(restoredItems);
+      final serverItems = await _tryFetchServerCart();
+      items.assignAll(serverItems.isNotEmpty ? serverItems : restoredItems);
       debugPrint(
         'CartController.syncCartFromStorage: restored ${items.length} lines and $totalItems total items',
       );
@@ -61,6 +64,14 @@ class CartController extends GetxController {
   }
 
   Future<void> addItem(ProductModel product) async {
+    if (product.id.isEmpty) {
+      Get.snackbar(
+        'Product Error',
+        'This product cannot be added right now.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
     debugPrint(
       'CartController.addItem: requested add for ${product.id} ${product.name}',
     );
@@ -76,6 +87,7 @@ class CartController extends GetxController {
       debugPrint('CartController.addItem: added new product ${product.id}');
     }
     await _persistCart();
+    await _trySyncLine(product.id, getItemCount(product.id));
   }
 
   Future<void> removeItem(String productId) async {
@@ -97,6 +109,7 @@ class CartController extends GetxController {
       debugPrint('CartController.removeItem: removed line for $productId');
     }
     await _persistCart();
+    await _trySyncLine(productId, getItemCount(productId));
   }
 
   Future<void> clearCart() async {
@@ -110,6 +123,7 @@ class CartController extends GetxController {
     try {
       items.clear();
       await _persistCart();
+      await _tryClearServerCart();
       debugPrint('CartController.clearCart: cart cleared successfully');
     } finally {
       isClearingCart.value = false;
@@ -119,7 +133,6 @@ class CartController extends GetxController {
   int getItemCount(String productId) {
     final index = items.indexWhere((item) => item.product.id == productId);
     final quantity = index >= 0 ? items[index].quantity : 0;
-    debugPrint('CartController.getItemCount: product=$productId quantity=$quantity');
     return quantity;
   }
 
@@ -129,5 +142,74 @@ class CartController extends GetxController {
     debugPrint(
       'CartController._persistCart: persisted ${items.length} lines and $totalItems total items',
     );
+  }
+
+  Future<List<CartItemModel>> _tryFetchServerCart() async {
+    if (!Get.isRegistered<ApiService>()) return const [];
+    if (!_hasAccessToken) return const [];
+    try {
+      final response = await Get.find<ApiService>().get(endpoint: ApiConstants.cartFetch);
+      final raw = _extractCartList(response);
+      if (raw is List) {
+        return raw
+            .whereType<Map>()
+            .map((item) => CartItemModel.fromJson(Map<String, dynamic>.from(item)))
+            .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
+            .toList();
+      }
+    } catch (error) {
+      debugPrint('CartController._tryFetchServerCart: storage fallback after $error');
+    }
+    return const [];
+  }
+
+  Future<void> _trySyncLine(String productId, int quantity) async {
+    if (!Get.isRegistered<ApiService>()) return;
+    if (!_hasAccessToken) {
+      return;
+    }
+    try {
+      if (quantity <= 0) {
+        await Get.find<ApiService>().delete(
+          endpoint: ApiConstants.cartRemove,
+          data: {'productId': productId},
+        );
+        return;
+      }
+      await Get.find<ApiService>().post(
+        endpoint: ApiConstants.cartAdd,
+        data: {'productId': productId, 'quantity': quantity},
+      );
+    } catch (error) {
+      debugPrint('CartController._trySyncLine: local fallback after $error');
+    }
+  }
+
+  Future<void> _tryClearServerCart() async {
+    if (!Get.isRegistered<ApiService>()) return;
+    if (!_hasAccessToken) return;
+    try {
+      try {
+        await Get.find<ApiService>().delete(endpoint: ApiConstants.cartClear);
+      } catch (_) {
+        await Get.find<ApiService>().post(endpoint: ApiConstants.cartClear);
+      }
+    } catch (error) {
+      debugPrint('CartController._tryClearServerCart: local fallback after $error');
+    }
+  }
+
+  Object? _extractCartList(Map<String, dynamic> response) {
+    final direct = response['data'] ?? response['items'] ?? response['cart'];
+    if (direct is List) return direct;
+    if (direct is Map) {
+      return direct['items'] ?? direct['cartItems'] ?? direct['products'];
+    }
+    return null;
+  }
+
+  bool get _hasAccessToken {
+    final token = _storage.read<String>('accessToken');
+    return token != null && token.trim().isNotEmpty;
   }
 }

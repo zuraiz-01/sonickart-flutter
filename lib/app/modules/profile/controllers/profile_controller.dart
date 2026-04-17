@@ -5,6 +5,8 @@ import 'package:get_storage/get_storage.dart';
 
 import '../../../data/models/address_model.dart';
 import '../../../data/models/user_model.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
@@ -162,6 +164,16 @@ class ProfileController extends GetxController {
 
   Future<void> loadAddresses() async {
     debugPrint('ProfileController.loadAddresses: loading saved addresses');
+    final remote = await _tryFetchAddresses();
+    if (remote.isNotEmpty) {
+      addresses.assignAll(remote);
+      await _persistAddresses();
+      debugPrint(
+        'ProfileController.loadAddresses: fetched ${addresses.length} addresses from API',
+      );
+      return;
+    }
+
     final rawList = _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
     final restored = rawList
         .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item as Map)))
@@ -203,23 +215,26 @@ class ProfileController extends GetxController {
 
     final existing = editingAddress.value;
     if (existing == null) {
-      final address = AddressModel(
+      var address = AddressModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         fullName: fullName,
         contactNumber: phone,
         address: addressLine,
         isSelected: addresses.isEmpty,
       );
+      address = await _trySaveAddress(address) ?? address;
       addresses.insert(0, address);
       debugPrint('ProfileController.saveAddress: created ${address.id}');
     } else {
       final index = addresses.indexWhere((item) => item.id == existing.id);
       if (index >= 0) {
-        addresses[index] = existing.copyWith(
+        var updatedAddress = existing.copyWith(
           fullName: fullName,
           contactNumber: phone,
           address: addressLine,
         );
+        updatedAddress = await _trySaveAddress(updatedAddress) ?? updatedAddress;
+        addresses[index] = updatedAddress;
         debugPrint('ProfileController.saveAddress: updated ${existing.id}');
       }
     }
@@ -236,17 +251,21 @@ class ProfileController extends GetxController {
   Future<void> useAddress(AddressModel address) async {
     debugPrint('ProfileController.useAddress: selecting ${address.id}');
     selectedAddressId.value = address.id;
+    final vendorId = await _tryResolveVendor(address);
     final updated = addresses
         .map((item) => item.copyWith(isSelected: item.id == address.id))
         .toList();
     addresses.assignAll(updated);
     await _persistAddresses();
-    statusMessage.value = 'Shopping from selected address.';
+    statusMessage.value = vendorId == null
+        ? 'Shopping from selected address.'
+        : 'Shopping from vendor $vendorId.';
   }
 
   Future<void> deleteAddress(AddressModel address) async {
     debugPrint('ProfileController.deleteAddress: deleting ${address.id}');
     addresses.removeWhere((item) => item.id == address.id);
+    await _tryDeleteAddress(address.id);
     if (selectedAddressId.value == address.id) {
       selectedAddressId.value = null;
     }
@@ -262,6 +281,107 @@ class ProfileController extends GetxController {
     debugPrint(
       'ProfileController._persistAddresses: persisted ${addresses.length} addresses',
     );
+  }
+
+  Future<AddressModel?> _trySaveAddress(AddressModel address) async {
+    if (!Get.isRegistered<ApiService>()) return null;
+    try {
+      final api = Get.find<ApiService>();
+      final payload = {
+        'fullName': address.fullName,
+        'contactNumber': address.contactNumber,
+        'address': address.address,
+        'latitude': address.latitude,
+        'longitude': address.longitude,
+        'placeId': address.placeId,
+      };
+      final response = editingAddress.value == null
+          ? await api.post(endpoint: ApiConstants.addressSave, data: payload)
+          : await api.put(endpoint: ApiConstants.addressById(address.id), data: payload);
+      final raw = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : response;
+      final parsed = AddressModel.fromJson(raw);
+      return parsed.id.isEmpty ? null : parsed.copyWith(isSelected: address.isSelected);
+    } catch (error) {
+      debugPrint('ProfileController._trySaveAddress: local fallback after $error');
+      return null;
+    }
+  }
+
+  Future<void> _tryDeleteAddress(String id) async {
+    if (!Get.isRegistered<ApiService>()) return;
+    try {
+      await Get.find<ApiService>().delete(endpoint: ApiConstants.addressById(id));
+    } catch (error) {
+      debugPrint('ProfileController._tryDeleteAddress: local fallback after $error');
+    }
+  }
+
+  Future<String?> _tryResolveVendor(AddressModel address) async {
+    if (!Get.isRegistered<ApiService>()) return null;
+    if (address.latitude == null || address.longitude == null) return null;
+    try {
+      final response = await Get.find<ApiService>().get(
+        endpoint: ApiConstants.resolveVendor,
+        query: {
+          'latitude': address.latitude,
+          'longitude': address.longitude,
+          'radiusKm': 30,
+        },
+      );
+      final vendorId = response['vendorId'] ??
+          response['vendor_id'] ??
+          (response['nearestVendor'] is Map
+              ? (response['nearestVendor']['vendorId'] ??
+                  response['nearestVendor']['vendor_id'])
+              : null) ??
+          (response['vendorIds'] is List && (response['vendorIds'] as List).isNotEmpty
+              ? (response['vendorIds'] as List).first
+              : null);
+      if (vendorId != null) {
+        await _storage.write('selectedVendorId', vendorId.toString());
+        return vendorId.toString();
+      }
+    } catch (error) {
+      debugPrint('ProfileController._tryResolveVendor: fallback after $error');
+    }
+    return null;
+  }
+
+  Future<List<AddressModel>> _tryFetchAddresses() async {
+    if (!Get.isRegistered<ApiService>()) return const <AddressModel>[];
+    try {
+      final response = await Get.find<ApiService>().get(endpoint: ApiConstants.addressList);
+      final list = _extractList(response)
+          .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .where((address) => address.id.isNotEmpty)
+          .toList();
+      return list;
+    } catch (error) {
+      debugPrint('ProfileController._tryFetchAddresses: local fallback after $error');
+      return const <AddressModel>[];
+    }
+  }
+
+  List _extractList(Map<String, dynamic> response) {
+    final candidates = [
+      response['data'],
+      response['addresses'],
+      response['items'],
+      response['result'],
+      response['results'],
+    ];
+    for (final value in candidates) {
+      if (value is List) return value;
+      if (value is Map) {
+        for (final nested in ['data', 'addresses', 'items', 'result', 'results']) {
+          final nestedValue = value[nested];
+          if (nestedValue is List) return nestedValue;
+        }
+      }
+    }
+    return const [];
   }
 
   void _syncProfileForm() {

@@ -5,6 +5,10 @@ abstract class AppRoutes {
   static const otpVerification = '/otp-verification';
   static const dashboard = '/dashboard';
   static const categories = '/categories';
+  static const search = '/search';
+  static const productDetail = '/product-detail';
+  static const buyAgain = '/buy-again';
+  static const liveTracking = '/live-tracking';
   static const packageDetails = '/package-details';
   static const addressBook = '/address-book';
   static const checkout = '/checkout';

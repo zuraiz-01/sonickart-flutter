@@ -28,6 +28,8 @@ class PackageOrderModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'orderId': id,
+      'orderType': 'package',
       'customerName': customerName,
       'customerPhone': customerPhone,
       'packageType': packageType,
@@ -43,18 +45,22 @@ class PackageOrderModel {
 
   factory PackageOrderModel.fromJson(Map<String, dynamic> json) {
     return PackageOrderModel(
-      id: json['id']?.toString() ?? '',
-      customerName: json['customerName']?.toString() ?? '',
-      customerPhone: json['customerPhone']?.toString() ?? '',
-      packageType: json['packageType']?.toString() ?? '',
-      pickupAddress: json['pickupAddress']?.toString() ?? '',
-      dropAddress: json['dropAddress']?.toString() ?? '',
-      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
-      deliveryCharge: (json['deliveryCharge'] as num?)?.toDouble() ?? 0,
-      totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0,
-      status: json['status']?.toString() ?? 'pending',
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-          DateTime.now(),
+      id: (json['id'] ?? json['_id'] ?? json['orderId'] ?? json['orderNumber'])?.toString() ?? '',
+      customerName: (json['customerName'] ?? json['senderName'] ?? json['receiverName'])?.toString() ?? '',
+      customerPhone: (json['customerPhone'] ?? json['senderPhone'] ?? json['receiverPhone'])?.toString() ?? '',
+      packageType: (json['packageType'] ?? json['type'])?.toString() ?? 'Package',
+      pickupAddress: (json['pickupAddress'] ?? json['pickup_location'] ?? json['pickup'])?.toString() ?? '',
+      dropAddress: (json['dropAddress'] ?? json['drop_location'] ?? json['drop'])?.toString() ?? '',
+      distanceKm: _number(json['distanceKm'] ?? json['distance'] ?? json['distance_km']),
+      deliveryCharge: _number(json['deliveryCharge'] ?? json['delivery_charge']),
+      totalPrice: _number(json['totalPrice'] ?? json['grandTotal'] ?? json['amount'] ?? json['deliveryCharge']),
+      status: (json['deliveryStatus'] ?? json['delivery_status'] ?? json['status'])?.toString() ?? 'pending',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? json['created_at']?.toString() ?? '') ?? DateTime.now(),
     );
+  }
+
+  static double _number(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

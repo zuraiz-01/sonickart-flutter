@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../data/models/category_model.dart';
+import '../../../data/models/product_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
-import '../../cart/controllers/cart_controller.dart';
+import '../../cart/widgets/cart_summary_bar.dart';
+import '../../cart/widgets/universal_add.dart';
 import '../controllers/categories_controller.dart';
 
 class CategoriesView extends GetView<CategoriesController> {
@@ -11,7 +14,6 @@ class CategoriesView extends GetView<CategoriesController> {
 
   @override
   Widget build(BuildContext context) {
-    final cartController = Get.find<CartController>();
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
@@ -26,17 +28,19 @@ class CategoriesView extends GetView<CategoriesController> {
           onPressed: Get.back,
           icon: const Icon(Icons.chevron_left_rounded),
         ),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Icon(Icons.search_rounded),
+        actions: [
+          IconButton(
+            onPressed: () => Get.toNamed(AppRoutes.search),
+            icon: const Icon(Icons.search_rounded),
           ),
         ],
       ),
-      body: Obx(
-        () => Row(
-          children: [
-            Container(
+      body: Stack(
+        children: [
+          Obx(
+            () => Row(
+              children: [
+                Container(
               width: MediaQuery.of(context).size.width * 0.30,
               decoration: const BoxDecoration(
                 color: AppColors.white,
@@ -72,22 +76,31 @@ class CategoriesView extends GetView<CategoriesController> {
                                 ),
                               ),
                             ),
-                            child: Text(
-                              category.name,
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontWeight:
-                                    isSelected ? FontWeight.w800 : FontWeight.w700,
-                                fontSize: 12,
-                              ),
+                            child: Column(
+                              children: [
+                                _CategoryThumb(category: category),
+                                const SizedBox(height: 6),
+                                Text(
+                                  category.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight:
+                                        isSelected ? FontWeight.w800 : FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
                       },
                     ),
             ),
-            Expanded(
-              child: Container(
+                Expanded(
+                  child: Container(
                 color: AppColors.surface,
                 child: controller.isProductsLoading.value
                     ? const Center(child: CircularProgressIndicator())
@@ -106,7 +119,7 @@ class CategoriesView extends GetView<CategoriesController> {
                             ),
                           )
                         : GridView.builder(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 112),
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
@@ -117,11 +130,13 @@ class CategoriesView extends GetView<CategoriesController> {
                             itemCount: controller.products.length,
                             itemBuilder: (context, index) {
                               final product = controller.products[index];
-                              return Obx(
-                                () {
-                                  final quantity =
-                                      cartController.getItemCount(product.id);
-                                  return Container(
+                              return InkWell(
+                                onTap: () => Get.toNamed(
+                                  AppRoutes.productDetail,
+                                  arguments: {'product': product},
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       color: AppColors.white,
@@ -137,19 +152,7 @@ class CategoriesView extends GetView<CategoriesController> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          height: 82,
-                                          width: double.infinity,
-                                          alignment: Alignment.center,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surface,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            product.emoji,
-                                            style: const TextStyle(fontSize: 42),
-                                          ),
-                                        ),
+                                        _ProductImageBox(product: product),
                                         const SizedBox(height: 8),
                                         Text(
                                           product.name,
@@ -213,92 +216,29 @@ class CategoriesView extends GetView<CategoriesController> {
                                         const SizedBox(height: 6),
                                         Align(
                                           alignment: Alignment.centerRight,
-                                          child: quantity == 0
-                                              ? OutlinedButton(
-                                                  onPressed: () => cartController
-                                                      .addItem(product),
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        AppColors.primary,
-                                                    side: const BorderSide(
-                                                      color: AppColors.primary,
-                                                    ),
-                                                    minimumSize:
-                                                        const Size(52, 28),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 0,
-                                                    ),
-                                                    tapTargetSize:
-                                                        MaterialTapTargetSize
-                                                            .shrinkWrap,
-                                                    visualDensity:
-                                                        VisualDensity.compact,
-                                                  ),
-                                                  child: const Text('Add'),
-                                                )
-                                              : Container(
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors.surface,
-                                                    borderRadius:
-                                                        BorderRadius.circular(10),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      IconButton(
-                                                        onPressed: () =>
-                                                            cartController
-                                                                .removeItem(
-                                                          product.id,
-                                                        ),
-                                                        icon: const Icon(
-                                                          Icons.remove_rounded,
-                                                          size: 18,
-                                                        ),
-                                                        color: AppColors.primary,
-                                                        visualDensity:
-                                                            VisualDensity.compact,
-                                                      ),
-                                                      Text(
-                                                        '$quantity',
-                                                        style: const TextStyle(
-                                                          color:
-                                                              AppColors.primary,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        onPressed: () =>
-                                                            cartController
-                                                                .addItem(product),
-                                                        icon: const Icon(
-                                                          Icons.add_rounded,
-                                                          size: 18,
-                                                        ),
-                                                        color: AppColors.primary,
-                                                        visualDensity:
-                                                            VisualDensity.compact,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
+                                          child: SizedBox(
+                                            width: 58,
+                                            child: UniversalAdd(product: product),
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  );
-                                },
+                                  ),
                               );
                             },
                           ),
               ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: CartSummaryBar(),
+          ),
+        ],
       ),
       bottomNavigationBar: const _CategoriesBottomNav(),
     );
@@ -470,6 +410,102 @@ class _CategoriesBottomNav extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryThumb extends StatelessWidget {
+  const _CategoryThumb({required this.category});
+
+  final CategoryModel category;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = category.resolvedImageUrl;
+    return Container(
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              width: 46,
+              height: 46,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _categoryFallback(),
+            )
+          : _categoryFallback(),
+    );
+  }
+
+  Widget _categoryFallback() {
+    return Text(
+      category.emoji.isEmpty
+          ? (category.name.isEmpty ? 'C' : category.name.characters.first.toUpperCase())
+          : category.emoji,
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontWeight: FontWeight.w800,
+        fontSize: 20,
+      ),
+    );
+  }
+}
+
+class _ProductImageBox extends StatelessWidget {
+  const _ProductImageBox({required this.product});
+
+  final ProductModel product;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = product.resolvedImageUrl.toString();
+    return Container(
+      height: 82,
+      width: double.infinity,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              width: double.infinity,
+              height: 82,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _fallback(),
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
+            )
+          : _fallback(),
+    );
+  }
+
+  Widget _fallback() {
+    final emoji = product.emoji.toString();
+    final name = product.name.toString();
+    return Text(
+      emoji.isEmpty ? (name.isEmpty ? 'P' : name.characters.first.toUpperCase()) : emoji,
+      style: const TextStyle(
+        fontSize: 42,
+        fontWeight: FontWeight.w800,
+        color: AppColors.primary,
       ),
     );
   }

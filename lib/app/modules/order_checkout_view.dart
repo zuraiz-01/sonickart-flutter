@@ -172,15 +172,74 @@ class OrderCheckoutView extends GetView<OrderController> {
                     ),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Coupons',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: controller.couponCodeController,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: const InputDecoration(
+                                hintText: 'Try SONIC10',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          FilledButton(
+                            onPressed: () => controller.applyCoupon(cartController.grandTotal),
+                            child: const Text('Apply'),
+                          ),
+                        ],
+                      ),
+                      if (controller.appliedCoupon.value != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '${controller.appliedCoupon.value} applied - Rs ${controller.couponDiscount.value.toStringAsFixed(0)} saved',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Column(
                     children: [
                       _CheckoutRow(
                         label: 'Items total',
                         value: cartController.subtotal,
                       ),
+                      if (controller.couponDiscount.value > 0) ...[
+                        const SizedBox(height: 10),
+                        _CheckoutRow(
+                          label: 'Coupon discount',
+                          value: -controller.couponDiscount.value,
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _CheckoutRow(
                         label: 'Grand total',
-                        value: cartController.grandTotal,
+                        value: controller.checkoutTotal(cartController.grandTotal),
                         strong: true,
                       ),
                     ],
@@ -212,7 +271,7 @@ class OrderCheckoutView extends GetView<OrderController> {
                         ),
                       )
                     : Text(
-                        'Place Order • Rs ${cartController.grandTotal.toStringAsFixed(0)}',
+                        'Place Order - Rs ${controller.checkoutTotal(cartController.grandTotal).toStringAsFixed(0)}',
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
               ),

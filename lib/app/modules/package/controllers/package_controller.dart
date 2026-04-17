@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../data/models/package_order_model.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
 
@@ -54,7 +56,8 @@ class PackageController extends GetxController {
       canMoveFromPickup &&
       canMoveFromDrop &&
       canMoveFromType &&
-      agreementChecked.value;
+      agreementChecked.value &&
+      distanceKm <= 30;
 
   @override
   void onInit() {
@@ -155,7 +158,9 @@ class PackageController extends GetxController {
     if (!canSubmitReview) {
       Get.snackbar(
         'Review Incomplete',
-        'Pickup, drop, package type aur agreement complete karo.',
+        distanceKm > 30
+            ? 'Package delivery 30km radius ke andar honi chahiye.'
+            : 'Pickup, drop, package type aur agreement complete karo.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -171,7 +176,7 @@ class PackageController extends GetxController {
       final authController =
           Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
       final user = authController?.currentUser;
-      final order = PackageOrderModel(
+      final draft = PackageOrderModel(
         id: 'PKG${DateTime.now().millisecondsSinceEpoch}',
         customerName: user?.name ?? 'SonicKart Customer',
         customerPhone: user?.phone ?? '+91 0000000000',
@@ -184,6 +189,7 @@ class PackageController extends GetxController {
         status: 'pending',
         createdAt: DateTime.now(),
       );
+      final order = await _tryCreatePackageOrder(draft) ?? draft;
       orders.insert(0, order);
       selectedOrder.value = order;
       await _persistOrders();
@@ -217,6 +223,16 @@ class PackageController extends GetxController {
     debugPrint('PackageController.loadOrders: loading package orders');
     isLoadingOrders.value = true;
     try {
+      final remote = await _tryFetchPackageOrders();
+      if (remote.isNotEmpty) {
+        orders.assignAll(remote);
+        await _persistOrders();
+        debugPrint(
+          'PackageController.loadOrders: fetched ${orders.length} package orders from API',
+        );
+        return;
+      }
+
       final rawOrders =
           _storage.read<List<dynamic>>(_storageKey) ?? <dynamic>[];
       final restoredOrders = rawOrders
@@ -279,6 +295,86 @@ class PackageController extends GetxController {
     final seed = pickupLength + dropLength;
     final distance = 2 + (seed % 9) + ((pickupLength % 3) * 0.5);
     return double.parse(distance.toStringAsFixed(1));
+  }
+
+  Future<PackageOrderModel?> _tryCreatePackageOrder(PackageOrderModel draft) async {
+    if (!Get.isRegistered<ApiService>()) return null;
+    try {
+      final payload = {
+        'pickupLocation': {
+          'address': draft.pickupAddress,
+        },
+        'dropLocation': {
+          'address': draft.dropAddress,
+        },
+        'packageType': draft.packageType,
+        'distanceKm': draft.distanceKm,
+        'distance': (draft.distanceKm * 1000).round(),
+        'distanceText': '${draft.distanceKm.toStringAsFixed(1)} km',
+        'duration': (draft.distanceKm * 300).round(),
+        'durationText': '${(draft.distanceKm * 5).round()} mins',
+        'deliveryCharge': draft.deliveryCharge,
+        'totalPrice': draft.totalPrice,
+        'customerName': draft.customerName,
+        'customerPhone': draft.customerPhone,
+        'orderType': 'package',
+        'agreement': agreementChecked.value,
+      };
+      final response = await Get.find<ApiService>().post(
+        endpoint: ApiConstants.packageOrder,
+        data: payload,
+      );
+      final raw = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : response;
+      final parsed = PackageOrderModel.fromJson(raw);
+      return parsed.id.isEmpty ? null : parsed;
+    } catch (error) {
+      debugPrint('PackageController._tryCreatePackageOrder: local fallback after $error');
+      return null;
+    }
+  }
+
+  Future<List<PackageOrderModel>> _tryFetchPackageOrders() async {
+    if (!Get.isRegistered<ApiService>()) return const <PackageOrderModel>[];
+    try {
+      final authController =
+          Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+      final userId = authController?.currentUser?.id ?? '';
+      final response = await Get.find<ApiService>().get(
+        endpoint: ApiConstants.packageOrder,
+        query: {'customerId': userId},
+      );
+      final list = _extractList(response)
+          .map((item) => PackageOrderModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .where((order) => order.id.isNotEmpty)
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (error) {
+      debugPrint('PackageController._tryFetchPackageOrders: local fallback after $error');
+      return const <PackageOrderModel>[];
+    }
+  }
+
+  List _extractList(Map<String, dynamic> response) {
+    final candidates = [
+      response['data'],
+      response['orders'],
+      response['items'],
+      response['result'],
+      response['results'],
+    ];
+    for (final value in candidates) {
+      if (value is List) return value;
+      if (value is Map) {
+        for (final nested in ['data', 'orders', 'items', 'result', 'results']) {
+          final nestedValue = value[nested];
+          if (nestedValue is List) return nestedValue;
+        }
+      }
+    }
+    return const [];
   }
 
   @override
