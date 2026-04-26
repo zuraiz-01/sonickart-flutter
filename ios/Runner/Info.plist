@@ -47,5 +47,15 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>SonicKart uses the camera so you can capture photos for your account and orders.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SonicKart uses your location to help you select delivery and pickup addresses.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SonicKart uses the microphone when audio input is needed while using the app.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SonicKart saves photos to your library when you choose to download or export images.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SonicKart uses your photo library so you can upload images for your account and orders.</string>
 </dict>
 </plist>
