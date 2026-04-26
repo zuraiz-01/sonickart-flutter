@@ -43,13 +43,15 @@ class OrderController extends GetxController {
   }
 
   void preloadCheckoutContext() {
-    final profileController =
-        Get.isRegistered<ProfileController>() ? Get.find<ProfileController>() : null;
+    final profileController = Get.isRegistered<ProfileController>()
+        ? Get.find<ProfileController>()
+        : null;
     final activeAddress = profileController?.addresses.firstWhereOrNull(
       (item) => item.isSelected,
     );
-    final authController =
-        Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+    final authController = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : null;
     final fallbackAddress = authController?.currentUser?.phone != null
         ? 'Deliver to ${authController!.currentUser!.phone}'
         : '';
@@ -79,10 +81,18 @@ class OrderController extends GetxController {
     if (code == 'SONIC10' || code == 'WELCOME10') {
       appliedCoupon.value = code;
       couponDiscount.value = (subtotal * 0.10).clamp(0, 150).toDouble();
-      Get.snackbar('Coupon Applied', '$code discount added.', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Coupon Applied',
+        '$code discount added.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return;
     }
-    Get.snackbar('Coupon Not Eligible', 'This coupon is not available for this cart.', snackPosition: SnackPosition.BOTTOM);
+    Get.snackbar(
+      'Coupon Not Eligible',
+      'This coupon is not available for this cart.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   Future<void> loadOrders() async {
@@ -94,24 +104,36 @@ class OrderController extends GetxController {
         _ordersStorageKey,
         fromApi.map((item) => item.toJson()).toList(),
       );
-      debugPrint('OrderController.loadOrders: fetched ${orders.length} orders from API');
+      debugPrint(
+        'OrderController.loadOrders: fetched ${orders.length} orders from API',
+      );
       return;
     }
 
-    final rawOrders = _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
-    final restored = rawOrders
-        .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item as Map)))
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final rawOrders =
+        _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
+    final restored =
+        rawOrders
+            .map(
+              (item) =>
+                  OrderModel.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     orders.assignAll(restored);
     latestOrder.value = restored.isNotEmpty ? restored.first : null;
-    debugPrint('OrderController.loadOrders: restored ${orders.length} local orders');
+    debugPrint(
+      'OrderController.loadOrders: restored ${orders.length} local orders',
+    );
   }
 
   void openOrder(OrderModel order) {
     selectedOrder.value = order;
     debugPrint('OrderController.openOrder: order=${order.id}');
-    Get.toNamed(AppRoutes.customerOrderDetails, arguments: {'orderId': order.id});
+    Get.toNamed(
+      AppRoutes.customerOrderDetails,
+      arguments: {'orderId': order.id},
+    );
   }
 
   OrderModel? findOrderById(String orderId) {
@@ -125,10 +147,12 @@ class OrderController extends GetxController {
 
   Future<void> placeOrder() async {
     final cartController = Get.find<CartController>();
-    final authController =
-        Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
-    final profileController =
-        Get.isRegistered<ProfileController>() ? Get.find<ProfileController>() : null;
+    final authController = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : null;
+    final profileController = Get.isRegistered<ProfileController>()
+        ? Get.find<ProfileController>()
+        : null;
 
     if (cartController.items.isEmpty) {
       Get.snackbar(
@@ -152,9 +176,8 @@ class OrderController extends GetxController {
 
     isPlacingOrder.value = true;
     try {
-      final AddressModel? activeAddress = profileController?.addresses.firstWhereOrNull(
-        (item) => item.isSelected,
-      );
+      final AddressModel? activeAddress = profileController?.addresses
+          .firstWhereOrNull((item) => item.isSelected);
       final order = OrderModel(
         id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
         items: cartController.items.toList(),
@@ -181,7 +204,10 @@ class OrderController extends GetxController {
       appliedCoupon.value = null;
       couponDiscount.value = 0;
       couponCodeController.clear();
-      Get.offNamed(AppRoutes.orderSuccess, arguments: {'orderId': createdOrder.id});
+      Get.offNamed(
+        AppRoutes.orderSuccess,
+        arguments: {'orderId': createdOrder.id},
+      );
     } finally {
       isPlacingOrder.value = false;
     }
@@ -223,13 +249,19 @@ class OrderController extends GetxController {
       _ordersStorageKey,
       orders.map((item) => item.toJson()).toList(),
     );
-    Get.snackbar('Order Cancelled', 'Your order has been cancelled successfully.', snackPosition: SnackPosition.BOTTOM);
+    Get.snackbar(
+      'Order Cancelled',
+      'Your order has been cancelled successfully.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   Future<OrderModel?> _tryCreateOrder(OrderModel draft) async {
     if (!Get.isRegistered<ApiService>()) return null;
     try {
-      final firstProduct = draft.items.isNotEmpty ? draft.items.first.product : null;
+      final firstProduct = draft.items.isNotEmpty
+          ? draft.items.first.product
+          : null;
       final payload = {
         'items': draft.items
             .map(
@@ -241,18 +273,34 @@ class OrderController extends GetxController {
                 'price': item.product.numericPrice,
                 'quantity': item.quantity,
                 'count': item.quantity,
-                'vendorId': item.product.vendorId.isEmpty ? null : item.product.vendorId,
-                'vendor_id': item.product.vendorId.isEmpty ? null : item.product.vendorId,
-                'branchId': item.product.branchId.isEmpty ? null : item.product.branchId,
-                'branch_id': item.product.branchId.isEmpty ? null : item.product.branchId,
+                'vendorId': item.product.vendorId.isEmpty
+                    ? null
+                    : item.product.vendorId,
+                'vendor_id': item.product.vendorId.isEmpty
+                    ? null
+                    : item.product.vendorId,
+                'branchId': item.product.branchId.isEmpty
+                    ? null
+                    : item.product.branchId,
+                'branch_id': item.product.branchId.isEmpty
+                    ? null
+                    : item.product.branchId,
                 'image': item.product.imageUrl,
               },
             )
             .toList(),
-        'vendorId': firstProduct?.vendorId.isNotEmpty == true ? firstProduct!.vendorId : null,
-        'vendor_id': firstProduct?.vendorId.isNotEmpty == true ? firstProduct!.vendorId : null,
-        'branchId': firstProduct?.branchId.isNotEmpty == true ? firstProduct!.branchId : null,
-        'branch_id': firstProduct?.branchId.isNotEmpty == true ? firstProduct!.branchId : null,
+        'vendorId': firstProduct?.vendorId.isNotEmpty == true
+            ? firstProduct!.vendorId
+            : null,
+        'vendor_id': firstProduct?.vendorId.isNotEmpty == true
+            ? firstProduct!.vendorId
+            : null,
+        'branchId': firstProduct?.branchId.isNotEmpty == true
+            ? firstProduct!.branchId
+            : null,
+        'branch_id': firstProduct?.branchId.isNotEmpty == true
+            ? firstProduct!.branchId
+            : null,
         'totalPrice': draft.totalPrice,
         'address': draft.deliveryAddress,
         'paymentMode': draft.paymentMode,
@@ -269,30 +317,39 @@ class OrderController extends GetxController {
       final parsed = OrderModel.fromJson(raw);
       return parsed.id.isEmpty ? null : parsed;
     } catch (error) {
-      debugPrint('OrderController._tryCreateOrder: local fallback after $error');
+      debugPrint(
+        'OrderController._tryCreateOrder: local fallback after $error',
+      );
       return null;
     }
   }
 
   Future<List<OrderModel>> _tryFetchOrders() async {
-    if (!Get.isRegistered<ApiService>()) return const <OrderModel>[];
+    if (!Get.isRegistered<ApiService>()) return <OrderModel>[];
     try {
-      final authController =
-          Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+      final authController = Get.isRegistered<AuthController>()
+          ? Get.find<AuthController>()
+          : null;
       final userId = authController?.currentUser?.id ?? '';
       final response = await Get.find<ApiService>().get(
         endpoint: ApiConstants.orders,
         query: {'customerId': userId},
       );
-      final list = _extractList(response)
-          .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item as Map)))
-          .where((order) => order.id.isNotEmpty)
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final list =
+          _extractList(response)
+              .map(
+                (item) =>
+                    OrderModel.fromJson(Map<String, dynamic>.from(item as Map)),
+              )
+              .where((order) => order.id.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     } catch (error) {
-      debugPrint('OrderController._tryFetchOrders: local fallback after $error');
-      return const <OrderModel>[];
+      debugPrint(
+        'OrderController._tryFetchOrders: local fallback after $error',
+      );
+      return <OrderModel>[];
     }
   }
 
@@ -313,7 +370,7 @@ class OrderController extends GetxController {
         }
       }
     }
-    return const [];
+    return [];
   }
 
   @override

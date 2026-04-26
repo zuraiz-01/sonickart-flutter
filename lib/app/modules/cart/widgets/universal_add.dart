@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/product_model.dart';
@@ -7,7 +8,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
 
 class UniversalAdd extends StatelessWidget {
-  const UniversalAdd({
+  UniversalAdd({
     required this.product,
     this.width,
     this.showOptionsOnInitialAdd = true,
@@ -26,12 +27,12 @@ class UniversalAdd extends StatelessWidget {
           .where((item) => item.product.id == product.id)
           .fold<int>(0, (sum, item) => sum + item.quantity);
       return AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: Duration(milliseconds: 180),
         width: width ?? double.infinity,
-        constraints: const BoxConstraints(minHeight: 40),
+        constraints: BoxConstraints(minHeight: 40.hpx),
         decoration: BoxDecoration(
           color: count == 0 ? AppColors.accent : AppColors.secondaryBlue,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(8.rpx),
         ),
         child: count == 0
             ? InkWell(
@@ -42,15 +43,18 @@ class UniversalAdd extends StatelessWidget {
                   }
                   cart.addItem(product);
                 },
-                borderRadius: BorderRadius.circular(8),
-                child: const Center(
+                borderRadius: BorderRadius.circular(8.rpx),
+                child: Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 4.wpx,
+                      vertical: 10.hpx,
+                    ),
                     child: Text(
                       'ADD',
                       style: TextStyle(
                         color: AppColors.primary,
-                        fontSize: 12,
+                        fontSize: 12.spx,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -58,7 +62,10 @@ class UniversalAdd extends StatelessWidget {
                 ),
               )
             : Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 4.wpx,
+                  vertical: 5.hpx,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -68,9 +75,9 @@ class UniversalAdd extends StatelessWidget {
                     ),
                     Text(
                       '$count',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 13,
+                        fontSize: 13.spx,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -85,14 +92,17 @@ class UniversalAdd extends StatelessWidget {
     });
   }
 
-  Future<void> _showAddOptions(BuildContext context, CartController cart) async {
+  Future<void> _showAddOptions(
+    BuildContext context,
+    CartController cart,
+  ) async {
     await Get.bottomSheet<void>(
       SafeArea(
         child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          decoration: const BoxDecoration(
+          padding: EdgeInsets.fromLTRB(20.wpx, 18.hpx, 20.wpx, 20.hpx),
+          decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22.rpx)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -102,20 +112,20 @@ class UniversalAdd extends StatelessWidget {
                 'Choose An Option',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8.hpx),
               Text(
                 'How would you like to proceed with ${product.name.trim().isEmpty ? 'this item' : product.name.trim()}?',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: 18.hpx),
               FilledButton(
                 onPressed: () async {
                   Get.back<void>();
@@ -124,17 +134,17 @@ class UniversalAdd extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12.rpx),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Add to Cart',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10.hpx),
               OutlinedButton(
                 onPressed: () async {
                   Get.back<void>();
@@ -143,21 +153,18 @@ class UniversalAdd extends StatelessWidget {
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: AppColors.primary),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12.rpx),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Buy Now',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-              TextButton(
-                onPressed: Get.back,
-                child: const Text('Cancel'),
-              ),
+              TextButton(onPressed: Get.back, child: Text('Cancel')),
             ],
           ),
         ),
@@ -169,10 +176,7 @@ class UniversalAdd extends StatelessWidget {
 }
 
 class _CounterTap extends StatelessWidget {
-  const _CounterTap({
-    required this.icon,
-    required this.onTap,
-  });
+  _CounterTap({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -181,9 +185,9 @@ class _CounterTap extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(16.rpx),
       child: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: EdgeInsets.all(6.rpx),
         child: Icon(icon, color: AppColors.white, size: 16),
       ),
     );

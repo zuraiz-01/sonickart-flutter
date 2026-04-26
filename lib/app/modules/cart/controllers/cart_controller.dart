@@ -20,10 +20,8 @@ class CartController extends GetxController {
 
   int get totalItems => items.fold<int>(0, (sum, item) => sum + item.quantity);
 
-  double get subtotal => items.fold<double>(
-        0,
-        (sum, item) => sum + item.totalPrice,
-      );
+  double get subtotal =>
+      items.fold<double>(0, (sum, item) => sum + item.totalPrice);
 
   double get grandTotal => subtotal;
 
@@ -43,9 +41,8 @@ class CartController extends GetxController {
       final rawItems = _storage.read<List<dynamic>>(_storageKey) ?? <dynamic>[];
       final restoredItems = rawItems
           .map(
-            (item) => CartItemModel.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
+            (item) =>
+                CartItemModel.fromJson(Map<String, dynamic>.from(item as Map)),
           )
           .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
           .toList();
@@ -78,7 +75,9 @@ class CartController extends GetxController {
     final itemIndex = items.indexWhere((item) => item.product.id == product.id);
     if (itemIndex >= 0) {
       final currentItem = items[itemIndex];
-      items[itemIndex] = currentItem.copyWith(quantity: currentItem.quantity + 1);
+      items[itemIndex] = currentItem.copyWith(
+        quantity: currentItem.quantity + 1,
+      );
       debugPrint(
         'CartController.addItem: incremented ${product.id} to ${items[itemIndex].quantity}',
       );
@@ -100,7 +99,9 @@ class CartController extends GetxController {
 
     final currentItem = items[itemIndex];
     if (currentItem.quantity > 1) {
-      items[itemIndex] = currentItem.copyWith(quantity: currentItem.quantity - 1);
+      items[itemIndex] = currentItem.copyWith(
+        quantity: currentItem.quantity - 1,
+      );
       debugPrint(
         'CartController.removeItem: decremented $productId to ${items[itemIndex].quantity}',
       );
@@ -148,17 +149,23 @@ class CartController extends GetxController {
     if (!Get.isRegistered<ApiService>()) return const [];
     if (!_hasAccessToken) return const [];
     try {
-      final response = await Get.find<ApiService>().get(endpoint: ApiConstants.cartFetch);
+      final response = await Get.find<ApiService>().get(
+        endpoint: ApiConstants.cartFetch,
+      );
       final raw = _extractCartList(response);
       if (raw is List) {
         return raw
             .whereType<Map>()
-            .map((item) => CartItemModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) => CartItemModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
             .toList();
       }
     } catch (error) {
-      debugPrint('CartController._tryFetchServerCart: storage fallback after $error');
+      debugPrint(
+        'CartController._tryFetchServerCart: storage fallback after $error',
+      );
     }
     return const [];
   }
@@ -195,7 +202,9 @@ class CartController extends GetxController {
         await Get.find<ApiService>().post(endpoint: ApiConstants.cartClear);
       }
     } catch (error) {
-      debugPrint('CartController._tryClearServerCart: local fallback after $error');
+      debugPrint(
+        'CartController._tryClearServerCart: local fallback after $error',
+      );
     }
   }
 

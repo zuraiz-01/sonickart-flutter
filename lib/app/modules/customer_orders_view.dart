@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../data/models/order_model.dart';
@@ -6,60 +7,59 @@ import '../theme/app_colors.dart';
 import 'order_controller.dart';
 
 class CustomerOrdersView extends GetView<OrderController> {
-  const CustomerOrdersView({super.key});
+  CustomerOrdersView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
-      appBar: AppBar(
-        title: const Text('My Orders'),
-        centerTitle: true,
-      ),
+      backgroundColor: Color(0xFFF5F8FF),
+      appBar: AppBar(title: Text('My Orders'), centerTitle: true),
       body: Obx(() {
         if (controller.orders.isEmpty) {
           return Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(24.rpx),
               child: Container(
-                padding: const EdgeInsets.all(28),
+                padding: EdgeInsets.all(28.rpx),
                 decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+                  borderRadius: BorderRadius.circular(24.rpx),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                  ),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 86,
-                      height: 86,
+                      width: 86.wpx,
+                      height: 86.hpx,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF4FF),
-                        borderRadius: BorderRadius.circular(28),
+                        color: Color(0xFFEEF4FF),
+                        borderRadius: BorderRadius.circular(28.rpx),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.shopping_bag_outlined,
                         size: 42,
                         color: AppColors.primary,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 18.hpx),
                     Text(
                       'No orders yet',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8.hpx),
                     Text(
                       'Your confirmed and delivered orders will appear here.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ),
@@ -69,9 +69,9 @@ class CustomerOrdersView extends GetView<OrderController> {
         }
 
         return ListView.separated(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16.rpx),
           itemCount: controller.orders.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          separatorBuilder: (_, __) => SizedBox(height: 12.hpx),
           itemBuilder: (context, index) {
             final order = controller.orders[index];
             return _OrderCard(
@@ -86,28 +86,27 @@ class CustomerOrdersView extends GetView<OrderController> {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({
-    required this.order,
-    required this.onTap,
-  });
+  _OrderCard({required this.order, required this.onTap});
 
   final OrderModel order;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final itemCount =
-        order.items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final itemCount = order.items.fold<int>(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(24.rpx),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16.rpx),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(24.rpx),
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
               color: Color(0x14000000),
               blurRadius: 18,
@@ -127,14 +126,15 @@ class _OrderCard extends StatelessWidget {
                       Text(
                         'Order ID',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4.hpx),
                       Text(
                         '#${order.id}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                             ),
@@ -143,16 +143,20 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF5DE),
-                    borderRadius: BorderRadius.circular(14),
+                    color: Color(0xFFFFF5DE),
+                    borderRadius: BorderRadius.circular(14.rpx),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.schedule_rounded, size: 15, color: Color(0xFFD18A00)),
-                      SizedBox(width: 6),
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 15,
+                        color: Color(0xFFD18A00),
+                      ),
+                      SizedBox(width: 6.wpx),
                       Text(
                         'Preparing',
                         style: TextStyle(
@@ -165,7 +169,7 @@ class _OrderCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14.hpx),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -180,23 +184,26 @@ class _OrderCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14.hpx),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                horizontal: 14.wpx,
+                vertical: 12.hpx,
+              ),
               decoration: BoxDecoration(
                 color: AppColors.surface.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(18.rpx),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: order.items.take(3).map((item) {
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: EdgeInsets.only(bottom: 6),
                     child: Text(
                       '${item.quantity} x ${item.product.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
                       ),
@@ -205,7 +212,7 @@ class _OrderCard extends StatelessWidget {
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.hpx),
             Row(
               children: [
                 Expanded(
@@ -215,23 +222,23 @@ class _OrderCard extends StatelessWidget {
                       Text(
                         'Total Paid',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4.hpx),
                       Text(
                         'Rs ${order.totalPrice.toStringAsFixed(2)}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 Row(
-                  children: const [
+                  children: [
                     Text(
                       'View details',
                       style: TextStyle(
@@ -239,8 +246,11 @@ class _OrderCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_right_alt_rounded, color: AppColors.primary),
+                    SizedBox(width: 4.wpx),
+                    Icon(
+                      Icons.arrow_right_alt_rounded,
+                      color: AppColors.primary,
+                    ),
                   ],
                 ),
               ],
@@ -253,10 +263,7 @@ class _OrderCard extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-  });
+  _InfoPill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -264,19 +271,19 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 10.wpx, vertical: 8.hpx),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF4FF),
-        borderRadius: BorderRadius.circular(14),
+        color: Color(0xFFEEF4FF),
+        borderRadius: BorderRadius.circular(14.rpx),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15, color: AppColors.primary),
-          const SizedBox(width: 6),
+          SizedBox(width: 6.wpx),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w600,
             ),

@@ -27,11 +27,7 @@ class AppPages {
       page: SplashView.new,
       binding: SplashBinding(),
     ),
-    GetPage(
-      name: AppRoutes.login,
-      page: LoginView.new,
-      binding: AuthBinding(),
-    ),
+    GetPage(name: AppRoutes.login, page: LoginView.new, binding: AuthBinding()),
     GetPage(
       name: AppRoutes.signup,
       page: LoginView.new,
@@ -45,10 +41,7 @@ class AppPages {
     GetPage(
       name: AppRoutes.dashboard,
       page: DashboardView.new,
-      bindings: [
-        AuthBinding(),
-        DashboardBinding(),
-      ],
+      bindings: [AuthBinding(), DashboardBinding()],
     ),
     GetPage(
       name: AppRoutes.categories,

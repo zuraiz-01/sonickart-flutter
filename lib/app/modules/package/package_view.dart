@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../theme/app_colors.dart';
 import 'controllers/package_controller.dart';
 
 class PackageView extends GetView<PackageController> {
-  const PackageView({super.key});
+  PackageView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Obx(
       () => Container(
-        color: const Color(0xFFF5F8FF),
+        color: Color(0xFFF5F8FF),
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            SizedBox(height: 12.hpx),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: _TopTabs(
                 selectedMode: controller.viewMode.value,
                 onSelected: controller.setViewMode,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.hpx),
             Expanded(
               child: controller.viewMode.value == PackageViewMode.orders
                   ? _OrdersPane(controller: controller)
@@ -36,10 +37,7 @@ class PackageView extends GetView<PackageController> {
 }
 
 class _TopTabs extends StatelessWidget {
-  const _TopTabs({
-    required this.selectedMode,
-    required this.onSelected,
-  });
+  _TopTabs({required this.selectedMode, required this.onSelected});
 
   final PackageViewMode selectedMode;
   final ValueChanged<PackageViewMode> onSelected;
@@ -47,12 +45,12 @@ class _TopTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(8.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 10,
@@ -68,7 +66,7 @@ class _TopTabs extends StatelessWidget {
             active: selectedMode == PackageViewMode.send,
             onTap: () => onSelected(PackageViewMode.send),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.wpx),
           _TabButton(
             label: 'My Packages',
             icon: Icons.inventory_2_outlined,
@@ -82,7 +80,7 @@ class _TopTabs extends StatelessWidget {
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton({
+  _TabButton({
     required this.label,
     required this.icon,
     required this.active,
@@ -99,12 +97,12 @@ class _TabButton extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(14.rpx),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          padding: EdgeInsets.symmetric(vertical: 12.hpx, horizontal: 10.wpx),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFEEF4FF) : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
+            color: active ? Color(0xFFEEF4FF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14.rpx),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -114,7 +112,7 @@ class _TabButton extends StatelessWidget {
                 size: 18,
                 color: active ? AppColors.primary : AppColors.textSecondary,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8.wpx),
               Flexible(
                 child: Text(
                   label,
@@ -134,14 +132,14 @@ class _TabButton extends StatelessWidget {
 }
 
 class _SendPane extends StatelessWidget {
-  const _SendPane({required this.controller});
+  _SendPane({required this.controller});
 
   final PackageController controller;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(16.wpx, 8.hpx, 16.wpx, 24.hpx),
       children: [
         if (controller.currentStep.value == PackageStep.initial)
           _InitialStep(controller: controller),
@@ -181,7 +179,7 @@ class _SendPane extends StatelessWidget {
 }
 
 class _InitialStep extends StatelessWidget {
-  const _InitialStep({required this.controller});
+  _InitialStep({required this.controller});
 
   final PackageController controller;
 
@@ -191,50 +189,50 @@ class _InitialStep extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 74,
-            height: 74,
+            width: 74.wpx,
+            height: 74.hpx,
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF4FF),
-              borderRadius: BorderRadius.circular(24),
+              color: Color(0xFFEEF4FF),
+              borderRadius: BorderRadius.circular(24.rpx),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.local_shipping_outlined,
               size: 36,
               color: AppColors.primary,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           Text(
             'Send Package',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8.hpx),
           Text(
             'Pickup, drop, package type aur review ke simple flow ke sath booking ready hai.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.hpx),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () => controller.startFlow('send'),
-              icon: const Icon(Icons.add_rounded),
+              icon: Icon(Icons.add_rounded),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14.rpx),
                 ),
               ),
-              label: const Text(
+              label: Text(
                 'Start Package Flow',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
@@ -247,7 +245,7 @@ class _InitialStep extends StatelessWidget {
 }
 
 class _AddressStep extends StatelessWidget {
-  const _AddressStep({
+  _AddressStep({
     required this.title,
     required this.subtitle,
     required this.hint,
@@ -278,38 +276,38 @@ class _AddressStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _BackChip(onTap: onBackTap),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.hpx),
           Center(
             child: Container(
-              width: 74,
-              height: 74,
+              width: 74.wpx,
+              height: 74.hpx,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF4FF),
-                borderRadius: BorderRadius.circular(24),
+                color: Color(0xFFEEF4FF),
+                borderRadius: BorderRadius.circular(24.rpx),
               ),
               child: Icon(icon, size: 36, color: AppColors.primary),
             ),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18.hpx),
           Center(
             child: Text(
               title,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8.hpx),
           Text(
             subtitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.45,
-                ),
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.hpx),
           TextField(
             controller: fieldController,
             maxLines: 3,
@@ -318,43 +316,43 @@ class _AddressStep extends StatelessWidget {
               filled: true,
               fillColor: AppColors.white,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14.rpx),
                 borderSide: BorderSide(
                   color: AppColors.primary.withValues(alpha: 0.1),
                 ),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14.rpx),
                 borderSide: BorderSide(
                   color: AppColors.primary.withValues(alpha: 0.1),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.hpx),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onSecondaryTap,
-              icon: const Icon(Icons.my_location_rounded),
+              icon: Icon(Icons.my_location_rounded),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
-                backgroundColor: const Color(0xFFEEF4FF),
+                backgroundColor: Color(0xFFEEF4FF),
                 side: BorderSide(
                   color: AppColors.primary.withValues(alpha: 0.08),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14.rpx),
                 ),
               ),
               label: Text(
                 secondaryText,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.hpx),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -362,14 +360,14 @@ class _AddressStep extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14.rpx),
                 ),
               ),
               child: Text(
                 primaryText,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ),
@@ -380,7 +378,7 @@ class _AddressStep extends StatelessWidget {
 }
 
 class _TypeStep extends StatelessWidget {
-  const _TypeStep({required this.controller});
+  _TypeStep({required this.controller});
 
   final PackageController controller;
 
@@ -391,26 +389,26 @@ class _TypeStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _BackChip(onTap: controller.goBackStep),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.hpx),
           Center(
             child: Text(
               'Package Type',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8.hpx),
           Text(
             'Select what you are sending so the rider flow stays clear.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.45,
-                ),
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.hpx),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -420,15 +418,12 @@ class _TypeStep extends StatelessWidget {
                 width: (MediaQuery.of(context).size.width - 56) / 2,
                 child: InkWell(
                   onTap: () => controller.selectPackageType(type),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(16.rpx),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 20,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 20),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : const Color(0xFFF4F8FF),
-                      borderRadius: BorderRadius.circular(16),
+                      color: isSelected ? AppColors.primary : Color(0xFFF4F8FF),
+                      borderRadius: BorderRadius.circular(16.rpx),
                       border: Border.all(
                         color: isSelected
                             ? AppColors.primary
@@ -444,7 +439,7 @@ class _TypeStep extends StatelessWidget {
                               ? AppColors.white
                               : AppColors.primary,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8.hpx),
                         Text(
                           type,
                           textAlign: TextAlign.center,
@@ -462,7 +457,7 @@ class _TypeStep extends StatelessWidget {
               );
             }).toList(),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18.hpx),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -470,12 +465,12 @@ class _TypeStep extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14.rpx),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'Review Package',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
@@ -488,7 +483,7 @@ class _TypeStep extends StatelessWidget {
 }
 
 class _ReviewStep extends StatelessWidget {
-  const _ReviewStep({required this.controller});
+  _ReviewStep({required this.controller});
 
   final PackageController controller;
 
@@ -499,15 +494,15 @@ class _ReviewStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _BackChip(onTap: controller.goBackStep),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.hpx),
           Text(
             'Review package order',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.hpx),
           _ReviewTile(
             icon: Icons.store_mall_directory_outlined,
             label: 'Pickup',
@@ -523,13 +518,15 @@ class _ReviewStep extends StatelessWidget {
             label: 'Package Type',
             value: controller.selectedPackageType.value ?? 'Not selected',
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16.rpx),
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF4FF),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+              color: Color(0xFFEEF4FF),
+              borderRadius: BorderRadius.circular(18.rpx),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.08),
+              ),
             ),
             child: Column(
               children: [
@@ -537,14 +534,14 @@ class _ReviewStep extends StatelessWidget {
                   label: 'Estimated distance',
                   value: '${controller.distanceKm.toStringAsFixed(1)} km',
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10.hpx),
                 _ChargeRow(
                   label: 'Delivery charge',
                   value: 'Rs ${controller.deliveryCharge.toStringAsFixed(0)}',
                 ),
-                const SizedBox(height: 10),
-                const Divider(height: 1, color: AppColors.border),
-                const SizedBox(height: 10),
+                SizedBox(height: 10.hpx),
+                Divider(height: 1, color: AppColors.border),
+                SizedBox(height: 10.hpx),
                 _ChargeRow(
                   label: 'Grand total',
                   value: 'Rs ${controller.totalPrice.toStringAsFixed(0)}',
@@ -553,51 +550,53 @@ class _ReviewStep extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           InkWell(
             onTap: controller.toggleAgreement,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16.rpx),
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16.rpx),
               decoration: BoxDecoration(
                 color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                borderRadius: BorderRadius.circular(16.rpx),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 20,
-                    height: 20,
-                    margin: const EdgeInsets.only(top: 2),
+                    width: 20.wpx,
+                    height: 20.hpx,
+                    margin: EdgeInsets.only(top: 2),
                     decoration: BoxDecoration(
                       color: controller.agreementChecked.value
                           ? AppColors.primary
                           : AppColors.white,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(4.rpx),
                       border: Border.all(color: AppColors.primary, width: 2),
                     ),
                     child: controller.agreementChecked.value
-                        ? const Icon(Icons.check, size: 14, color: AppColors.white)
+                        ? Icon(Icons.check, size: 14, color: AppColors.white)
                         : null,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12.wpx),
                   Expanded(
                     child: Text(
                       'I confirm the package details are correct and ready for booking.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.primary,
-                            height: 1.4,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: AppColors.primary,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -605,21 +604,21 @@ class _ReviewStep extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14.rpx),
                 ),
               ),
               child: controller.isSubmitting.value
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
+                  ? SizedBox(
+                      width: 18.wpx,
+                      height: 18.hpx,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: AppColors.white,
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Confirm Package Order',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
@@ -632,61 +631,61 @@ class _ReviewStep extends StatelessWidget {
 }
 
 class _OrdersPane extends StatelessWidget {
-  const _OrdersPane({required this.controller});
+  _OrdersPane({required this.controller});
 
   final PackageController controller;
 
   @override
   Widget build(BuildContext context) {
     if (controller.isLoadingOrders.value && controller.orders.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
 
     if (controller.orders.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24.rpx),
           child: Container(
-            padding: const EdgeInsets.all(28),
+            padding: EdgeInsets.all(28.rpx),
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+              borderRadius: BorderRadius.circular(24.rpx),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.08),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 86,
-                  height: 86,
+                  width: 86.wpx,
+                  height: 86.hpx,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEEF4FF),
-                    borderRadius: BorderRadius.circular(28),
+                    color: Color(0xFFEEF4FF),
+                    borderRadius: BorderRadius.circular(28.rpx),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.inventory_2_outlined,
                     size: 42,
                     color: AppColors.primary,
                   ),
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: 18.hpx),
                 Text(
                   'No package orders yet',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.hpx),
                 Text(
                   'Your booked package deliveries will appear here.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ],
             ),
@@ -696,21 +695,23 @@ class _OrdersPane extends StatelessWidget {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(16.wpx, 8.hpx, 16.wpx, 24.hpx),
       itemCount: controller.orders.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => SizedBox(height: 12.hpx),
       itemBuilder: (context, index) {
         final order = controller.orders[index];
         return InkWell(
           onTap: () => controller.openOrder(order),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20.rpx),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16.rpx),
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.07)),
-              boxShadow: const [
+              borderRadius: BorderRadius.circular(20.rpx),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.07),
+              ),
+              boxShadow: [
                 BoxShadow(
                   color: Color(0x14000000),
                   blurRadius: 10,
@@ -726,24 +727,25 @@ class _OrdersPane extends StatelessWidget {
                     Expanded(
                       child: Text(
                         order.packageType,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF4FF),
-                        borderRadius: BorderRadius.circular(999),
+                        color: Color(0xFFEEF4FF),
+                        borderRadius: BorderRadius.circular(999.rpx),
                       ),
                       child: Text(
                         order.status,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w700,
                         ),
@@ -751,19 +753,19 @@ class _OrdersPane extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10.hpx),
                 Text(
                   order.id,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12.hpx),
                 _MiniInfo(label: 'Pickup', value: order.pickupAddress),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.hpx),
                 _MiniInfo(label: 'Drop', value: order.dropAddress),
-                const SizedBox(height: 12),
+                SizedBox(height: 12.hpx),
                 Row(
                   children: [
                     Expanded(
@@ -772,7 +774,7 @@ class _OrdersPane extends StatelessWidget {
                         value: '${order.distanceKm.toStringAsFixed(1)} km',
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10.wpx),
                     Expanded(
                       child: _StatPill(
                         label: 'Charge',
@@ -791,19 +793,19 @@ class _OrdersPane extends StatelessWidget {
 }
 
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.child});
+  _StepCard({required this.child});
 
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(18.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 14,
@@ -817,7 +819,7 @@ class _StepCard extends StatelessWidget {
 }
 
 class _BackChip extends StatelessWidget {
-  const _BackChip({required this.onTap});
+  _BackChip({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -827,18 +829,18 @@ class _BackChip extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(999.rpx),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 8.hpx),
           decoration: BoxDecoration(
-            color: const Color(0xFFEEF4FF),
-            borderRadius: BorderRadius.circular(999),
+            color: Color(0xFFEEF4FF),
+            borderRadius: BorderRadius.circular(999.rpx),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.chevron_left_rounded, color: AppColors.primary),
-              SizedBox(width: 4),
+              SizedBox(width: 4.wpx),
               Text(
                 'Back',
                 style: TextStyle(
@@ -855,11 +857,7 @@ class _BackChip extends StatelessWidget {
 }
 
 class _ReviewTile extends StatelessWidget {
-  const _ReviewTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  _ReviewTile({required this.icon, required this.label, required this.value});
 
   final IconData icon;
   final String label;
@@ -868,12 +866,12 @@ class _ReviewTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: AppColors.primary, size: 18),
-          const SizedBox(width: 10),
+          SizedBox(width: 10.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -881,18 +879,18 @@ class _ReviewTile extends StatelessWidget {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   value,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        height: 1.4,
-                      ),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -904,11 +902,7 @@ class _ReviewTile extends StatelessWidget {
 }
 
 class _ChargeRow extends StatelessWidget {
-  const _ChargeRow({
-    required this.label,
-    required this.value,
-    this.strong = false,
-  });
+  _ChargeRow({required this.label, required this.value, this.strong = false});
 
   final String label;
   final String value;
@@ -935,7 +929,7 @@ class _ChargeRow extends StatelessWidget {
 }
 
 class _MiniInfo extends StatelessWidget {
-  const _MiniInfo({required this.label, required this.value});
+  _MiniInfo({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -948,19 +942,19 @@ class _MiniInfo extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        const SizedBox(height: 2),
+        SizedBox(height: 2),
         Text(
           value,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -968,7 +962,7 @@ class _MiniInfo extends StatelessWidget {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.value});
+  _StatPill({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -976,10 +970,10 @@ class _StatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(12.rpx),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF4FF),
-        borderRadius: BorderRadius.circular(14),
+        color: Color(0xFFEEF4FF),
+        borderRadius: BorderRadius.circular(14.rpx),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -987,17 +981,17 @@ class _StatPill extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4.hpx),
           Text(
             value,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import 'app_colors.dart';
 
@@ -25,71 +26,68 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 16.wpx,
+          vertical: 14.hpx,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
           borderSide: const BorderSide(color: AppColors.border, width: 1.2),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
           borderSide: const BorderSide(color: AppColors.border, width: 1.2),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: const TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 14,
-        ),
+        hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.spx),
       ),
       cardTheme: CardThemeData(
         color: AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(24.rpx),
           side: const BorderSide(color: Color(0x61FFFFFF)),
         ),
       ),
       textTheme: base.textTheme.copyWith(
-        headlineLarge: const TextStyle(
+        headlineLarge: TextStyle(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w800,
-          fontSize: 34,
+          fontSize: 34.spx,
         ),
-        headlineSmall: const TextStyle(
+        headlineSmall: TextStyle(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
-          fontSize: 24,
+          fontSize: 24.spx,
         ),
-        headlineMedium: const TextStyle(
+        headlineMedium: TextStyle(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w800,
-          fontSize: 28,
+          fontSize: 28.spx,
         ),
         titleMedium: const TextStyle(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
         ),
-        bodyLarge: const TextStyle(
+        bodyLarge: TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 16,
+          fontSize: 16.spx,
           height: 1.45,
         ),
-        bodyMedium: const TextStyle(
+        bodyMedium: TextStyle(
           color: AppColors.textSecondary,
-          fontSize: 14,
+          fontSize: 14.spx,
           height: 1.45,
         ),
       ),

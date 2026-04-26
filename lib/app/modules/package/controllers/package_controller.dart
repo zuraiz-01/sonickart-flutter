@@ -37,12 +37,11 @@ class PackageController extends GetxController {
 
   List<String> get packageTypes => _packageTypes;
 
-  double get distanceKm => _estimateDistance(
-        pickupController.text,
-        dropController.text,
-      );
+  double get distanceKm =>
+      _estimateDistance(pickupController.text, dropController.text);
 
-  double get deliveryCharge => _baseDeliveryCharge + (distanceKm * _chargePerKm);
+  double get deliveryCharge =>
+      _baseDeliveryCharge + (distanceKm * _chargePerKm);
 
   double get totalPrice => deliveryCharge;
 
@@ -81,7 +80,9 @@ class PackageController extends GetxController {
   }
 
   void goBackStep() {
-    debugPrint('PackageController.goBackStep: current step ${currentStep.value}');
+    debugPrint(
+      'PackageController.goBackStep: current step ${currentStep.value}',
+    );
     switch (currentStep.value) {
       case PackageStep.initial:
         return;
@@ -172,9 +173,10 @@ class PackageController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-      final authController =
-          Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+      await Future<void>.delayed(Duration(milliseconds: 350));
+      final authController = Get.isRegistered<AuthController>()
+          ? Get.find<AuthController>()
+          : null;
       final user = authController?.currentUser;
       final draft = PackageOrderModel(
         id: 'PKG${DateTime.now().millisecondsSinceEpoch}',
@@ -235,14 +237,15 @@ class PackageController extends GetxController {
 
       final rawOrders =
           _storage.read<List<dynamic>>(_storageKey) ?? <dynamic>[];
-      final restoredOrders = rawOrders
-          .map(
-            (item) => PackageOrderModel.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final restoredOrders =
+          rawOrders
+              .map(
+                (item) => PackageOrderModel.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       orders.assignAll(restoredOrders);
       debugPrint(
         'PackageController.loadOrders: restored ${orders.length} package orders',
@@ -297,16 +300,14 @@ class PackageController extends GetxController {
     return double.parse(distance.toStringAsFixed(1));
   }
 
-  Future<PackageOrderModel?> _tryCreatePackageOrder(PackageOrderModel draft) async {
+  Future<PackageOrderModel?> _tryCreatePackageOrder(
+    PackageOrderModel draft,
+  ) async {
     if (!Get.isRegistered<ApiService>()) return null;
     try {
       final payload = {
-        'pickupLocation': {
-          'address': draft.pickupAddress,
-        },
-        'dropLocation': {
-          'address': draft.dropAddress,
-        },
+        'pickupLocation': {'address': draft.pickupAddress},
+        'dropLocation': {'address': draft.dropAddress},
         'packageType': draft.packageType,
         'distanceKm': draft.distanceKm,
         'distance': (draft.distanceKm * 1000).round(),
@@ -330,30 +331,40 @@ class PackageController extends GetxController {
       final parsed = PackageOrderModel.fromJson(raw);
       return parsed.id.isEmpty ? null : parsed;
     } catch (error) {
-      debugPrint('PackageController._tryCreatePackageOrder: local fallback after $error');
+      debugPrint(
+        'PackageController._tryCreatePackageOrder: local fallback after $error',
+      );
       return null;
     }
   }
 
   Future<List<PackageOrderModel>> _tryFetchPackageOrders() async {
-    if (!Get.isRegistered<ApiService>()) return const <PackageOrderModel>[];
+    if (!Get.isRegistered<ApiService>()) return <PackageOrderModel>[];
     try {
-      final authController =
-          Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
+      final authController = Get.isRegistered<AuthController>()
+          ? Get.find<AuthController>()
+          : null;
       final userId = authController?.currentUser?.id ?? '';
       final response = await Get.find<ApiService>().get(
         endpoint: ApiConstants.packageOrder,
         query: {'customerId': userId},
       );
-      final list = _extractList(response)
-          .map((item) => PackageOrderModel.fromJson(Map<String, dynamic>.from(item as Map)))
-          .where((order) => order.id.isNotEmpty)
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final list =
+          _extractList(response)
+              .map(
+                (item) => PackageOrderModel.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
+              .where((order) => order.id.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     } catch (error) {
-      debugPrint('PackageController._tryFetchPackageOrders: local fallback after $error');
-      return const <PackageOrderModel>[];
+      debugPrint(
+        'PackageController._tryFetchPackageOrders: local fallback after $error',
+      );
+      return <PackageOrderModel>[];
     }
   }
 
@@ -374,7 +385,7 @@ class PackageController extends GetxController {
         }
       }
     }
-    return const [];
+    return [];
   }
 
   @override

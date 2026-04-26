@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
@@ -6,7 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 
 class LoginView extends GetView<AuthController> {
-  const LoginView({super.key});
+  LoginView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +23,7 @@ class LoginView extends GetView<AuthController> {
               fit: BoxFit.cover,
             ),
           ),
-          const Positioned.fill(
-            child: ColoredBox(color: AppColors.overlayBlue),
-          ),
+          Positioned.fill(child: ColoredBox(color: AppColors.overlayBlue)),
           SafeArea(
             bottom: false,
             child: SingleChildScrollView(
@@ -32,21 +31,22 @@ class LoginView extends GetView<AuthController> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: MediaQuery.sizeOf(context).height - (130 + bottomInset),
+                  minHeight:
+                      MediaQuery.sizeOf(context).height - (130 + bottomInset),
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 400),
+                    constraints: BoxConstraints(maxWidth: 400.wpx),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(24),
+                      padding: EdgeInsets.all(24.rpx),
                       decoration: BoxDecoration(
                         color: AppColors.white,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(24.rpx),
                         border: Border.all(
                           color: Colors.white.withValues(alpha: 0.38),
                         ),
-                        boxShadow: const [
+                        boxShadow: [
                           BoxShadow(
                             color: Color(0x2E000000),
                             blurRadius: 18,
@@ -68,52 +68,56 @@ class LoginView extends GetView<AuthController> {
                                     color: AppColors.primary,
                                     letterSpacing: 0.8,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 30,
+                                    fontSize: 26.spx,
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              SizedBox(height: 20.hpx),
                               if (!controller.isOtpSent.value)
                                 _PhoneField(controller: controller)
                               else
                                 _OtpSection(controller: controller),
                               InkWell(
                                 onTap: controller.toggleAgreement,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(10.rpx),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Container(
-                                        width: 20,
-                                        height: 20,
-                                        margin: const EdgeInsets.only(top: 1),
+                                        width: 20.wpx,
+                                        height: 20.hpx,
+                                        margin: EdgeInsets.only(top: 1),
                                         decoration: BoxDecoration(
-                                          color: controller.agreementChecked.value
+                                          color:
+                                              controller.agreementChecked.value
                                               ? AppColors.primary
                                               : AppColors.white,
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                           border: Border.all(
                                             color: AppColors.primary,
                                             width: 2,
                                           ),
                                         ),
                                         child: controller.agreementChecked.value
-                                            ? const Icon(
+                                            ? Icon(
                                                 Icons.check,
                                                 size: 14,
                                                 color: AppColors.white,
                                               )
                                             : null,
                                       ),
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: 8.wpx),
                                       Expanded(
                                         child: Text(
                                           'By continuing you agree to SonicKart\'s Terms & Conditions and Privacy Policy.',
                                           style: textTheme.bodyMedium?.copyWith(
                                             color: AppColors.primary,
-                                            fontSize: 12,
+                                            fontSize: 12.spx.spx,
                                             height: 1.5,
                                             letterSpacing: 0.4,
                                           ),
@@ -123,39 +127,41 @@ class LoginView extends GetView<AuthController> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: 16.hpx),
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton(
                                   onPressed:
-                                      controller.isSendingOtp.value || controller.isVerifyingOtp.value
-                                          ? null
-                                          : (controller.isOtpSent.value
-                                              ? controller.verifyOtp
-                                              : controller.sendOtp),
+                                      controller.isSendingOtp.value ||
+                                          controller.isVerifyingOtp.value
+                                      ? null
+                                      : (controller.isOtpSent.value
+                                            ? controller.verifyOtp
+                                            : controller.sendOtp),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: AppColors.accent,
                                     foregroundColor: AppColors.white,
-                                    minimumSize: const Size.fromHeight(50),
+                                    minimumSize: Size.fromHeight(50),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(
+                                        10.rpx,
+                                      ),
                                     ),
-                                    textStyle: const TextStyle(
-                                      fontSize: 16,
+                                    textStyle: TextStyle(
+                                      fontSize: 16.spx.spx,
                                       fontWeight: FontWeight.w700,
                                     ),
-                                    disabledBackgroundColor: AppColors.accent.withValues(
-                                      alpha: 0.55,
-                                    ),
-                                    disabledForegroundColor: AppColors.white.withValues(
-                                      alpha: 0.8,
-                                    ),
+                                    disabledBackgroundColor: AppColors.accent
+                                        .withValues(alpha: 0.55),
+                                    disabledForegroundColor: AppColors.white
+                                        .withValues(alpha: 0.8),
                                   ),
-                                  child: controller.isSendingOtp.value ||
+                                  child:
+                                      controller.isSendingOtp.value ||
                                           controller.isVerifyingOtp.value
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
+                                      ? SizedBox(
+                                          height: 20.hpx,
+                                          width: 20.wpx,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2.2,
                                             color: AppColors.white,
@@ -185,13 +191,10 @@ class LoginView extends GetView<AuthController> {
             child: Container(
               width: double.infinity,
               padding: EdgeInsets.fromLTRB(16, 8, 16, 8 + bottomInset),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.primary,
                 border: Border(
-                  top: BorderSide(
-                    color: Color(0xFF234488),
-                    width: 0.8,
-                  ),
+                  top: BorderSide(color: Color(0xFF234488), width: 0.8),
                 ),
               ),
               child: Text(
@@ -200,7 +203,7 @@ class LoginView extends GetView<AuthController> {
                 style: textTheme.bodySmall?.copyWith(
                   color: AppColors.white,
                   letterSpacing: 0.6,
-                  fontSize: 10,
+                  fontSize: 10.spx.spx,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -213,7 +216,7 @@ class LoginView extends GetView<AuthController> {
 }
 
 class _PhoneField extends StatelessWidget {
-  const _PhoneField({required this.controller});
+  _PhoneField({required this.controller});
 
   final AuthController controller;
 
@@ -234,21 +237,21 @@ class _PhoneField extends StatelessWidget {
           );
         }
       },
-      style: const TextStyle(
+      style: TextStyle(
         color: AppColors.primary,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
-        fontSize: 15,
+        fontSize: 15.spx.spx,
       ),
       decoration: InputDecoration(
         counterText: '',
         hintText: 'Enter 10-digit mobile number',
-        hintStyle: const TextStyle(color: Color(0xFF999999)),
+        hintStyle: TextStyle(color: Color(0xFF999999)),
         filled: true,
         fillColor: AppColors.white.withValues(alpha: 0.82),
-        prefixIconConstraints: const BoxConstraints(minWidth: 0),
+        prefixIconConstraints: BoxConstraints(minWidth: 0.wpx),
         prefixIcon: Padding(
-          padding: const EdgeInsets.only(left: 16, right: 8),
+          padding: EdgeInsets.only(left: 16, right: 8),
           child: Center(
             widthFactor: 1,
             child: Text(
@@ -257,7 +260,7 @@ class _PhoneField extends StatelessWidget {
                 color: AppColors.primary,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
-                fontSize: 15,
+                fontSize: 15.spx.spx,
               ),
             ),
           ),
@@ -265,29 +268,20 @@ class _PhoneField extends StatelessWidget {
         suffixIcon: ValueListenableBuilder<TextEditingValue>(
           valueListenable: controller.phoneController,
           builder: (context, value, _) {
-            if (value.text.isEmpty) return const SizedBox.shrink();
+            if (value.text.isEmpty) return SizedBox.shrink();
             return IconButton(
               onPressed: controller.phoneController.clear,
-              icon: const Icon(
-                Icons.close,
-                color: AppColors.textSecondary,
-              ),
+              icon: Icon(Icons.close, color: AppColors.textSecondary),
             );
           },
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: Color(0x2E092774),
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(12.rpx),
+          borderSide: BorderSide(color: Color(0x2E092774), width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: Color(0x2E092774),
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(12.rpx),
+          borderSide: BorderSide(color: Color(0x2E092774), width: 1.5),
         ),
       ),
     );
@@ -295,7 +289,7 @@ class _PhoneField extends StatelessWidget {
 }
 
 class _OtpSection extends StatelessWidget {
-  const _OtpSection({required this.controller});
+  _OtpSection({required this.controller});
 
   final AuthController controller;
 
@@ -315,43 +309,43 @@ class _OtpSection extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: textTheme.bodyMedium?.copyWith(
                   color: AppColors.primary,
-                  fontSize: 12,
+                  fontSize: 12.spx.spx,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 controller.pendingPhone.value,
                 textAlign: TextAlign.center,
                 style: textTheme.titleSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontSize: 13.spx.spx,
                   letterSpacing: 0.4,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10.hpx),
         TextFormField(
           controller: controller.otpController,
           validator: controller.validateOtp,
           keyboardType: TextInputType.number,
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w600,
             letterSpacing: 2,
-            fontSize: 15,
+            fontSize: 15.spx.spx,
           ),
           decoration: InputDecoration(
             counterText: '',
             hintText: 'Enter 6-digit OTP',
-            hintStyle: const TextStyle(color: Color(0xFF999999)),
+            hintStyle: TextStyle(color: Color(0xFF999999)),
             filled: true,
             fillColor: AppColors.white.withValues(alpha: 0.82),
-            prefixIcon: const Padding(
+            prefixIcon: Padding(
               padding: EdgeInsets.only(left: 16, right: 8),
               child: Center(
                 widthFactor: 1,
@@ -361,34 +355,29 @@ class _OtpSection extends StatelessWidget {
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
-                    fontSize: 15,
+                    fontSize: 15.spx.spx,
                   ),
                 ),
               ),
             ),
-            prefixIconConstraints: BoxConstraints(minWidth: 0),
+            prefixIconConstraints: BoxConstraints(minWidth: 0.wpx),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0x2E092774),
-                width: 1.5,
-              ),
+              borderRadius: BorderRadius.circular(12.rpx),
+              borderSide: BorderSide(color: Color(0x2E092774), width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0x2E092774),
-                width: 1.5,
-              ),
+              borderRadius: BorderRadius.circular(12.rpx),
+              borderSide: BorderSide(color: Color(0x2E092774), width: 1.5),
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6.hpx),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton(
-              onPressed: controller.isSendingOtp.value ||
+              onPressed:
+                  controller.isSendingOtp.value ||
                       controller.isVerifyingOtp.value ||
                       controller.resendTimer.value > 0
                   ? null
@@ -400,9 +389,10 @@ class _OtpSection extends StatelessWidget {
                     : 'Resend OTP',
                 style: TextStyle(
                   decoration: TextDecoration.underline,
-                  fontSize: 12,
+                  fontSize: 12.spx.spx,
                   fontWeight: FontWeight.w600,
-                  color: controller.isSendingOtp.value ||
+                  color:
+                      controller.isSendingOtp.value ||
                           controller.isVerifyingOtp.value ||
                           controller.resendTimer.value > 0
                       ? AppColors.primary.withValues(alpha: 0.55)
@@ -411,23 +401,25 @@ class _OtpSection extends StatelessWidget {
               ),
             ),
             TextButton(
-              onPressed: controller.isSendingOtp.value || controller.isVerifyingOtp.value
+              onPressed:
+                  controller.isSendingOtp.value ||
+                      controller.isVerifyingOtp.value
                   ? null
                   : controller.changeNumber,
               style: TextButton.styleFrom(padding: EdgeInsets.zero),
-              child: const Text(
+              child: Text(
                 'Change Number',
                 style: TextStyle(
                   color: AppColors.primary,
                   decoration: TextDecoration.underline,
-                  fontSize: 12,
+                  fontSize: 12.spx.spx,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6.hpx),
       ],
     );
   }

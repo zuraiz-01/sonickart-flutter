@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import '../../../../theme/app_colors.dart';
 
 class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({
+  AuthScaffold({
     super.key,
     required this.title,
     required this.subtitle,
@@ -22,13 +23,9 @@ class AuthScaffold extends StatelessWidget {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFDDF6EE),
-              Color(0xFFF9F3D9),
-              Colors.white,
-            ],
+            colors: [Color(0xFFDDF6EE), Color(0xFFF9F3D9), Colors.white],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -36,36 +33,36 @@ class AuthScaffold extends StatelessWidget {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20.rpx),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 460),
+                constraints: BoxConstraints(maxWidth: 460.wpx),
                 child: Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: EdgeInsets.all(24.rpx),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(14),
+                          padding: EdgeInsets.all(14.rpx),
                           decoration: BoxDecoration(
                             color: AppColors.muted,
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(18.rpx),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.shopping_basket_rounded,
                             color: AppColors.primary,
                             size: 34,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: 20.hpx),
                         Text(title, style: theme.textTheme.headlineSmall),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8.hpx),
                         Text(subtitle, style: theme.textTheme.bodyMedium),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24.hpx),
                         child,
                         if (footer != null) ...[
-                          const SizedBox(height: 18),
+                          SizedBox(height: 18.hpx),
                           footer!,
                         ],
                       ],

@@ -71,8 +71,14 @@ class AddressModel {
         : const <String, dynamic>{};
     return AddressModel(
       id: (json['id'] ?? json['_id'])?.toString() ?? '',
-      fullName: (json['fullName'] ?? json['name'] ?? json['customerName'])?.toString() ?? '',
-      contactNumber: (json['contactNumber'] ?? json['phone'] ?? json['mobile'])?.toString() ?? '',
+      fullName:
+          (json['fullName'] ?? json['name'] ?? json['customerName'])
+              ?.toString() ??
+          '',
+      contactNumber:
+          (json['contactNumber'] ?? json['phone'] ?? json['mobile'])
+              ?.toString() ??
+          '',
       address: json['address']?.toString() ?? '',
       latitude: number(json['latitude'] ?? liveLocation['latitude']),
       longitude: number(json['longitude'] ?? liveLocation['longitude']),

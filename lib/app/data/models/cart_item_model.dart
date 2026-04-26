@@ -1,10 +1,7 @@
 import 'product_model.dart';
 
 class CartItemModel {
-  const CartItemModel({
-    required this.product,
-    required this.quantity,
-  });
+  const CartItemModel({required this.product, required this.quantity});
 
   final ProductModel product;
   final int quantity;
@@ -13,10 +10,7 @@ class CartItemModel {
 
   double get totalPrice => unitPrice * quantity;
 
-  CartItemModel copyWith({
-    ProductModel? product,
-    int? quantity,
-  }) {
+  CartItemModel copyWith({ProductModel? product, int? quantity}) {
     return CartItemModel(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
@@ -37,7 +31,8 @@ class CartItemModel {
       product: ProductModel.fromJson(
         Map<String, dynamic>.from(productJson as Map? ?? const {}),
       ),
-      quantity: (json['quantity'] as num?)?.toInt() ??
+      quantity:
+          (json['quantity'] as num?)?.toInt() ??
           (json['count'] as num?)?.toInt() ??
           0,
     );

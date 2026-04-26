@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../theme/app_colors.dart';
@@ -6,7 +7,7 @@ import '../../data/models/package_order_model.dart';
 import 'controllers/package_controller.dart';
 
 class PackageOrderDetailsView extends GetView<PackageController> {
-  const PackageOrderDetailsView({super.key});
+  PackageOrderDetailsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,13 +16,10 @@ class PackageOrderDetailsView extends GetView<PackageController> {
         controller.findOrderById(orderId) ?? controller.selectedOrder.value;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
-      appBar: AppBar(
-        title: const Text('Package Order'),
-        centerTitle: true,
-      ),
+      backgroundColor: Color(0xFFF5F8FF),
+      appBar: AppBar(title: Text('Package Order'), centerTitle: true),
       body: order == null
-          ? const Center(
+          ? Center(
               child: Text(
                 'Package order not found.',
                 style: TextStyle(
@@ -31,13 +29,13 @@ class PackageOrderDetailsView extends GetView<PackageController> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16.rpx),
               children: [
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -53,20 +51,16 @@ class PackageOrderDetailsView extends GetView<PackageController> {
                               children: [
                                 Text(
                                   'Packing your package order',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
+                                  style: Theme.of(context).textTheme.titleLarge
                                       ?.copyWith(
                                         color: AppColors.primary,
                                         fontWeight: FontWeight.w800,
                                       ),
                                 ),
-                                const SizedBox(height: 4),
+                                SizedBox(height: 4.hpx),
                                 Text(
                                   'Order #${order.id}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
                                         color: AppColors.textSecondary,
                                       ),
@@ -75,17 +69,17 @@ class PackageOrderDetailsView extends GetView<PackageController> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEEF4FF),
-                              borderRadius: BorderRadius.circular(999),
+                              color: Color(0xFFEEF4FF),
+                              borderRadius: BorderRadius.circular(999.rpx),
                             ),
                             child: Text(
                               order.status,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -93,23 +87,29 @@ class PackageOrderDetailsView extends GetView<PackageController> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      _DetailRow(label: 'Package Type', value: order.packageType),
+                      SizedBox(height: 16.hpx),
+                      _DetailRow(
+                        label: 'Package Type',
+                        value: order.packageType,
+                      ),
                       _DetailRow(label: 'Pickup', value: order.pickupAddress),
                       _DetailRow(label: 'Drop', value: order.dropAddress),
                       _DetailRow(
                         label: 'Booked At',
-                        value: order.createdAt.toLocal().toString().substring(0, 16),
+                        value: order.createdAt.toLocal().toString().substring(
+                          0,
+                          16,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16.hpx),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -119,24 +119,25 @@ class PackageOrderDetailsView extends GetView<PackageController> {
                     children: [
                       Text(
                         'Bill Details',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 14),
+                      SizedBox(height: 14.hpx),
                       _BillRow(
                         label: 'Distance',
                         value: '${order.distanceKm.toStringAsFixed(1)} km',
                       ),
-                      const SizedBox(height: 10),
+                      SizedBox(height: 10.hpx),
                       _BillRow(
                         label: 'Delivery Charge',
                         value: 'Rs ${order.deliveryCharge.toStringAsFixed(0)}',
                       ),
-                      const SizedBox(height: 10),
-                      const Divider(height: 1, color: AppColors.border),
-                      const SizedBox(height: 10),
+                      SizedBox(height: 10.hpx),
+                      Divider(height: 1, color: AppColors.border),
+                      SizedBox(height: 10.hpx),
                       _BillRow(
                         label: 'Grand Total',
                         value: 'Rs ${order.totalPrice.toStringAsFixed(0)}',
@@ -152,7 +153,7 @@ class PackageOrderDetailsView extends GetView<PackageController> {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  _DetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -160,25 +161,25 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4.hpx),
           Text(
             value,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -187,11 +188,7 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _BillRow extends StatelessWidget {
-  const _BillRow({
-    required this.label,
-    required this.value,
-    this.strong = false,
-  });
+  _BillRow({required this.label, required this.value, this.strong = false});
 
   final String label;
   final String value;

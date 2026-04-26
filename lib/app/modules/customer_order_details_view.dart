@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../data/models/order_model.dart';
@@ -6,7 +7,7 @@ import '../theme/app_colors.dart';
 import 'order_controller.dart';
 
 class CustomerOrderDetailsView extends GetView<OrderController> {
-  const CustomerOrderDetailsView({super.key});
+  CustomerOrderDetailsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,13 +16,10 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
         controller.findOrderById(orderId) ?? controller.selectedOrder.value;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
-      appBar: AppBar(
-        title: const Text('Order Details'),
-        centerTitle: true,
-      ),
+      backgroundColor: Color(0xFFF5F8FF),
+      appBar: AppBar(title: Text('Order Details'), centerTitle: true),
       body: order == null
-          ? const Center(
+          ? Center(
               child: Text(
                 'Order not found.',
                 style: TextStyle(
@@ -31,14 +29,16 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16.rpx),
               children: [
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
+                    borderRadius: BorderRadius.circular(18.rpx),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,30 +46,35 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                       Text(
                         'Order #${order.id}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6.hpx),
                       Text(
                         order.createdAt.toLocal().toString().substring(0, 16),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16.hpx),
                       _DetailLine(label: 'Status', value: 'Preparing'),
                       _DetailLine(label: 'Payment', value: order.paymentMode),
-                      _DetailLine(label: 'Delivery Address', value: order.deliveryAddress),
+                      _DetailLine(
+                        label: 'Delivery Address',
+                        value: order.deliveryAddress,
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16.hpx),
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
+                    borderRadius: BorderRadius.circular(18.rpx),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                    ),
                   ),
                   child: Column(
                     children: order.items.map((item) {
@@ -80,15 +85,17 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                         ),
                         title: Text(
                           item.product.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        subtitle: Text('${item.quantity} x ${item.product.unit}'),
+                        subtitle: Text(
+                          '${item.quantity} x ${item.product.unit}',
+                        ),
                         trailing: Text(
                           'Rs ${item.totalPrice.toStringAsFixed(0)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w800,
                           ),
@@ -97,17 +104,19 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                     }).toList(),
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16.hpx),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
+                    borderRadius: BorderRadius.circular(18.rpx),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Total Paid',
                           style: TextStyle(
@@ -118,7 +127,7 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                       ),
                       Text(
                         'Rs ${order.totalPrice.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w800,
                         ),
@@ -133,10 +142,7 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
 }
 
 class _DetailLine extends StatelessWidget {
-  const _DetailLine({
-    required this.label,
-    required this.value,
-  });
+  _DetailLine({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -144,24 +150,24 @@ class _DetailLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           Text(
             value,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

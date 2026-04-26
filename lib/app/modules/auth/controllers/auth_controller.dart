@@ -11,9 +11,9 @@ import '../../../routes/app_routes.dart';
 class AuthController extends GetxController {
   AuthController(this._repository);
 
-  static const int otpResendSeconds = 60;
-  static const int phoneDigitLength = 10;
-  static const String dialCode = '+91';
+  static int otpResendSeconds = 60;
+  static int phoneDigitLength = 10;
+  static String dialCode = '+91';
 
   final AuthRepository _repository;
   final GetStorage _storage = GetStorage();
@@ -44,7 +44,8 @@ class AuthController extends GetxController {
 
   bool get isLoggedIn => _storage.read('isLoggedIn') == true;
 
-  String get enteredPhoneDigits => phoneController.text.replaceAll(RegExp(r'\D'), '');
+  String get enteredPhoneDigits =>
+      phoneController.text.replaceAll(RegExp(r'\D'), '');
 
   String get normalizedPhone {
     final digits = enteredPhoneDigits;
@@ -76,7 +77,8 @@ class AuthController extends GetxController {
     if (digits.isEmpty) {
       return 'Phone number required hai.';
     }
-    final normalized = (digits.length == phoneDigitLength + 1 && digits.startsWith('0'))
+    final normalized =
+        (digits.length == phoneDigitLength + 1 && digits.startsWith('0'))
         ? digits.substring(1)
         : digits;
     if (normalized.length != phoneDigitLength) {
@@ -120,9 +122,12 @@ class AuthController extends GetxController {
   }
 
   Future<void> resendOtp() async {
-    if (resendTimer.value > 0 || isSendingOtp.value || isVerifyingOtp.value) return;
+    if (resendTimer.value > 0 || isSendingOtp.value || isVerifyingOtp.value)
+      return;
 
-    final phone = pendingPhone.value.isNotEmpty ? pendingPhone.value : fullPhone;
+    final phone = pendingPhone.value.isNotEmpty
+        ? pendingPhone.value
+        : fullPhone;
     if (phone.isEmpty) return;
 
     await _requestOtp(phone: phone, showResentMessage: true);
@@ -149,11 +154,13 @@ class AuthController extends GetxController {
 
     if (isVerifyingOtp.value || isSendingOtp.value) return;
 
-    final phoneForVerification =
-        pendingPhone.value.isNotEmpty ? pendingPhone.value : fullPhone;
+    final phoneForVerification = pendingPhone.value.isNotEmpty
+        ? pendingPhone.value
+        : fullPhone;
     final otpCode = otpController.text.replaceAll(RegExp(r'\D'), '');
 
-    if (phoneForVerification.replaceAll(RegExp(r'\D'), '').length < phoneDigitLength) {
+    if (phoneForVerification.replaceAll(RegExp(r'\D'), '').length <
+        phoneDigitLength) {
       Get.snackbar(
         'Invalid Number',
         'Mobile number incomplete hai. Number dobara enter karo.',
@@ -243,7 +250,7 @@ class AuthController extends GetxController {
   void _startResendTimer() {
     _resendTimerTicker?.cancel();
     resendTimer.value = otpResendSeconds;
-    _resendTimerTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _resendTimerTicker = Timer.periodic(Duration(seconds: 1), (timer) {
       if (resendTimer.value <= 1) {
         resendTimer.value = 0;
         timer.cancel();

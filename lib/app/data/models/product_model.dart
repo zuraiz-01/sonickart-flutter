@@ -79,12 +79,14 @@ class ProductModel {
         ? Map<String, dynamic>.from(json['branch'] as Map)
         : const <String, dynamic>{};
     final images = json['images'] is List ? json['images'] as List : const [];
-    final rawImageValue = json['image'] ??
+    final rawImageValue =
+        json['image'] ??
         json['product_images'] ??
         json['productImages'] ??
         json['thumbnail'] ??
         (images.isNotEmpty ? images.first : null);
-    final rawFeaturedImageValue = json['featuredImage'] ??
+    final rawFeaturedImageValue =
+        json['featuredImage'] ??
         json['featureImage'] ??
         json['featured_image'] ??
         json['feature_image'] ??
@@ -94,7 +96,8 @@ class ProductModel {
     final featuredImageValue = _imageString(rawFeaturedImageValue);
     return ProductModel(
       id: (json['id'] ?? json['_id'] ?? json['productId'])?.toString() ?? '',
-      categoryId: (json['categoryId'] ??
+      categoryId:
+          (json['categoryId'] ??
                   json['category_id'] ??
                   category['id'] ??
                   category['_id'] ??
@@ -103,30 +106,35 @@ class ProductModel {
           '',
       name: json['name']?.toString() ?? json['product_name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      unit: (json['unit'] ?? json['quantity'] ?? json['weight'] ?? json['size'])
+      unit:
+          (json['unit'] ?? json['quantity'] ?? json['weight'] ?? json['size'])
               ?.toString() ??
           '',
-      price: (json['discountPrice'] ??
+      price:
+          (json['discountPrice'] ??
                   json['discount_price'] ??
                   json['sellingPrice'] ??
                   json['selling_price'] ??
                   json['price'])
               ?.toString() ??
           '0',
-      mrp: (json['mrp'] ?? json['originalPrice'] ?? json['original_price'])
+      mrp:
+          (json['mrp'] ?? json['originalPrice'] ?? json['original_price'])
               ?.toString() ??
           '',
       emoji: json['emoji']?.toString() ?? '',
       imageUrl: imageValue,
       featuredImageUrl: featuredImageValue,
-      vendorId: (json['vendorId'] ??
+      vendorId:
+          (json['vendorId'] ??
                   json['vendor_id'] ??
                   vendor['id'] ??
                   vendor['_id'] ??
                   vendor['vendorId'])
               ?.toString() ??
           '',
-      branchId: (json['branchId'] ??
+      branchId:
+          (json['branchId'] ??
                   json['branch_id'] ??
                   branch['id'] ??
                   branch['_id'] ??

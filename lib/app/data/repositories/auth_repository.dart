@@ -7,7 +7,7 @@ import '../models/user_model.dart';
 
 class AuthRepository {
   AuthRepository(this._apiService, {GetStorage? storage})
-      : _storage = storage ?? GetStorage();
+    : _storage = storage ?? GetStorage();
 
   final ApiService _apiService;
   final GetStorage _storage;
@@ -21,7 +21,9 @@ class AuthRepository {
         authenticated: false,
       );
     } catch (error) {
-      debugPrint('AuthRepository.sendOtp: backend unavailable, keeping OTP UI alive: $error');
+      debugPrint(
+        'AuthRepository.sendOtp: backend unavailable, keeping OTP UI alive: $error',
+      );
     }
   }
 
@@ -47,11 +49,19 @@ class AuthRepository {
         data: {'phone': _serverPhone(phone), 'agreement': true, 'otp': otp},
         authenticated: false,
       );
-      final token = _findString(response, const ['accessToken', 'token', 'access_token']);
-      final refresh = _findString(response, const ['refreshToken', 'refresh_token']);
+      final token = _findString(response, const [
+        'accessToken',
+        'token',
+        'access_token',
+      ]);
+      final refresh = _findString(response, const [
+        'refreshToken',
+        'refresh_token',
+      ]);
       if (token != null) await _storage.write('accessToken', token);
       if (refresh != null) await _storage.write('refreshToken', refresh);
-      final userJson = _findMap(response, const ['user', 'customer', 'data']) ?? response;
+      final userJson =
+          _findMap(response, const ['user', 'customer', 'data']) ?? response;
       final user = UserModel.fromJson(userJson);
       if (user.phone.isNotEmpty || user.id.isNotEmpty) return user;
     } catch (error) {

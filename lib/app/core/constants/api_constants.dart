@@ -39,7 +39,8 @@ class ApiConstants {
   static const paymentOrder = '/payment/create-order';
   static const paymentVerify = '/payment/verify';
 
-  static String productsByCategory(String categoryId) => '/products/$categoryId';
+  static String productsByCategory(String categoryId) =>
+      '/products/$categoryId';
 
   static String orderById(String id) => '/order/$id';
 

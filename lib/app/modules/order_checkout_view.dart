@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../routes/app_routes.dart';
@@ -7,28 +8,25 @@ import 'cart/controllers/cart_controller.dart';
 import 'order_controller.dart';
 
 class OrderCheckoutView extends GetView<OrderController> {
-  const OrderCheckoutView({super.key});
+  OrderCheckoutView({super.key});
 
   @override
   Widget build(BuildContext context) {
     final cartController = Get.find<CartController>();
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
-      appBar: AppBar(
-        title: const Text('Checkout'),
-        centerTitle: true,
-      ),
+      backgroundColor: Color(0xFFF5F8FF),
+      appBar: AppBar(title: Text('Checkout'), centerTitle: true),
       body: Obx(
         () => Stack(
           children: [
             ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              padding: EdgeInsets.fromLTRB(16.wpx, 16.hpx, 16.wpx, 120.hpx),
               children: [
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: EdgeInsets.all(14.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -37,49 +35,51 @@ class OrderCheckoutView extends GetView<OrderController> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 38.wpx,
+                        height: 38.hpx,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEEF4FF),
-                          borderRadius: BorderRadius.circular(19),
+                          color: Color(0xFFEEF4FF),
+                          borderRadius: BorderRadius.circular(19.rpx),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.location_on_outlined,
                           color: AppColors.primary,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12.wpx),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'Delivery Address',
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8.hpx),
                             TextField(
                               controller: controller.deliveryAddressController,
                               minLines: 2,
                               maxLines: 3,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 hintText: 'Enter delivery address',
                                 border: InputBorder.none,
                                 isDense: true,
                                 contentPadding: EdgeInsets.zero,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            SizedBox(height: 6.hpx),
                             TextButton(
-                              onPressed: () => Get.toNamed(AppRoutes.addressBook),
+                              onPressed: () =>
+                                  Get.toNamed(AppRoutes.addressBook),
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 foregroundColor: AppColors.primary,
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Manage Addresses',
                                 style: TextStyle(fontWeight: FontWeight.w700),
                               ),
@@ -90,11 +90,11 @@ class OrderCheckoutView extends GetView<OrderController> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14.hpx),
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -108,15 +108,17 @@ class OrderCheckoutView extends GetView<OrderController> {
                         ),
                         title: Text(
                           item.product.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        subtitle: Text('${item.quantity} x ${item.product.unit}'),
+                        subtitle: Text(
+                          '${item.quantity} x ${item.product.unit}',
+                        ),
                         trailing: Text(
                           'Rs ${item.totalPrice.toStringAsFixed(0)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w800,
                           ),
@@ -125,12 +127,12 @@ class OrderCheckoutView extends GetView<OrderController> {
                     }).toList(),
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14.hpx),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -140,12 +142,13 @@ class OrderCheckoutView extends GetView<OrderController> {
                     children: [
                       Text(
                         'Payment Mode',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12.hpx),
                       _PaymentTile(
                         title: 'Cash on Delivery',
                         value: 'COD',
@@ -161,12 +164,12 @@ class OrderCheckoutView extends GetView<OrderController> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14.hpx),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -176,35 +179,38 @@ class OrderCheckoutView extends GetView<OrderController> {
                     children: [
                       Text(
                         'Coupons',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12.hpx),
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: controller.couponCodeController,
                               textCapitalization: TextCapitalization.characters,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 hintText: 'Try SONIC10',
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          SizedBox(width: 10.wpx),
                           FilledButton(
-                            onPressed: () => controller.applyCoupon(cartController.grandTotal),
-                            child: const Text('Apply'),
+                            onPressed: () => controller.applyCoupon(
+                              cartController.grandTotal,
+                            ),
+                            child: Text('Apply'),
                           ),
                         ],
                       ),
                       if (controller.appliedCoupon.value != null) ...[
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8.hpx),
                         Text(
                           '${controller.appliedCoupon.value} applied - Rs ${controller.couponDiscount.value.toStringAsFixed(0)} saved',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,
                           ),
@@ -213,12 +219,12 @@ class OrderCheckoutView extends GetView<OrderController> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14.hpx),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
                       color: AppColors.primary.withValues(alpha: 0.06),
                     ),
@@ -230,16 +236,18 @@ class OrderCheckoutView extends GetView<OrderController> {
                         value: cartController.subtotal,
                       ),
                       if (controller.couponDiscount.value > 0) ...[
-                        const SizedBox(height: 10),
+                        SizedBox(height: 10.hpx),
                         _CheckoutRow(
                           label: 'Coupon discount',
                           value: -controller.couponDiscount.value,
                         ),
                       ],
-                      const SizedBox(height: 10),
+                      SizedBox(height: 10.hpx),
                       _CheckoutRow(
                         label: 'Grand total',
-                        value: controller.checkoutTotal(cartController.grandTotal),
+                        value: controller.checkoutTotal(
+                          cartController.grandTotal,
+                        ),
                         strong: true,
                       ),
                     ],
@@ -256,15 +264,15 @@ class OrderCheckoutView extends GetView<OrderController> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16.rpx),
                   ),
                 ),
                 child: controller.isPlacingOrder.value
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                    ? SizedBox(
+                        width: 18.wpx,
+                        height: 18.hpx,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppColors.white,
@@ -272,7 +280,7 @@ class OrderCheckoutView extends GetView<OrderController> {
                       )
                     : Text(
                         'Place Order - Rs ${controller.checkoutTotal(cartController.grandTotal).toStringAsFixed(0)}',
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        style: TextStyle(fontWeight: FontWeight.w800),
                       ),
               ),
             ),
@@ -284,7 +292,7 @@ class OrderCheckoutView extends GetView<OrderController> {
 }
 
 class _PaymentTile extends StatelessWidget {
-  const _PaymentTile({
+  _PaymentTile({
     required this.title,
     required this.value,
     required this.groupValue,
@@ -310,21 +318,14 @@ class _PaymentTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       title: Text(
         title,
-        style: const TextStyle(
-          color: AppColors.primary,
-          fontWeight: FontWeight.w700,
-        ),
+        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
 class _CheckoutRow extends StatelessWidget {
-  const _CheckoutRow({
-    required this.label,
-    required this.value,
-    this.strong = false,
-  });
+  _CheckoutRow({required this.label, required this.value, this.strong = false});
 
   final String label;
   final double value;

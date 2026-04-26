@@ -6,6 +6,38 @@ import 'package:get/get.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../routes/app_routes.dart';
+
+void openDashboardTab(int index) {
+  final targetIndex = index.clamp(0, 4);
+  debugPrint(
+    'openDashboardTab: target=$targetIndex currentRoute=${Get.currentRoute} registered=${Get.isRegistered<DashboardController>()}',
+  );
+
+  if (Get.isRegistered<DashboardController>()) {
+    final controller = Get.find<DashboardController>();
+    controller.setTabFromNavigation(targetIndex);
+
+    if (Get.currentRoute == AppRoutes.dashboard) {
+      return;
+    }
+
+    var foundDashboardRoute = false;
+    Get.until((route) {
+      final isDashboardRoute = route.settings.name == AppRoutes.dashboard;
+      if (isDashboardRoute) {
+        foundDashboardRoute = true;
+      }
+      return isDashboardRoute;
+    });
+
+    if (foundDashboardRoute) {
+      return;
+    }
+  }
+
+  Get.offNamed(AppRoutes.dashboard, arguments: {'tabIndex': targetIndex});
+}
 
 class DashboardController extends GetxController {
   final currentIndex = 0.obs;
@@ -44,7 +76,9 @@ class DashboardController extends GetxController {
   }
 
   void setTabFromNavigation(int index) {
-    debugPrint('DashboardController.setTabFromNavigation: requested tab $index');
+    debugPrint(
+      'DashboardController.setTabFromNavigation: requested tab $index',
+    );
     currentIndex.value = index;
   }
 
@@ -83,7 +117,10 @@ class DashboardController extends GetxController {
       setTabFromNavigation(requestedIndex);
     }
     loadCatalog();
-    _promoTimer = Timer.periodic(const Duration(seconds: 4), (_) => nextPromo());
+    _promoTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => nextPromo(),
+    );
     _searchHintTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       currentSearchHintIndex.value =
           (currentSearchHintIndex.value + 1) % searchHints.length;

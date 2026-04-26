@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:sizer/sizer.dart';
 
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
@@ -17,12 +18,16 @@ class SonicCartApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: 'Sonic Cart',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.splash,
-      getPages: AppPages.routes,
+    return Sizer(
+      builder: (context, orientation, deviceType) {
+        return GetMaterialApp(
+          title: 'Sonic Cart',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          initialRoute: AppRoutes.splash,
+          getPages: AppPages.routes,
+        );
+      },
     );
   }
 }

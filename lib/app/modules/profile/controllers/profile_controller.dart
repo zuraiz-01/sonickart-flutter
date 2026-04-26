@@ -47,8 +47,14 @@ class ProfileController extends GetxController {
   String get initials {
     final seed = currentUser?.name.isNotEmpty == true
         ? currentUser!.name
-        : (currentUser?.phone.isNotEmpty == true ? currentUser!.phone : 'Guest');
-    final parts = seed.trim().split(' ').where((part) => part.isNotEmpty).toList();
+        : (currentUser?.phone.isNotEmpty == true
+              ? currentUser!.phone
+              : 'Guest');
+    final parts = seed
+        .trim()
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .toList();
     if (parts.isEmpty) {
       return 'G';
     }
@@ -174,9 +180,13 @@ class ProfileController extends GetxController {
       return;
     }
 
-    final rawList = _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
+    final rawList =
+        _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
     final restored = rawList
-        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item as Map)))
+        .map(
+          (item) =>
+              AddressModel.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
         .toList();
     addresses.assignAll(restored);
     debugPrint(
@@ -233,7 +243,8 @@ class ProfileController extends GetxController {
           contactNumber: phone,
           address: addressLine,
         );
-        updatedAddress = await _trySaveAddress(updatedAddress) ?? updatedAddress;
+        updatedAddress =
+            await _trySaveAddress(updatedAddress) ?? updatedAddress;
         addresses[index] = updatedAddress;
         debugPrint('ProfileController.saveAddress: updated ${existing.id}');
       }
@@ -297,14 +308,21 @@ class ProfileController extends GetxController {
       };
       final response = editingAddress.value == null
           ? await api.post(endpoint: ApiConstants.addressSave, data: payload)
-          : await api.put(endpoint: ApiConstants.addressById(address.id), data: payload);
+          : await api.put(
+              endpoint: ApiConstants.addressById(address.id),
+              data: payload,
+            );
       final raw = response['data'] is Map
           ? Map<String, dynamic>.from(response['data'] as Map)
           : response;
       final parsed = AddressModel.fromJson(raw);
-      return parsed.id.isEmpty ? null : parsed.copyWith(isSelected: address.isSelected);
+      return parsed.id.isEmpty
+          ? null
+          : parsed.copyWith(isSelected: address.isSelected);
     } catch (error) {
-      debugPrint('ProfileController._trySaveAddress: local fallback after $error');
+      debugPrint(
+        'ProfileController._trySaveAddress: local fallback after $error',
+      );
       return null;
     }
   }
@@ -312,9 +330,13 @@ class ProfileController extends GetxController {
   Future<void> _tryDeleteAddress(String id) async {
     if (!Get.isRegistered<ApiService>()) return;
     try {
-      await Get.find<ApiService>().delete(endpoint: ApiConstants.addressById(id));
+      await Get.find<ApiService>().delete(
+        endpoint: ApiConstants.addressById(id),
+      );
     } catch (error) {
-      debugPrint('ProfileController._tryDeleteAddress: local fallback after $error');
+      debugPrint(
+        'ProfileController._tryDeleteAddress: local fallback after $error',
+      );
     }
   }
 
@@ -330,13 +352,15 @@ class ProfileController extends GetxController {
           'radiusKm': 30,
         },
       );
-      final vendorId = response['vendorId'] ??
+      final vendorId =
+          response['vendorId'] ??
           response['vendor_id'] ??
           (response['nearestVendor'] is Map
               ? (response['nearestVendor']['vendorId'] ??
-                  response['nearestVendor']['vendor_id'])
+                    response['nearestVendor']['vendor_id'])
               : null) ??
-          (response['vendorIds'] is List && (response['vendorIds'] as List).isNotEmpty
+          (response['vendorIds'] is List &&
+                  (response['vendorIds'] as List).isNotEmpty
               ? (response['vendorIds'] as List).first
               : null);
       if (vendorId != null) {
@@ -350,17 +374,24 @@ class ProfileController extends GetxController {
   }
 
   Future<List<AddressModel>> _tryFetchAddresses() async {
-    if (!Get.isRegistered<ApiService>()) return const <AddressModel>[];
+    if (!Get.isRegistered<ApiService>()) return <AddressModel>[];
     try {
-      final response = await Get.find<ApiService>().get(endpoint: ApiConstants.addressList);
+      final response = await Get.find<ApiService>().get(
+        endpoint: ApiConstants.addressList,
+      );
       final list = _extractList(response)
-          .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) =>
+                AddressModel.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
           .where((address) => address.id.isNotEmpty)
           .toList();
       return list;
     } catch (error) {
-      debugPrint('ProfileController._tryFetchAddresses: local fallback after $error');
-      return const <AddressModel>[];
+      debugPrint(
+        'ProfileController._tryFetchAddresses: local fallback after $error',
+      );
+      return <AddressModel>[];
     }
   }
 
@@ -375,13 +406,19 @@ class ProfileController extends GetxController {
     for (final value in candidates) {
       if (value is List) return value;
       if (value is Map) {
-        for (final nested in ['data', 'addresses', 'items', 'result', 'results']) {
+        for (final nested in [
+          'data',
+          'addresses',
+          'items',
+          'result',
+          'results',
+        ]) {
           final nestedValue = value[nested];
           if (nestedValue is List) return nestedValue;
         }
       }
     }
-    return const [];
+    return [];
   }
 
   void _syncProfileForm() {

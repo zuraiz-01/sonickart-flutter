@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../../routes/app_routes.dart';
@@ -6,7 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
 
 class CartView extends GetView<CartController> {
-  const CartView({super.key, this.showScaffold = false});
+  CartView({super.key, this.showScaffold = false});
 
   final bool showScaffold;
 
@@ -14,26 +15,24 @@ class CartView extends GetView<CartController> {
   Widget build(BuildContext context) {
     final content = Obx(() {
       if (controller.isEmpty) {
-        return _CartEmptyState(
-          isSyncing: controller.isSyncingCart.value,
-        );
+        return _CartEmptyState(isSyncing: controller.isSyncingCart.value);
       }
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: EdgeInsets.fromLTRB(16.wpx, 16.hpx, 16.wpx, 24.hpx),
         children: [
           _SummaryCard(
             totalItems: controller.totalItems,
             isSyncing: controller.isSyncingCart.value,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           _ItemsCard(controller: controller),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           _PriceCard(
             subtotal: controller.subtotal,
             total: controller.grandTotal,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.hpx),
           _ActionSection(controller: controller),
         ],
       );
@@ -44,21 +43,15 @@ class CartView extends GetView<CartController> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
-      appBar: AppBar(
-        title: const Text('Cart'),
-        centerTitle: true,
-      ),
+      backgroundColor: Color(0xFFF5F8FF),
+      appBar: AppBar(title: Text('Cart'), centerTitle: true),
       body: content,
     );
   }
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.totalItems,
-    required this.isSyncing,
-  });
+  _SummaryCard({required this.totalItems, required this.isSyncing});
 
   final int totalItems;
   final bool isSyncing;
@@ -70,27 +63,27 @@ class _SummaryCard extends StatelessWidget {
         Text(
           'Ready to checkout',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w800,
-              ),
+            color: AppColors.primary,
+            fontWeight: FontWeight.w800,
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6.hpx),
         Text(
           '$totalItems ${totalItems == 1 ? 'item' : 'items'} packed in your cart.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10.hpx),
         Text(
           isSyncing ? 'Refreshing cart...' : 'Speed you want, care you trust',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
-              ),
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -99,7 +92,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _ItemsCard extends StatelessWidget {
-  const _ItemsCard({required this.controller});
+  _ItemsCard({required this.controller});
 
   final CartController controller;
 
@@ -108,9 +101,9 @@ class _ItemsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 8,
@@ -121,29 +114,29 @@ class _ItemsCard extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+            padding: EdgeInsets.fromLTRB(14.wpx, 14.hpx, 14.wpx, 8.hpx),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
                     'Cart items',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 Text(
                   '${controller.totalItems} selected',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           ...controller.items.map((item) {
             return _CartItemRow(
               itemId: item.product.id,
@@ -164,7 +157,7 @@ class _ItemsCard extends StatelessWidget {
 }
 
 class _CartItemRow extends StatelessWidget {
-  const _CartItemRow({
+  _CartItemRow({
     required this.itemId,
     required this.emoji,
     required this.name,
@@ -189,21 +182,21 @@ class _CartItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14.rpx),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 62,
-            height: 62,
+            width: 62.wpx,
+            height: 62.hpx,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14.rpx),
             ),
-            child: Text(emoji, style: const TextStyle(fontSize: 28)),
+            child: Text(emoji, style: TextStyle(fontSize: 28.spx)),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,29 +204,29 @@ class _CartItemRow extends StatelessWidget {
                 Text(
                   name,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4.hpx),
                 Text(
                   description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.35,
-                      ),
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6.hpx),
                 Text(
                   unit,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10.hpx),
                 Row(
                   children: [
                     _QuantityButton(
@@ -241,42 +234,39 @@ class _CartItemRow extends StatelessWidget {
                       onTap: onRemove,
                     ),
                     Container(
-                      width: 40,
+                      width: 40.wpx,
                       alignment: Alignment.center,
                       child: Text(
                         '$quantity',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    _QuantityButton(
-                      icon: Icons.add_rounded,
-                      onTap: onAdd,
-                    ),
+                    _QuantityButton(icon: Icons.add_rounded, onTap: onAdd),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10.wpx),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 'Rs ${totalPrice.toStringAsFixed(0)}',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6.hpx),
               Text(
                 'ID $itemId',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -287,10 +277,7 @@ class _CartItemRow extends StatelessWidget {
 }
 
 class _QuantityButton extends StatelessWidget {
-  const _QuantityButton({
-    required this.icon,
-    required this.onTap,
-  });
+  _QuantityButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -299,13 +286,13 @@ class _QuantityButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(12.rpx),
       child: Ink(
-        width: 32,
-        height: 32,
+        width: 32.wpx,
+        height: 32.hpx,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.rpx),
         ),
         child: Icon(icon, size: 18, color: AppColors.primary),
       ),
@@ -314,10 +301,7 @@ class _QuantityButton extends StatelessWidget {
 }
 
 class _PriceCard extends StatelessWidget {
-  const _PriceCard({
-    required this.subtotal,
-    required this.total,
-  });
+  _PriceCard({required this.subtotal, required this.total});
 
   final double subtotal;
   final double total;
@@ -325,12 +309,12 @@ class _PriceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 8,
@@ -344,15 +328,15 @@ class _PriceCard extends StatelessWidget {
           Text(
             'Price details',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.hpx),
           _PriceRow(label: 'Subtotal', value: subtotal),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.hpx),
+          Divider(height: 1, color: AppColors.border),
+          SizedBox(height: 12.hpx),
           _PriceRow(label: 'Total', value: total, isStrong: true),
         ],
       ),
@@ -361,11 +345,7 @@ class _PriceCard extends StatelessWidget {
 }
 
 class _PriceRow extends StatelessWidget {
-  const _PriceRow({
-    required this.label,
-    required this.value,
-    this.isStrong = false,
-  });
+  _PriceRow({required this.label, required this.value, this.isStrong = false});
 
   final String label;
   final double value;
@@ -380,17 +360,17 @@ class _PriceRow extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: weight,
-                ),
+              color: AppColors.primary,
+              fontWeight: weight,
+            ),
           ),
         ),
         Text(
           'Rs ${value.toStringAsFixed(0)}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.primary,
-                fontWeight: weight,
-              ),
+            color: AppColors.primary,
+            fontWeight: weight,
+          ),
         ),
       ],
     );
@@ -398,7 +378,7 @@ class _PriceRow extends StatelessWidget {
 }
 
 class _ActionSection extends StatelessWidget {
-  const _ActionSection({required this.controller});
+  _ActionSection({required this.controller});
 
   final CartController controller;
 
@@ -413,23 +393,23 @@ class _ActionSection extends StatelessWidget {
                 ? null
                 : () => _showClearDialog(context),
             style: OutlinedButton.styleFrom(
-              backgroundColor: const Color(0xFFDCE5FF),
+              backgroundColor: Color(0xFFDCE5FF),
               foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: AppColors.primary),
+              padding: EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14.rpx),
               ),
             ),
             child: Text(
               controller.isClearingCart.value
                   ? 'Removing...'
                   : 'Remove all items',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12.hpx),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
@@ -444,12 +424,12 @@ class _ActionSection extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              padding: EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14.rpx),
               ),
             ),
-            child: const Text(
+            child: Text(
               'Go to Checkout',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
@@ -463,18 +443,18 @@ class _ActionSection extends StatelessWidget {
     debugPrint('CartView._showClearDialog: opening clear cart confirmation');
     final confirmed = await Get.dialog<bool>(
       AlertDialog(
-        title: const Text('Remove all items?'),
-        content: const Text(
+        title: Text('Remove all items?'),
+        content: Text(
           'This action clears your entire cart. You cannot undo it.',
         ),
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Get.back(result: true),
-            child: const Text('Remove everything'),
+            child: Text('Remove everything'),
           ),
         ],
       ),
@@ -487,7 +467,7 @@ class _ActionSection extends StatelessWidget {
 }
 
 class _CartEmptyState extends StatelessWidget {
-  const _CartEmptyState({required this.isSyncing});
+  _CartEmptyState({required this.isSyncing});
 
   final bool isSyncing;
 
@@ -495,58 +475,55 @@ class _CartEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        padding: EdgeInsets.symmetric(horizontal: 32.wpx, vertical: 24.hpx),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 140,
-              height: 140,
+              width: 140.wpx,
+              height: 140.hpx,
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(28.rpx),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.shopping_cart_checkout_rounded,
                 size: 62,
                 color: AppColors.primary,
               ),
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: 18.hpx),
             Text(
               'Your cart is waiting',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.hpx),
             Text(
               isSyncing
                   ? 'Refreshing your saved cart...'
                   : 'Browse categories and add your favorites to get started.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20.hpx),
             FilledButton(
               onPressed: () => Get.toNamed(AppRoutes.categories),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 14,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 22, vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(999.rpx),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'Explore Categories',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),

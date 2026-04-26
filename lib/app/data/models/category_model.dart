@@ -24,13 +24,7 @@ class CategoryModel {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      ...raw,
-      'id': id,
-      'name': name,
-      'emoji': emoji,
-      'image': imageUrl,
-    };
+    return {...raw, 'id': id, 'name': name, 'emoji': emoji, 'image': imageUrl};
   }
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -38,11 +32,13 @@ class CategoryModel {
       id: (json['id'] ?? json['_id'] ?? json['categoryId'])?.toString() ?? '',
       name: json['name']?.toString() ?? json['title']?.toString() ?? '',
       emoji: json['emoji']?.toString() ?? '',
-      imageUrl: _imageString(json['image'] ??
-          json['categoryImage'] ??
-          json['category_image'] ??
-          json['icon'] ??
-          json['thumbnail']),
+      imageUrl: _imageString(
+        json['image'] ??
+            json['categoryImage'] ??
+            json['category_image'] ??
+            json['icon'] ??
+            json['thumbnail'],
+      ),
       raw: json,
     );
   }

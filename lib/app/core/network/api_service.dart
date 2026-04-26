@@ -95,7 +95,9 @@ class ApiService {
         request.add(utf8.encode(jsonEncode(data)));
       }
 
-      final response = await request.close().timeout(const Duration(seconds: 18));
+      final response = await request.close().timeout(
+        const Duration(seconds: 18),
+      );
       final body = await response.transform(utf8.decoder).join();
       final decoded = _decodeBody(body);
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -181,25 +183,38 @@ class ApiService {
     }
 
     try {
-      final uri = Uri.parse('${ApiConstants.baseUrl}${ApiConstants.refreshToken}');
+      final uri = Uri.parse(
+        '${ApiConstants.baseUrl}${ApiConstants.refreshToken}',
+      );
       final request = await _client.openUrl('POST', uri);
       request.headers
         ..set(HttpHeaders.acceptHeader, 'application/json')
         ..set(HttpHeaders.contentTypeHeader, 'application/json');
       request.add(utf8.encode(jsonEncode({'refreshToken': refreshToken})));
 
-      final response = await request.close().timeout(const Duration(seconds: 18));
+      final response = await request.close().timeout(
+        const Duration(seconds: 18),
+      );
       final body = await response.transform(utf8.decoder).join();
       final decoded = _decodeBody(body);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         await _clearAuthTokens();
-        debugPrint('ApiService.refresh: failed HTTP ${response.statusCode} $body');
+        debugPrint(
+          'ApiService.refresh: failed HTTP ${response.statusCode} $body',
+        );
         return false;
       }
 
       final normalized = _normalizeResponse(decoded, uri.toString());
-      final access = _findString(normalized, const ['accessToken', 'token', 'access_token']);
-      final refresh = _findString(normalized, const ['refreshToken', 'refresh_token']);
+      final access = _findString(normalized, const [
+        'accessToken',
+        'token',
+        'access_token',
+      ]);
+      final refresh = _findString(normalized, const [
+        'refreshToken',
+        'refresh_token',
+      ]);
       if (access == null || access.isEmpty) {
         await _clearAuthTokens();
         return false;
@@ -253,4 +268,3 @@ class ApiException implements Exception {
   @override
   String toString() => 'ApiException($statusCode): $message';
 }
-

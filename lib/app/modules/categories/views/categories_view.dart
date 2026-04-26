@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/category_model.dart';
@@ -7,10 +8,11 @@ import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../../cart/widgets/cart_summary_bar.dart';
 import '../../cart/widgets/universal_add.dart';
+import '../../dashboard/controllers/dashboard_controller.dart';
 import '../controllers/categories_controller.dart';
 
 class CategoriesView extends GetView<CategoriesController> {
-  const CategoriesView({super.key});
+  CategoriesView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,18 +22,18 @@ class CategoriesView extends GetView<CategoriesController> {
         title: Obx(
           () => Text(
             controller.selectedCategory.value?.name ?? 'Categories',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
         centerTitle: true,
         leading: IconButton(
           onPressed: Get.back,
-          icon: const Icon(Icons.chevron_left_rounded),
+          icon: Icon(Icons.chevron_left_rounded),
         ),
         actions: [
           IconButton(
             onPressed: () => Get.toNamed(AppRoutes.search),
-            icon: const Icon(Icons.search_rounded),
+            icon: Icon(Icons.search_rounded),
           ),
         ],
       ),
@@ -41,73 +43,77 @@ class CategoriesView extends GetView<CategoriesController> {
             () => Row(
               children: [
                 Container(
-              width: MediaQuery.of(context).size.width * 0.30,
-              decoration: const BoxDecoration(
-                color: AppColors.white,
-                border: Border(
-                  right: BorderSide(color: AppColors.border, width: 0.8),
-                ),
-              ),
-              child: controller.isCategoriesLoading.value
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      itemCount: controller.categories.length,
-                      itemBuilder: (context, index) {
-                        final category = controller.categories[index];
-                        final isSelected =
-                            controller.selectedCategory.value?.id == category.id;
-                        return InkWell(
-                          onTap: () => controller.selectCategory(category),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 18,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primary.withValues(alpha: 0.08)
-                                  : Colors.transparent,
-                              border: Border(
-                                right: BorderSide(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : Colors.transparent,
-                                  width: 4,
+                  width: MediaQuery.of(context).size.width * 0.30,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    border: Border(
+                      right: BorderSide(color: AppColors.border, width: 0.8),
+                    ),
+                  ),
+                  child: controller.isCategoriesLoading.value
+                      ? Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          itemCount: controller.categories.length,
+                          itemBuilder: (context, index) {
+                            final category = controller.categories[index];
+                            final isSelected =
+                                controller.selectedCategory.value?.id ==
+                                category.id;
+                            return InkWell(
+                              onTap: () => controller.selectCategory(category),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 18,
                                 ),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                _CategoryThumb(category: category),
-                                const SizedBox(height: 6),
-                                Text(
-                                  category.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight:
-                                        isSelected ? FontWeight.w800 : FontWeight.w700,
-                                    fontSize: 12,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary.withValues(
+                                          alpha: 0.08,
+                                        )
+                                      : Colors.transparent,
+                                  border: Border(
+                                    right: BorderSide(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : Colors.transparent,
+                                      width: 4.wpx,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+                                child: Column(
+                                  children: [
+                                    _CategoryThumb(category: category),
+                                    SizedBox(height: 6.hpx),
+                                    Text(
+                                      category.name,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w800
+                                            : FontWeight.w700,
+                                        fontSize: 12.spx,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
                 Expanded(
                   child: Container(
-                color: AppColors.surface,
-                child: controller.isProductsLoading.value
-                    ? const Center(child: CircularProgressIndicator())
-                    : controller.products.isEmpty
-                        ? const Center(
+                    color: AppColors.surface,
+                    child: controller.isProductsLoading.value
+                        ? Center(child: CircularProgressIndicator())
+                        : controller.products.isEmpty
+                        ? Center(
                             child: Padding(
-                              padding: EdgeInsets.all(20),
+                              padding: EdgeInsets.all(20.rpx),
                               child: Text(
                                 'New categories will be available soon.',
                                 textAlign: TextAlign.center,
@@ -119,14 +125,19 @@ class CategoriesView extends GetView<CategoriesController> {
                             ),
                           )
                         : GridView.builder(
-                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 112),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 8,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: 0.50,
+                            padding: EdgeInsets.fromLTRB(
+                              8.wpx,
+                              8.hpx,
+                              8.wpx,
+                              112.hpx,
                             ),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: 0.50,
+                                ),
                             itemCount: controller.products.length,
                             itemBuilder: (context, index) {
                               final product = controller.products[index];
@@ -135,122 +146,118 @@ class CategoriesView extends GetView<CategoriesController> {
                                   AppRoutes.productDetail,
                                   arguments: {'product': product},
                                 ),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(10.rpx),
                                 child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.white,
-                                      borderRadius: BorderRadius.circular(10),
-                                      boxShadow: const [
-                                        BoxShadow(
-                                          color: Color(0x1A000000),
-                                          blurRadius: 3,
-                                          offset: Offset(0, 2),
+                                  padding: EdgeInsets.all(8.rpx),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.white,
+                                    borderRadius: BorderRadius.circular(10.rpx),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Color(0x1A000000),
+                                        blurRadius: 3,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _ProductImageBox(product: product),
+                                      SizedBox(height: 8.hpx),
+                                      Text(
+                                        product.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12.spx,
+                                          color: AppColors.primary,
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        _ProductImageBox(product: product),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          product.name,
+                                      ),
+                                      SizedBox(height: 2),
+                                      Expanded(
+                                        child: Text(
+                                          product.description,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12,
+                                          style: TextStyle(
+                                            fontSize: 9.spx,
                                             color: AppColors.primary,
+                                            height: 1.3,
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Expanded(
-                                          child: Text(
-                                            product.description,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 9,
-                                              color: AppColors.primary,
-                                              height: 1.3,
-                                            ),
-                                          ),
+                                      ),
+                                      SizedBox(height: 4.hpx),
+                                      Text(
+                                        'Rs ${product.price}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12.spx,
+                                          color: AppColors.primary,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Rs ${product.price}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                            color: AppColors.primary,
-                                          ),
-                                        ),
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                product.unit,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  color: AppColors.textSecondary,
-                                                ),
+                                      ),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              product.unit,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 10.spx,
+                                                color: AppColors.textSecondary,
                                               ),
                                             ),
-                                            if (product.mrp.isNotEmpty)
-                                              Text(
-                                                'Rs ${product.mrp}',
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  color: AppColors.textSecondary,
-                                                  decoration: TextDecoration
-                                                      .lineThrough,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: SizedBox(
-                                            width: 58,
-                                            child: UniversalAdd(product: product),
                                           ),
+                                          if (product.mrp.isNotEmpty)
+                                            Text(
+                                              'Rs ${product.mrp}',
+                                              style: TextStyle(
+                                                fontSize: 10.spx,
+                                                color: AppColors.textSecondary,
+                                                decoration:
+                                                    TextDecoration.lineThrough,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 6.hpx),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: SizedBox(
+                                          width: 58.wpx,
+                                          child: UniversalAdd(product: product),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
+                                ),
                               );
                             },
                           ),
-              ),
+                  ),
                 ),
               ],
             ),
           ),
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: CartSummaryBar(),
-          ),
+          Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
         ],
       ),
-      bottomNavigationBar: const _CategoriesBottomNav(),
+      bottomNavigationBar: _CategoriesBottomNav(),
     );
   }
 }
 
 class _CategoriesBottomNav extends StatelessWidget {
-  const _CategoriesBottomNav();
+  _CategoriesBottomNav();
 
   @override
   Widget build(BuildContext context) {
-    const tabs = [
+    final tabs = [
       ('Home', Icons.home_outlined, Icons.home_rounded),
       ('Categories', Icons.category_outlined, Icons.category_rounded),
       ('Cart', Icons.shopping_cart_outlined, Icons.shopping_cart_rounded),
@@ -261,7 +268,7 @@ class _CategoriesBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        padding: EdgeInsets.fromLTRB(12.wpx, 6.hpx, 12.wpx, 6.hpx),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -270,26 +277,21 @@ class _CategoriesBottomNav extends StatelessWidget {
               right: 0,
               top: 0,
               child: Container(
-                height: 24,
-                decoration: const BoxDecoration(
+                height: 24.hpx,
+                decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(22),
+                    top: Radius.circular(22.rpx),
                   ),
                 ),
               ),
             ),
             Container(
-              padding: const EdgeInsets.only(
-                top: 8,
-                left: 8,
-                right: 8,
-                bottom: 8,
-              ),
+              padding: EdgeInsets.only(top: 8, left: 8, right: 8, bottom: 8),
               decoration: BoxDecoration(
                 color: AppColors.white,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: const [
+                borderRadius: BorderRadius.circular(22.rpx),
+                boxShadow: [
                   BoxShadow(
                     color: Color(0x1F000000),
                     blurRadius: 10,
@@ -307,28 +309,19 @@ class _CategoriesBottomNav extends StatelessWidget {
                       onTap: () {
                         if (i == 1) return;
                         if (i == 0) {
-                          Get.offNamed(AppRoutes.dashboard);
+                          openDashboardTab(0);
                           return;
                         }
                         if (i == 2) {
-                          Get.offNamed(
-                            AppRoutes.dashboard,
-                            arguments: {'tabIndex': 2},
-                          );
+                          openDashboardTab(2);
                           return;
                         }
                         if (i == 3) {
-                          Get.offNamed(
-                            AppRoutes.dashboard,
-                            arguments: {'tabIndex': 3},
-                          );
+                          openDashboardTab(3);
                           return;
                         }
                         if (i == 4) {
-                          Get.offNamed(
-                            AppRoutes.dashboard,
-                            arguments: {'tabIndex': 4},
-                          );
+                          openDashboardTab(4);
                           return;
                         }
                         Get.snackbar(
@@ -348,15 +341,17 @@ class _CategoriesBottomNav extends StatelessWidget {
                             if (active)
                               IgnorePointer(
                                 child: Transform.translate(
-                                  offset: const Offset(0, -20),
+                                  offset: Offset(0, -20),
                                   child: Container(
-                                    margin: const EdgeInsets.only(bottom: 2),
-                                    width: 46,
-                                    height: 46,
+                                    margin: EdgeInsets.only(bottom: 2),
+                                    width: 46.wpx,
+                                    height: 46.hpx,
                                     decoration: BoxDecoration(
                                       color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(23),
-                                      boxShadow: const [
+                                      borderRadius: BorderRadius.circular(
+                                        23.rpx,
+                                      ),
+                                      boxShadow: [
                                         BoxShadow(
                                           color: Color(0x29000000),
                                           blurRadius: 10,
@@ -366,11 +361,13 @@ class _CategoriesBottomNav extends StatelessWidget {
                                     ),
                                     child: Center(
                                       child: Container(
-                                        width: 34,
-                                        height: 34,
+                                        width: 34.wpx,
+                                        height: 34.hpx,
                                         decoration: BoxDecoration(
                                           color: AppColors.white,
-                                          borderRadius: BorderRadius.circular(17),
+                                          borderRadius: BorderRadius.circular(
+                                            17,
+                                          ),
                                         ),
                                         child: Icon(
                                           tabs[i].$3,
@@ -390,11 +387,12 @@ class _CategoriesBottomNav extends StatelessWidget {
                               ),
                             Text(
                               tabs[i].$1,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
                                     color: active
                                         ? AppColors.primary
                                         : AppColors.textSecondary,
-                                    fontSize: 10,
+                                    fontSize: 10.spx,
                                     fontWeight: active
                                         ? FontWeight.w600
                                         : FontWeight.w500,
@@ -416,7 +414,7 @@ class _CategoriesBottomNav extends StatelessWidget {
 }
 
 class _CategoryThumb extends StatelessWidget {
-  const _CategoryThumb({required this.category});
+  _CategoryThumb({required this.category});
 
   final CategoryModel category;
 
@@ -424,19 +422,19 @@ class _CategoryThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = category.resolvedImageUrl;
     return Container(
-      width: 46,
-      height: 46,
+      width: 46.wpx,
+      height: 46.hpx,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(14.rpx),
       ),
       child: imageUrl.isNotEmpty
           ? Image.network(
               imageUrl,
-              width: 46,
-              height: 46,
+              width: 46.wpx,
+              height: 46.hpx,
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => _categoryFallback(),
             )
@@ -447,19 +445,21 @@ class _CategoryThumb extends StatelessWidget {
   Widget _categoryFallback() {
     return Text(
       category.emoji.isEmpty
-          ? (category.name.isEmpty ? 'C' : category.name.characters.first.toUpperCase())
+          ? (category.name.isEmpty
+                ? 'C'
+                : category.name.characters.first.toUpperCase())
           : category.emoji,
-      style: const TextStyle(
+      style: TextStyle(
         color: AppColors.primary,
         fontWeight: FontWeight.w800,
-        fontSize: 20,
+        fontSize: 20.spx,
       ),
     );
   }
 }
 
 class _ProductImageBox extends StatelessWidget {
-  const _ProductImageBox({required this.product});
+  _ProductImageBox({required this.product});
 
   final ProductModel product;
 
@@ -467,27 +467,27 @@ class _ProductImageBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = product.resolvedImageUrl.toString();
     return Container(
-      height: 82,
+      height: 82.hpx,
       width: double.infinity,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.rpx),
       ),
       clipBehavior: Clip.antiAlias,
       child: imageUrl.isNotEmpty
           ? Image.network(
               imageUrl,
               width: double.infinity,
-              height: 82,
+              height: 82.hpx,
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => _fallback(),
               loadingBuilder: (context, child, progress) {
                 if (progress == null) return child;
-                return const Center(
+                return Center(
                   child: SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 18.wpx,
+                    height: 18.hpx,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 );
@@ -501,9 +501,11 @@ class _ProductImageBox extends StatelessWidget {
     final emoji = product.emoji.toString();
     final name = product.name.toString();
     return Text(
-      emoji.isEmpty ? (name.isEmpty ? 'P' : name.characters.first.toUpperCase()) : emoji,
-      style: const TextStyle(
-        fontSize: 42,
+      emoji.isEmpty
+          ? (name.isEmpty ? 'P' : name.characters.first.toUpperCase())
+          : emoji,
+      style: TextStyle(
+        fontSize: 42.spx,
         fontWeight: FontWeight.w800,
         color: AppColors.primary,
       ),
