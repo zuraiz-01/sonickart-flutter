@@ -15,11 +15,15 @@ class CategoriesController extends GetxController {
   final selectedCategory = Rxn<CategoryModel>();
   final isCategoriesLoading = false.obs;
   final isProductsLoading = false.obs;
+  final targetProductId = RxnString();
+  String? _preferredVendorId;
 
   @override
   void onInit() {
     super.onInit();
     debugPrint('CategoriesController.onInit: starting category flow');
+    targetProductId.value = Get.arguments?['productId']?.toString();
+    _preferredVendorId = Get.arguments?['preferredVendorId']?.toString();
     loadCategories();
   }
 
@@ -57,13 +61,22 @@ class CategoriesController extends GetxController {
     await loadProducts(category.id);
   }
 
+  Future<void> reloadSelectedCategory() async {
+    final category = selectedCategory.value;
+    if (category == null) return;
+    await loadProducts(category.id);
+  }
+
   Future<void> loadProducts(String categoryId) async {
     debugPrint(
       'CategoriesController.loadProducts: loading products for $categoryId',
     );
     isProductsLoading.value = true;
     try {
-      final result = await _repository.fetchProductsByCategory(categoryId);
+      final result = await _repository.fetchProductsByCategory(
+        categoryId,
+        preferredVendorId: _preferredVendorId,
+      );
       products.assignAll(result);
     } finally {
       isProductsLoading.value = false;

@@ -131,6 +131,20 @@ class CartController extends GetxController {
     }
   }
 
+  Future<void> removeItemsCompletely(List<String> productIds) async {
+    final ids = productIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (ids.isEmpty) return;
+
+    items.removeWhere((item) => ids.contains(item.product.id));
+    await _persistCart();
+    for (final id in ids) {
+      await _trySyncLine(id, 0);
+    }
+  }
+
   int getItemCount(String productId) {
     final index = items.indexWhere((item) => item.product.id == productId);
     final quantity = index >= 0 ? items[index].quantity : 0;

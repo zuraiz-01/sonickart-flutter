@@ -237,7 +237,7 @@ class ProfileView extends GetView<ProfileController> {
                             ),
                             SizedBox(height: 4.hpx),
                             Text(
-                              'Rs 0',
+                              'Rs ${controller.walletBalance.value.toStringAsFixed(0)}',
                               style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(
                                     color: AppColors.primary,
@@ -552,7 +552,7 @@ class _InfoDialog extends StatelessWidget {
     if (key == null) {
       return SizedBox.shrink();
     }
-    final content = _modalCopy[key] ?? _modalCopy['default']!;
+    final content = controller.infoModalContent(key);
     return _OverlayCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -624,32 +624,3 @@ class _OverlayCard extends StatelessWidget {
     );
   }
 }
-
-Map<String, (String, String)> _modalCopy = {
-  'notifications': (
-    'Notifications',
-    'Notification preferences will be available shortly.',
-  ),
-  'rewards': ('Rewards', 'Earn points on every order. Feature coming soon!'),
-  'giftcards': (
-    'Gift Cards',
-    'Purchase and send gift cards to your loved ones. Feature coming soon!',
-  ),
-  'suggest': (
-    'Suggest Products',
-    'Have a product suggestion? We would love to hear from you. Feature coming soon!',
-  ),
-  'refunds': (
-    'Refunds',
-    'View and manage your refund requests. Feature coming soon!',
-  ),
-  'about': (
-    'About',
-    'SonicKart profile flow Flutter mein same journey ke sath ready hai.',
-  ),
-  'wallet': (
-    'Wallet',
-    'Wallet top-up flow aglay step ke liye placeholder ke sath ready hai.',
-  ),
-  'default': ('Coming Soon', 'This section will be available shortly.'),
-};

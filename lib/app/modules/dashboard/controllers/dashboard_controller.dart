@@ -7,6 +7,7 @@ import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../routes/app_routes.dart';
+import '../../order_controller.dart';
 
 void openDashboardTab(int index) {
   final targetIndex = index.clamp(0, 4);
@@ -63,16 +64,12 @@ class DashboardController extends GetxController {
     'assets/images/slider2.jpeg',
   ];
 
-  final activeOrder = const {
-    'id': 'SK1024',
-    'items': 3,
-    'title': 'Your order is on the way',
-    'subtitle': 'Tap to track the delivery live.',
-  };
-
   void changeTab(int index) {
     debugPrint('DashboardController.changeTab: switching to index $index');
     currentIndex.value = index;
+    if (index == 0) {
+      unawaited(syncActiveProductOrder());
+    }
   }
 
   void setTabFromNavigation(int index) {
@@ -80,6 +77,9 @@ class DashboardController extends GetxController {
       'DashboardController.setTabFromNavigation: requested tab $index',
     );
     currentIndex.value = index;
+    if (index == 0) {
+      unawaited(syncActiveProductOrder());
+    }
   }
 
   void nextPromo() {
@@ -87,26 +87,27 @@ class DashboardController extends GetxController {
     currentPromoIndex.value = (currentPromoIndex.value + 1) % promoCards.length;
   }
 
-  Future<void> loadCatalog() async {
-    if (isCatalogLoading.value) return;
+  Future<void> loadCatalog({bool force = false}) async {
+    if (isCatalogLoading.value && !force) return;
     isCatalogLoading.value = true;
     try {
       final repo = Get.find<CatalogRepository>();
+      await repo.loadDeliverySettings(force: force);
       final loadedCategories = await repo.fetchCategories();
       categories.assignAll(loadedCategories);
-
-      final loadedProducts = <ProductModel>[];
-      for (final category in loadedCategories.take(6)) {
-        final products = await repo.fetchProductsByCategory(category.id);
-        loadedProducts.addAll(products.take(3));
-        if (loadedProducts.length >= 12) break;
-      }
-      featuredProducts.assignAll(loadedProducts.take(12));
+      featuredProducts.assignAll(
+        await repo.fetchFeaturedProducts(loadedCategories),
+      );
     } catch (error) {
       debugPrint('DashboardController.loadCatalog: failed $error');
     } finally {
       isCatalogLoading.value = false;
     }
+  }
+
+  Future<void> syncActiveProductOrder() async {
+    if (!Get.isRegistered<OrderController>()) return;
+    await Get.find<OrderController>().syncActiveProductOrder();
   }
 
   @override
@@ -117,6 +118,7 @@ class DashboardController extends GetxController {
       setTabFromNavigation(requestedIndex);
     }
     loadCatalog();
+    unawaited(syncActiveProductOrder());
     _promoTimer = Timer.periodic(
       const Duration(seconds: 4),
       (_) => nextPromo(),

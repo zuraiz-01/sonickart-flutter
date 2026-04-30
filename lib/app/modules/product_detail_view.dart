@@ -93,16 +93,16 @@ class ProductDetailView extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Rs ${product.price}',
+                'Rs ${product.displayPrice}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               SizedBox(width: 12.wpx),
-              if (product.mrp.isNotEmpty)
+              if (product.displayMrp.isNotEmpty)
                 Text(
-                  'Rs ${product.mrp}',
+                  'Rs ${product.displayMrp}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     decoration: TextDecoration.lineThrough,
@@ -113,7 +113,7 @@ class ProductDetailView extends StatelessWidget {
           ),
           SizedBox(height: 8.hpx),
           Text(
-            product.unit,
+            product.unit == '1 pc' ? '' : product.unit,
             style: TextStyle(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,

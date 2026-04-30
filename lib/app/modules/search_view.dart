@@ -193,7 +193,7 @@ class _ProductTile extends StatelessWidget {
                   ),
                   SizedBox(height: 4.hpx),
                   Text(
-                    product.unit,
+                    product.unit == '1 pc' ? ' ' : product.unit,
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
@@ -201,7 +201,7 @@ class _ProductTile extends StatelessWidget {
                   ),
                   SizedBox(height: 6.hpx),
                   Text(
-                    'Rs ${product.price}',
+                    'Rs ${product.displayPrice}',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w800,
@@ -229,11 +229,12 @@ class _ProductVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (product.imageUrl.startsWith('http')) {
+    final imageUrl = product.resolvedImageUrl;
+    if (imageUrl.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(14.rpx),
         child: Image.network(
-          product.imageUrl,
+          imageUrl,
           width: size,
           height: size,
           fit: BoxFit.contain,

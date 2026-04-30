@@ -191,7 +191,7 @@ class CategoriesView extends GetView<CategoriesController> {
                                       ),
                                       SizedBox(height: 4.hpx),
                                       Text(
-                                        'Rs ${product.price}',
+                                        'Rs ${product.displayPrice}',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 12.spx,
@@ -204,7 +204,9 @@ class CategoriesView extends GetView<CategoriesController> {
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              product.unit,
+                                              product.unit == '1 pc'
+                                                  ? ' '
+                                                  : product.unit,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -213,9 +215,9 @@ class CategoriesView extends GetView<CategoriesController> {
                                               ),
                                             ),
                                           ),
-                                          if (product.mrp.isNotEmpty)
+                                          if (product.displayMrp.isNotEmpty)
                                             Text(
-                                              'Rs ${product.mrp}',
+                                              'Rs ${product.displayMrp}',
                                               style: TextStyle(
                                                 fontSize: 10.spx,
                                                 color: AppColors.textSecondary,
