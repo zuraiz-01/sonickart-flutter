@@ -157,7 +157,7 @@ class CatalogRepository {
           featuredProductsLimit: _featuredProductsLimit,
         );
       }
-      final options = DefaultFirebaseOptions.android;
+      final options = DefaultFirebaseOptions.currentPlatform;
       final endpoint =
           'https://firestore.googleapis.com/v1/projects/${options.projectId}/databases/(default)/documents/adminSettings/deliveryRadius?key=${options.apiKey}';
       final response = await _apiService.get(

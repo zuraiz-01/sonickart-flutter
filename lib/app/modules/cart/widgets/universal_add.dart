@@ -8,7 +8,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
 
 class UniversalAdd extends StatelessWidget {
-  UniversalAdd({
+  const UniversalAdd({
     required this.product,
     this.width,
     this.showOptionsOnInitialAdd = true,
@@ -61,32 +61,50 @@ class UniversalAdd extends StatelessWidget {
                   ),
                 ),
               )
-            : Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 4.wpx,
-                  vertical: 5.hpx,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _CounterTap(
-                      icon: Icons.remove_rounded,
-                      onTap: () => cart.removeItem(product.id),
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 56;
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompact ? 1.wpx : 4.wpx,
+                      vertical: 5.hpx,
                     ),
-                    Text(
-                      '$count',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: 13.spx,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _CounterTap(
+                          icon: Icons.remove_rounded,
+                          compact: isCompact,
+                          onTap: () => cart.removeItem(product.id),
+                        ),
+                        Flexible(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 1.wpx : 3.wpx,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '$count',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: (isCompact ? 12 : 13).spx,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _CounterTap(
+                          icon: Icons.add_rounded,
+                          compact: isCompact,
+                          onTap: () => cart.addItem(product),
+                        ),
+                      ],
                     ),
-                    _CounterTap(
-                      icon: Icons.add_rounded,
-                      onTap: () => cart.addItem(product),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
       );
     });
@@ -176,19 +194,25 @@ class UniversalAdd extends StatelessWidget {
 }
 
 class _CounterTap extends StatelessWidget {
-  _CounterTap({required this.icon, required this.onTap});
+  const _CounterTap({
+    required this.icon,
+    required this.onTap,
+    required this.compact,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16.rpx),
-      child: Padding(
-        padding: EdgeInsets.all(6.rpx),
-        child: Icon(icon, color: AppColors.white, size: 16),
+      child: SizedBox(
+        width: compact ? 16 : 28.rpx,
+        height: compact ? 22 : 28.rpx,
+        child: Icon(icon, color: AppColors.white, size: compact ? 13 : 16),
       ),
     );
   }

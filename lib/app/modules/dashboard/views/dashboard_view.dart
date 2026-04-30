@@ -134,6 +134,8 @@ class _HomeTab extends StatelessWidget {
             loading: controller.isCatalogLoading.value,
           ),
         ),
+        SizedBox(height: 10.hpx),
+        const _HomeTagline(),
         SizedBox(height: 140.hpx),
       ],
     );
@@ -596,6 +598,44 @@ class _CategoryGridState extends State<_CategoryGrid> {
           ],
         );
       },
+    );
+  }
+}
+
+class _HomeTagline extends StatelessWidget {
+  const _HomeTagline();
+
+  @override
+  Widget build(BuildContext context) {
+    final lineColor = AppColors.primary.withValues(alpha: 0.12);
+    return Row(
+      children: [
+        Expanded(child: Container(height: 1, color: lineColor)),
+        Container(
+          constraints: BoxConstraints(
+            maxWidth: min(MediaQuery.of(context).size.width * 0.74, 280),
+          ),
+          margin: EdgeInsets.symmetric(horizontal: 10.wpx),
+          padding: EdgeInsets.symmetric(horizontal: 18.wpx, vertical: 12.hpx),
+          decoration: BoxDecoration(
+            color: Color(0xFFF3F7FF),
+            borderRadius: BorderRadius.circular(999.rpx),
+            border: Border.all(color: lineColor),
+          ),
+          child: Text(
+            'Your City, Your Cart in Minutes \u26A1',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 16.spx,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Expanded(child: Container(height: 1, color: lineColor)),
+      ],
     );
   }
 }

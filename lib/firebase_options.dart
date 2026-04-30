@@ -15,8 +15,7 @@ class DefaultFirebaseOptions {
         return android;
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        if (isAppleConfigured) return apple;
-        return android;
+        return apple;
       case TargetPlatform.windows:
       case TargetPlatform.linux:
       case TargetPlatform.fuchsia:
@@ -40,8 +39,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions apple = FirebaseOptions(
-    apiKey: String.fromEnvironment('SONICKART_IOS_FIREBASE_API_KEY'),
-    appId: String.fromEnvironment('SONICKART_IOS_FIREBASE_APP_ID'),
+    apiKey: 'AIzaSyCvyX5LD___3uc9fkpSMoLV3Du55E9cBtA',
+    appId: '1:443982695818:ios:12de8aefe01c4976728c73',
     messagingSenderId: '443982695818',
     projectId: 'sonickart-app',
     storageBucket: 'sonickart-app.firebasestorage.app',
