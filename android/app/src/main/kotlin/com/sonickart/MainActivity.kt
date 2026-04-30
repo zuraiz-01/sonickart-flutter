@@ -1,4 +1,4 @@
-package com.example.sonic_cart
+package com.sonickart
 
 import io.flutter.embedding.android.FlutterActivity
 

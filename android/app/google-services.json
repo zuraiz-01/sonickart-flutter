@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "443982695818",
+    "project_id": "sonickart-app",
+    "storage_bucket": "sonickart-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:443982695818:android:ee41e147a7bd12b6728c73",
+        "android_client_info": {
+          "package_name": "com.sonickart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSrTFKYF8ZbuTsXa1EudjXpLgIILGK07s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
