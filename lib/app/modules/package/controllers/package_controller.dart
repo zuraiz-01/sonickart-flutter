@@ -157,7 +157,7 @@ class PackageController extends GetxController {
     try {
       final firebaseHeaders = await _firebaseAuthHeaders();
       if (firebaseHeaders == null || !Get.isRegistered<ApiService>()) return;
-      final options = DefaultFirebaseOptions.android;
+      final options = DefaultFirebaseOptions.firestoreRestOptions;
       final endpoint =
           'https://firestore.googleapis.com/v1/projects/${options.projectId}/databases/(default)/documents/adminSettings/deliveryRadius?key=${options.apiKey}';
       final response = await Get.find<ApiService>().get(

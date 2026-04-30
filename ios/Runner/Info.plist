@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>sonickart</string>
+	<string>SonicKart</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>sonic_cart</string>
+	<string>SonicKart</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -47,8 +47,18 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>GoogleMapsApiKey</key>
+	<string>AIzaSyB5dcpM7PWKnErsIQjyzEG9CUxup0Ysuxs</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SonicKart uses the camera so you can capture photos for your account and orders.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SonicKart uses your location to help track and deliver active orders.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SonicKart uses your location to help you select delivery and pickup addresses.</string>
 	<key>NSMicrophoneUsageDescription</key>

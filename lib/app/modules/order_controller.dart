@@ -1212,7 +1212,7 @@ class OrderController extends GetxController {
     bool isDocument = false,
   }) async {
     final firebaseHeaders = await _firebaseAuthHeaders();
-    final options = DefaultFirebaseOptions.android;
+    final options = DefaultFirebaseOptions.firestoreRestOptions;
     final base =
         'https://firestore.googleapis.com/v1/projects/${options.projectId}/databases/(default)/documents/$path';
     final endpoint = '$base?key=${options.apiKey}';

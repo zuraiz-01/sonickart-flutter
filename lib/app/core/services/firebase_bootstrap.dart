@@ -25,20 +25,22 @@ class FirebaseBootstrap {
 
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
-          await Firebase.initializeApp(
-            options: DefaultFirebaseOptions.android,
-          );
+          await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
           _lastError = null;
           return;
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
-          await Firebase.initializeApp();
+          if (DefaultFirebaseOptions.isAppleConfigured) {
+            await Firebase.initializeApp(options: DefaultFirebaseOptions.apple);
+          } else {
+            await Firebase.initializeApp();
+          }
           _lastError = null;
           return;
         case TargetPlatform.windows:
         case TargetPlatform.linux:
           _lastError = UnsupportedError(
-            'Firebase phone auth is only configured for Android right now.',
+            'Firebase phone auth is only configured for Android and iOS right now.',
           );
           return;
         case TargetPlatform.fuchsia:
