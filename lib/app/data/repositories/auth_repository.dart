@@ -12,64 +12,57 @@ class AuthRepository {
   final ApiService _apiService;
   final GetStorage _storage;
 
-  Future<void> sendOtp({required String phone}) async {
-    debugPrint('AuthRepository.sendOtp: phone=$phone');
-    try {
-      await _apiService.post(
-        endpoint: ApiConstants.customerLogin,
-        data: {'phone': _serverPhone(phone), 'agreement': true},
-        authenticated: false,
-      );
-    } catch (error) {
-      debugPrint(
-        'AuthRepository.sendOtp: backend unavailable, keeping OTP UI alive: $error',
-      );
-    }
-  }
-
-  UserModel buildPendingUser({required String phone}) {
-    final localPhone = phone.replaceFirst('+91', '');
-    return UserModel(
-      id: 'usr-$localPhone',
-      name: 'SonicKart Customer',
-      email: 'customer$localPhone@sonickart.app',
-      phone: phone,
-    );
-  }
-
-  Future<UserModel?> verifyOtp({
+  Future<UserModel> loginVerifiedCustomer({
     required String phone,
-    required String otp,
+    required bool agreement,
+    required String firebaseIdToken,
+    required String firebaseUid,
+    required String phoneE164,
   }) async {
-    debugPrint('AuthRepository.verifyOtp: phone=$phone');
-    if (otp.length != 6) return null;
+    debugPrint('AuthRepository.loginVerifiedCustomer: phone=$phone');
     try {
-      final response = await _apiService.post(
-        endpoint: ApiConstants.customerLogin,
-        data: {'phone': _serverPhone(phone), 'agreement': true, 'otp': otp},
-        authenticated: false,
+      final response = await _postCustomerLogin(
+        data: {'phone': phone, 'agreement': agreement},
       );
-      final token = _findString(response, const [
-        'accessToken',
-        'token',
-        'access_token',
-      ]);
-      final refresh = _findString(response, const [
-        'refreshToken',
-        'refresh_token',
-      ]);
-      if (token != null) await _storage.write('accessToken', token);
-      if (refresh != null) await _storage.write('refreshToken', refresh);
-      final userJson =
-          _findMap(response, const ['user', 'customer', 'data']) ?? response;
-      final user = UserModel.fromJson(userJson);
-      if (user.phone.isNotEmpty || user.id.isNotEmpty) return user;
-    } catch (error) {
-      debugPrint('AuthRepository.verifyOtp: backend fallback after $error');
-    }
+      return _persistCustomerSession(response);
+    } on ApiException catch (error) {
+      if (!_shouldRetryWithFirebaseProof(error)) {
+        throw AuthFlowException(
+          error.message.isNotEmpty
+              ? error.message
+              : 'Login session start nahi ho saki. Dobara try karo.',
+        );
+      }
 
-    if (otp != '123456') return null;
-    return buildPendingUser(phone: phone);
+      try {
+        final response = await _postCustomerLogin(
+          data: {
+            'phone': phoneE164,
+            'agreement': agreement,
+            'firebaseIdToken': firebaseIdToken,
+            'firebaseUid': firebaseUid,
+          },
+          headers: {
+            'Authorization': 'Bearer $firebaseIdToken',
+            'x-firebase-token': firebaseIdToken,
+          },
+        );
+        return _persistCustomerSession(response);
+      } on ApiException catch (fallbackError) {
+        throw AuthFlowException(
+          fallbackError.message.isNotEmpty
+              ? fallbackError.message
+              : 'Login session start nahi ho saki. Dobara try karo.',
+        );
+      }
+    } on AuthFlowException {
+      rethrow;
+    } catch (error) {
+      debugPrint('AuthRepository.loginVerifiedCustomer failed: $error');
+      throw AuthFlowException(
+        'Backend se login complete nahi ho saka. Dobara try karo.',
+      );
+    }
   }
 
   Future<void> logout() async {
@@ -77,7 +70,64 @@ class AuthRepository {
     await _storage.remove('refreshToken');
   }
 
-  String _serverPhone(String phone) => phone.replaceFirst('+91', '');
+  Future<Map<String, dynamic>> _postCustomerLogin({
+    required Map<String, dynamic> data,
+    Map<String, String>? headers,
+  }) {
+    return _apiService.post(
+      endpoint: ApiConstants.customerLogin,
+      data: data,
+      authenticated: false,
+      headers: headers,
+    );
+  }
+
+  Future<UserModel> _persistCustomerSession(
+    Map<String, dynamic> response,
+  ) async {
+    final token = _findString(response, const [
+      'accessToken',
+      'token',
+      'access_token',
+    ]);
+    final refresh = _findString(response, const [
+      'refreshToken',
+      'refresh_token',
+    ]);
+    if (token == null || token.trim().isEmpty) {
+      throw AuthFlowException(
+        'Login session start nahi ho saki. Dobara try karo.',
+      );
+    }
+    await _storage.write('accessToken', token);
+    if (refresh != null && refresh.trim().isNotEmpty) {
+      await _storage.write('refreshToken', refresh);
+    }
+    final userJson =
+        _findMap(response, const ['customer', 'user']) ??
+        _findMap(response, const ['data']) ??
+        response;
+    final user = UserModel.fromJson(userJson);
+    if (user.phone.isEmpty && user.id.isEmpty) {
+      throw AuthFlowException(
+        'User profile load nahi ho saka. Dobara try karo.',
+      );
+    }
+    return user;
+  }
+
+  bool _shouldRetryWithFirebaseProof(ApiException error) {
+    final message = error.message.toLowerCase();
+    if (error.statusCode == 400 ||
+        error.statusCode == 401 ||
+        error.statusCode == 403) {
+      return true;
+    }
+    return message.contains('invalid otp') ||
+        message.contains('otp') ||
+        message.contains('verification') ||
+        message.contains('phone auth');
+  }
 
   String? _findString(Map<String, dynamic> map, List<String> keys) {
     for (final key in keys) {
@@ -98,6 +148,21 @@ class AuthRepository {
       final value = map[key];
       if (value is Map) return Map<String, dynamic>.from(value);
     }
+    for (final value in map.values) {
+      if (value is Map) {
+        final nested = _findMap(Map<String, dynamic>.from(value), keys);
+        if (nested != null) return nested;
+      }
+    }
     return null;
   }
+}
+
+class AuthFlowException implements Exception {
+  AuthFlowException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'AuthFlowException: $message';
 }

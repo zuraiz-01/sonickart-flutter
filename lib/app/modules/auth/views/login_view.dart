@@ -7,7 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 
 class LoginView extends GetView<AuthController> {
-  LoginView({super.key});
+  const LoginView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -131,13 +131,13 @@ class LoginView extends GetView<AuthController> {
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton(
-                                  onPressed:
-                                      controller.isSendingOtp.value ||
-                                          controller.isVerifyingOtp.value
-                                      ? null
-                                      : (controller.isOtpSent.value
+                                  onPressed: controller.isOtpSent.value
+                                      ? (controller.canSubmitOtp
                                             ? controller.verifyOtp
-                                            : controller.sendOtp),
+                                            : null)
+                                      : (controller.canSubmitPhone
+                                            ? controller.sendOtp
+                                            : null),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: AppColors.accent,
                                     foregroundColor: AppColors.white,
@@ -216,7 +216,7 @@ class LoginView extends GetView<AuthController> {
 }
 
 class _PhoneField extends StatelessWidget {
-  _PhoneField({required this.controller});
+  const _PhoneField({required this.controller});
 
   final AuthController controller;
 
@@ -226,8 +226,11 @@ class _PhoneField extends StatelessWidget {
       controller: controller.phoneController,
       validator: controller.validatePhone,
       keyboardType: TextInputType.phone,
-      maxLength: AuthController.phoneDigitLength + 1,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength: AuthController.phoneDigitLength,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(AuthController.phoneDigitLength),
+      ],
       onChanged: (value) {
         final digits = value.replaceAll(RegExp(r'\D'), '');
         if (digits != value) {
@@ -289,7 +292,7 @@ class _PhoneField extends StatelessWidget {
 }
 
 class _OtpSection extends StatelessWidget {
-  _OtpSection({required this.controller});
+  const _OtpSection({required this.controller});
 
   final AuthController controller;
 

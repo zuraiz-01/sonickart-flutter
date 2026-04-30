@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/constants/api_constants.dart';
 
 class CategoryModel {
@@ -18,9 +20,19 @@ class CategoryModel {
   String get resolvedImageUrl {
     final value = imageUrl.trim();
     if (value.isEmpty) return '';
+    final decodedList = _decodeImageList(value);
+    if (decodedList.isNotEmpty) return _resolveUrl(decodedList.first);
+    return _resolveUrl(value);
+  }
+
+  static String _resolveUrl(String value) {
+    if (value.startsWith('//')) return 'https:$value';
     if (value.startsWith('http')) return value;
-    if (value.startsWith('/')) return '${ApiConstants.mobileHost}$value';
-    return '${ApiConstants.mobileHost}/$value';
+    final normalizedPath = value.replaceAll(r'\', '/');
+    if (normalizedPath.startsWith('/')) {
+      return '${ApiConstants.mobileHost}$normalizedPath';
+    }
+    return '${ApiConstants.mobileHost}/$normalizedPath';
   }
 
   Map<String, dynamic> toJson() {
@@ -45,7 +57,10 @@ class CategoryModel {
 
   static String _imageString(Object? value) {
     if (value == null) return '';
-    if (value is String) return value;
+    if (value is String) {
+      final decoded = _decodeImageList(value);
+      return decoded.isNotEmpty ? decoded.first : value;
+    }
     if (value is List && value.isNotEmpty) return _imageString(value.first);
     if (value is Map) {
       final map = Map<String, dynamic>.from(value);
@@ -55,5 +70,20 @@ class CategoryModel {
       }
     }
     return value.toString();
+  }
+
+  static List<String> _decodeImageList(String value) {
+    final trimmed = value.trim();
+    if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return const [];
+    try {
+      final parsed = jsonDecode(trimmed);
+      if (parsed is! List) return const [];
+      return parsed
+          .map(_imageString)
+          .where((item) => item.trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 }

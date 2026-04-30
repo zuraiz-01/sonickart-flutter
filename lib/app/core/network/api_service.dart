@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../constants/api_constants.dart';
+import '../services/session_controller.dart';
 
 class ApiService {
   ApiService({GetStorage? storage}) : _storage = storage ?? GetStorage();
@@ -23,12 +25,14 @@ class ApiService {
     required String endpoint,
     Map<String, dynamic>? query,
     bool authenticated = true,
+    Map<String, String>? headers,
   }) {
     return _request(
       method: 'GET',
       endpoint: endpoint,
       query: query,
       authenticated: authenticated,
+      headers: headers,
     );
   }
 
@@ -36,12 +40,14 @@ class ApiService {
     required String endpoint,
     Map<String, dynamic>? data,
     bool authenticated = true,
+    Map<String, String>? headers,
   }) {
     return _request(
       method: 'POST',
       endpoint: endpoint,
       data: data,
       authenticated: authenticated,
+      headers: headers,
     );
   }
 
@@ -49,12 +55,29 @@ class ApiService {
     required String endpoint,
     Map<String, dynamic>? data,
     bool authenticated = true,
+    Map<String, String>? headers,
   }) {
     return _request(
       method: 'PUT',
       endpoint: endpoint,
       data: data,
       authenticated: authenticated,
+      headers: headers,
+    );
+  }
+
+  Future<Map<String, dynamic>> patch({
+    required String endpoint,
+    Map<String, dynamic>? data,
+    bool authenticated = true,
+    Map<String, String>? headers,
+  }) {
+    return _request(
+      method: 'PATCH',
+      endpoint: endpoint,
+      data: data,
+      authenticated: authenticated,
+      headers: headers,
     );
   }
 
@@ -62,12 +85,14 @@ class ApiService {
     required String endpoint,
     Map<String, dynamic>? data,
     bool authenticated = true,
+    Map<String, String>? headers,
   }) {
     return _request(
       method: 'DELETE',
       endpoint: endpoint,
       data: data,
       authenticated: authenticated,
+      headers: headers,
     );
   }
 
@@ -77,10 +102,11 @@ class ApiService {
     Map<String, dynamic>? query,
     Map<String, dynamic>? data,
     bool authenticated = true,
+    Map<String, String>? headers,
     bool hasRetriedAfterRefresh = false,
   }) async {
     final uri = _buildUri(endpoint, query);
-    debugPrint('ApiService.$method: $uri payload=${data ?? {}}');
+    debugPrint('ApiService.$method: $uri payload=${_redactForLog(data) ?? {}}');
 
     try {
       final request = await _client.openUrl(method, uri);
@@ -91,6 +117,11 @@ class ApiService {
       if (authenticated && token != null && token.isNotEmpty) {
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       }
+      headers?.forEach((key, value) {
+        if (value.trim().isNotEmpty) {
+          request.headers.set(key, value);
+        }
+      });
       if (data != null) {
         request.add(utf8.encode(jsonEncode(data)));
       }
@@ -105,16 +136,19 @@ class ApiService {
       }
       if (authenticated &&
           response.statusCode == 401 &&
-          !hasRetriedAfterRefresh &&
-          await _refreshAccessToken()) {
-        return _request(
-          method: method,
-          endpoint: endpoint,
-          query: query,
-          data: data,
-          authenticated: authenticated,
-          hasRetriedAfterRefresh: true,
-        );
+          !hasRetriedAfterRefresh) {
+        if (await _refreshAccessToken()) {
+          return _request(
+            method: method,
+            endpoint: endpoint,
+            query: query,
+            data: data,
+            authenticated: authenticated,
+            headers: headers,
+            hasRetriedAfterRefresh: true,
+          );
+        }
+        await _clearAuthTokens();
       }
       debugPrint('ApiService.$method: HTTP ${response.statusCode} $body');
       throw ApiException(
@@ -132,6 +166,19 @@ class ApiService {
       debugPrint('ApiService.$method error: $error');
       rethrow;
     }
+  }
+
+  Map<String, dynamic>? _redactForLog(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    return data.map((key, value) {
+      final lowerKey = key.toLowerCase();
+      if (lowerKey.contains('token') ||
+          lowerKey == 'authorization' ||
+          lowerKey.contains('secret')) {
+        return MapEntry(key, '<redacted>');
+      }
+      return MapEntry(key, value);
+    });
   }
 
   Uri _buildUri(String endpoint, Map<String, dynamic>? query) {
@@ -251,6 +298,9 @@ class ApiService {
   Future<void> _clearAuthTokens() async {
     await _storage.remove('accessToken');
     await _storage.remove('refreshToken');
+    if (Get.isRegistered<SessionController>()) {
+      await Get.find<SessionController>().showExpiredSession();
+    }
   }
 }
 
