@@ -12,9 +12,11 @@ import '../modules/dashboard/views/dashboard_view.dart';
 import '../modules/live_tracking_view.dart';
 import '../modules/order_checkout_view.dart';
 import '../modules/order_success_view.dart';
+import '../modules/package/package_view.dart';
 import '../modules/package/package_order_details_view.dart';
 import '../modules/product_detail_view.dart';
 import '../modules/profile/address_book_view.dart';
+import '../modules/profile/profile_view.dart';
 import '../modules/search_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/views/splash_view.dart';
@@ -69,8 +71,18 @@ class AppPages {
       binding: DashboardBinding(),
     ),
     GetPage(
+      name: AppRoutes.package,
+      page: PackageView.new,
+      binding: DashboardBinding(),
+    ),
+    GetPage(
       name: AppRoutes.packageDetails,
       page: PackageOrderDetailsView.new,
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.profile,
+      page: ProfileView.new,
       binding: DashboardBinding(),
     ),
     GetPage(

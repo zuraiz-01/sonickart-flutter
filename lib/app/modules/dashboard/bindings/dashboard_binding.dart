@@ -2,6 +2,8 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/order_socket_service.dart';
+import '../../../core/services/package_socket_service.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../order_controller.dart';
@@ -29,6 +31,16 @@ class DashboardBinding extends Bindings {
     }
     if (!Get.isRegistered<ProfileController>()) {
       Get.put(ProfileController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<OrderSocketService>()) {
+      Get.put(OrderSocketService(), permanent: true).init();
+    } else {
+      Get.find<OrderSocketService>().bindOrderController(
+        Get.find<OrderController>(),
+      );
+    }
+    if (!Get.isRegistered<PackageSocketService>()) {
+      Get.put(PackageSocketService(), permanent: true).init();
     }
     Get.lazyPut(DashboardController.new);
   }
