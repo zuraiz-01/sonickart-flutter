@@ -33,3 +33,9 @@ flutter run -d ios
 ```
 
 Phone auth on iOS still requires the Firebase iOS app to be registered and the app's iOS auth settings/APNs setup to be completed in Firebase.
+
+For SonicKart, the iOS phone-auth reCAPTCHA fallback is wired in `ios/Runner/Info.plist` with the Firebase Encoded App ID URL scheme:
+
+`app-1-443982695818-ios-12de8aefe01c4976728c73`
+
+If the Firebase iOS app is recreated, replace this value with the new Encoded App ID from Firebase Console and keep Background Modes enabled for `fetch` and `remote-notification`.

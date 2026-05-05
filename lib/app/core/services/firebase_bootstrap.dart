@@ -30,11 +30,7 @@ class FirebaseBootstrap {
           return;
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
-          if (DefaultFirebaseOptions.isAppleConfigured) {
-            await Firebase.initializeApp(options: DefaultFirebaseOptions.apple);
-          } else {
-            await Firebase.initializeApp();
-          }
+          await _initializeAppleApp();
           _lastError = null;
           return;
         case TargetPlatform.windows:
@@ -52,6 +48,18 @@ class FirebaseBootstrap {
     } catch (error) {
       _lastError = error;
       rethrow;
+    }
+  }
+
+  static Future<void> _initializeAppleApp() async {
+    try {
+      await Firebase.initializeApp();
+    } catch (error) {
+      if (!DefaultFirebaseOptions.isAppleConfigured) rethrow;
+      debugPrint(
+        'Native Apple Firebase config failed, falling back to Dart options: $error',
+      );
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.apple);
     }
   }
 }

@@ -49,11 +49,27 @@
 	<false/>
 	<key>GoogleMapsApiKey</key>
 	<string>AIzaSyB5dcpM7PWKnErsIQjyzEG9CUxup0Ysuxs</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-443982695818-ios-12de8aefe01c4976728c73</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
 		<string>maps</string>
 		<string>comgooglemaps</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SonicKart uses the camera so you can capture photos for your account and orders.</string>

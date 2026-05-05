@@ -20,6 +20,10 @@ class ServiceAreaGateService {
            locationLookupService ?? LocationLookupService();
 
   static const _collectionName = 'serviceAreas';
+  static const _genericBlockedMessage =
+      'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.';
+  static const _serviceAreasUnavailableMessage =
+      'Service areas are not available right now. Please try again shortly.';
 
   final ApiService _apiService;
   final FirebaseAuth? _firebaseAuth;
@@ -28,12 +32,23 @@ class ServiceAreaGateService {
   Future<ServiceAreaGateResult> evaluate() async {
     try {
       final areas = await _fetchServiceAreas();
+      if (areas.isEmpty) {
+        return _blockedWithCurrentLocation(
+          message: _serviceAreasUnavailableMessage,
+        );
+      }
+
       final activeCoordinateAreas = areas
           .where((area) => area.isActive && area.hasCoordinateRule)
           .toList();
+      final workingAreas = activeCoordinateAreas
+          .where((area) => area.status == 'working')
+          .toList();
 
-      if (activeCoordinateAreas.isEmpty) {
-        return ServiceAreaGateResult.allowed();
+      if (workingAreas.isEmpty) {
+        return _blockedWithCurrentLocation(
+          message: _serviceAreasUnavailableMessage,
+        );
       }
 
       final positionResult = await _resolvePosition();
@@ -62,15 +77,6 @@ class ServiceAreaGateService {
         );
       }
 
-      final workingAreas = activeCoordinateAreas
-          .where((area) => area.status == 'working')
-          .toList();
-      if (workingAreas.isEmpty) {
-        return ServiceAreaGateResult.allowed(
-          locationLabel: positionResult.label,
-        );
-      }
-
       final workingMatch = _firstMatchingArea(workingAreas, position);
       if (workingMatch != null) {
         return ServiceAreaGateResult.allowed(
@@ -82,12 +88,35 @@ class ServiceAreaGateService {
       return ServiceAreaGateResult.blocked(
         reason: ServiceAreaBlockReason.outsideWorkingArea,
         locationLabel: await _locationLabel(position),
-        message:
-            'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.',
+        message: _genericBlockedMessage,
       );
     } catch (error) {
       debugPrint('ServiceAreaGateService.evaluate failed: $error');
-      return ServiceAreaGateResult.allowed();
+      return _blockedWithCurrentLocation(
+        message: _serviceAreasUnavailableMessage,
+      );
+    }
+  }
+
+  Future<ServiceAreaGateResult> _blockedWithCurrentLocation({
+    required String message,
+  }) async {
+    return ServiceAreaGateResult.blocked(
+      reason: ServiceAreaBlockReason.outsideWorkingArea,
+      locationLabel: await _currentLocationLabel(),
+      message: message,
+    );
+  }
+
+  Future<String> _currentLocationLabel() async {
+    try {
+      final positionResult = await _resolvePosition();
+      final position = positionResult.position;
+      if (position == null) return positionResult.label;
+      return _locationLabel(position);
+    } catch (error) {
+      debugPrint('ServiceAreaGateService._currentLocationLabel failed: $error');
+      return 'Live location unavailable';
     }
   }
 

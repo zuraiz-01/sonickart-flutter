@@ -763,10 +763,8 @@ class ProfileController extends GetxController {
     final rawList =
         _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
     final restored = rawList
-        .map(
-          (item) =>
-              AddressModel.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
+        .whereType<Map>()
+        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item)))
         .toList();
     addresses.assignAll(_applySelectedState(restored));
     debugPrint(
@@ -1125,10 +1123,8 @@ class ProfileController extends GetxController {
       endpoint: ApiConstants.addressList,
     );
     return _extractList(response)
-        .map(
-          (item) =>
-              AddressModel.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
+        .whereType<Map>()
+        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item)))
         .where((address) => address.id.isNotEmpty)
         .toList();
   }

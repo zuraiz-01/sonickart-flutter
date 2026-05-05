@@ -240,11 +240,12 @@ class _TopLocationChip extends StatelessWidget {
                       SizedBox(height: 2.hpx),
                       Text(
                         locationLabel,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppColors.white.withValues(alpha: 0.82),
                           fontSize: 10.spx,
+                          height: 1.2,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

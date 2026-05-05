@@ -85,8 +85,9 @@ class LocationLookupService {
 
     if (response?['status'] == 'OK' && response?['results'] is List) {
       final results = response!['results'] as List;
-      if (results.isNotEmpty) {
-        return (results.first as Map)['formatted_address']?.toString();
+      final first = _mapFrom(results.isEmpty ? null : results.first);
+      if (first != null) {
+        return first['formatted_address']?.toString();
       }
     }
 
@@ -107,8 +108,8 @@ class LocationLookupService {
 
     if (response?['status'] == 'OK' && response?['results'] is List) {
       final results = response!['results'] as List;
-      if (results.isNotEmpty) {
-        final first = Map<String, dynamic>.from(results.first as Map);
+      final first = _mapFrom(results.isEmpty ? null : results.first);
+      if (first != null) {
         final geometry = first['geometry'] is Map
             ? Map<String, dynamic>.from(first['geometry'] as Map)
             : const <String, dynamic>{};
@@ -155,10 +156,9 @@ class LocationLookupService {
     if (response?['status'] == 'OK' && response?['predictions'] is List) {
       final predictions = response!['predictions'] as List;
       return predictions
+          .whereType<Map>()
           .map(
-            (item) => PlaceSuggestion.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
+            (item) => PlaceSuggestion.fromJson(Map<String, dynamic>.from(item)),
           )
           .where(
             (item) => item.description.isNotEmpty && item.placeId.isNotEmpty,
@@ -286,5 +286,11 @@ class LocationLookupService {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
+  }
+
+  Map<String, dynamic>? _mapFrom(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
   }
 }
