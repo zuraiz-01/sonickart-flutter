@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
@@ -91,17 +91,18 @@ class _UnserviceableAreaView extends StatelessWidget {
                       minHeight: constraints.maxHeight - 30.hpx,
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         _TopLocationChip(locationLabel: _locationLabel),
                         SizedBox(height: 24.hpx),
                         Padding(
-                          padding: EdgeInsets.only(left: 8.wpx),
+                          padding: EdgeInsets.symmetric(horizontal: 10.wpx),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Text(
                                 'HANG',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: AppColors.white,
                                   fontSize: 46.spx,
@@ -112,6 +113,7 @@ class _UnserviceableAreaView extends StatelessWidget {
                               ),
                               Text(
                                 'TIGHT!',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: AppColors.accent,
                                   fontSize: 50.spx,
@@ -127,25 +129,24 @@ class _UnserviceableAreaView extends StatelessWidget {
                                 color: AppColors.accent,
                               ),
                               SizedBox(height: 12.hpx),
-                              SizedBox(
-                                width: 250.wpx,
-                                child: Text(
-                                  result.message.isNotEmpty
-                                      ? result.message
-                                      : 'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.',
-                                  style: TextStyle(
-                                    color: AppColors.white.withValues(
-                                      alpha: 0.84,
-                                    ),
-                                    fontSize: 12.spx,
-                                    height: 1.35,
-                                    fontWeight: FontWeight.w600,
+                              Text(
+                                result.message.isNotEmpty
+                                    ? result.message
+                                    : 'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.white.withValues(
+                                    alpha: 0.84,
                                   ),
+                                  fontSize: 12.spx,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               SizedBox(height: 4.hpx),
                               Text(
                                 'Stay tuned for updates!',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: AppColors.accent,
                                   fontSize: 13.spx,
@@ -157,19 +158,7 @@ class _UnserviceableAreaView extends StatelessWidget {
                         ),
                         SizedBox(height: 18.hpx),
                         _InfoSteps(reason: result.reason),
-                        SizedBox(height: 10.hpx),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: EdgeInsets.only(right: 4.wpx),
-                            child: Icon(
-                              Icons.delivery_dining_rounded,
-                              color: AppColors.accent,
-                              size: 132.rpx,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 8.hpx),
+                        SizedBox(height: 12.hpx),
                         _RetryButton(onRetry: onRetry),
                       ],
                     ),

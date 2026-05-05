@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/location_lookup_service.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -53,8 +53,6 @@ class ProfileController extends GetxController {
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
-  final emailController = TextEditingController();
-
   final addressNameController = TextEditingController();
   final addressPhoneController = TextEditingController();
   final addressLineController = TextEditingController();
@@ -153,11 +151,15 @@ class ProfileController extends GetxController {
   void onInit() {
     super.onInit();
     debugPrint('ProfileController.onInit: profile flow started');
+    unawaited(_bootstrapProfile());
+  }
+
+  Future<void> _bootstrapProfile() async {
     _syncProfileForm();
-    _restoreSelectedAddress();
-    loadAddresses();
-    loadProfileSummary();
-    _resolveHomeLocationPreview();
+    await _clearStartupSelectedAddressContext();
+    await loadAddresses();
+    await loadProfileSummary();
+    await _resolveHomeLocationPreview(forceRefresh: true);
   }
 
   Future<void> refreshForAuthenticatedSession() async {
@@ -168,7 +170,6 @@ class ProfileController extends GetxController {
     addressLoadError.value = null;
     requiresAddressRelogin.value = false;
     _syncProfileForm();
-    _restoreSelectedAddress();
     await loadProfileSummary();
     await loadAddresses();
     if (activeAddress == null) {
@@ -178,6 +179,7 @@ class ProfileController extends GetxController {
 
   void clearSessionState() {
     debugPrint('ProfileController.clearSessionState: clearing session state');
+    clearTransientOverlays();
     addresses.clear();
     placeSuggestions.clear();
     addressLoadError.value = null;
@@ -198,6 +200,7 @@ class ProfileController extends GetxController {
   void openEditProfile() {
     debugPrint('ProfileController.openEditProfile: opening edit modal');
     _syncProfileForm();
+    activeInfoModal.value = null;
     isEditModalVisible.value = true;
   }
 
@@ -222,7 +225,7 @@ class ProfileController extends GetxController {
       final localUser = UserModel(
         id: currentUser?.id ?? 'usr-local',
         name: trimmedName.isEmpty ? 'SonicKart Customer' : trimmedName,
-        email: emailController.text.trim(),
+        email: currentUser?.email ?? '',
         phone: trimmedPhone,
       );
       final user = await _tryUpdateProfileRemote(localUser) ?? localUser;
@@ -288,7 +291,7 @@ class ProfileController extends GetxController {
     return switch (key) {
       'wallet' => (
         'Wallet',
-        'Available balance: Rs ${walletBalance.value.toStringAsFixed(0)}. Wallet top-up is available from supported payment channels.',
+        'Available balance: ₹${walletBalance.value.toStringAsFixed(0)}. Wallet top-up is available from supported payment channels.',
       ),
       'rewards' => (
         'Rewards',
@@ -324,6 +327,7 @@ class ProfileController extends GetxController {
 
   void openInfoModal(String key) {
     debugPrint('ProfileController.openInfoModal: opening modal $key');
+    isEditModalVisible.value = false;
     activeInfoModal.value = key;
   }
 
@@ -332,8 +336,15 @@ class ProfileController extends GetxController {
     activeInfoModal.value = null;
   }
 
+  void clearTransientOverlays() {
+    isEditModalVisible.value = false;
+    activeInfoModal.value = null;
+    isSavingProfile.value = false;
+  }
+
   void openOrders() {
     debugPrint('ProfileController.openOrders: redirecting to customer orders');
+    clearTransientOverlays();
     Get.toNamed(AppRoutes.customerOrders);
   }
 
@@ -346,17 +357,37 @@ class ProfileController extends GetxController {
     );
   }
 
+  Future<void> openWebsite() async {
+    debugPrint('ProfileController.openWebsite: opening SonicKart website');
+    clearTransientOverlays();
+    final uri = Uri.parse('https://sonickartnow.com');
+    try {
+      final canOpen = await canLaunchUrl(uri);
+      if (canOpen && await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+        return;
+      }
+    } catch (error) {
+      debugPrint('ProfileController.openWebsite failed: $error');
+    }
+    Get.snackbar(
+      'Error',
+      'Unable to open website. Please visit sonickartnow.com manually.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
   void handleMenuAction(String action) {
     debugPrint('ProfileController.handleMenuAction: action=$action');
     switch (action) {
       case 'addresses':
+        clearTransientOverlays();
         Get.toNamed(AppRoutes.addressBook);
         return;
       case 'edit':
         openEditProfile();
         return;
       case 'about':
-        openInfoModal('about');
+        unawaited(openWebsite());
         return;
       default:
         openInfoModal(action);
@@ -365,6 +396,7 @@ class ProfileController extends GetxController {
 
   Future<void> logout() async {
     debugPrint('ProfileController.logout: logout requested');
+    clearTransientOverlays();
     if (Get.isRegistered<CartController>()) {
       await Get.find<CartController>().clearCart();
     }
@@ -407,7 +439,7 @@ class ProfileController extends GetxController {
             ? error.message
             : 'Addresses abhi load nahi ho rahe. Dobara try karo.';
       }
-    } on SocketException {
+    } on http.ClientException {
       _restoreLocalAddresses();
       addressLoadError.value =
           'Internet issue ki wajah se addresses sync nahi ho sake.';
@@ -425,8 +457,8 @@ class ProfileController extends GetxController {
     }
   }
 
-  Future<void> startAddAddress() async {
-    if (!_ensureAddressSession()) return;
+  bool startAddAddress() {
+    if (!_ensureAddressSession()) return false;
     debugPrint('ProfileController.startAddAddress: opening add address flow');
     editingAddress.value = null;
     addressNameController.clear();
@@ -436,7 +468,9 @@ class ProfileController extends GetxController {
     draftLongitude.value = null;
     draftPlaceId.value = null;
     placeSuggestions.clear();
-    await resolveCurrentLocationForDraft(forceAddressFill: true);
+    liveLocationAddress.value = '';
+    unawaited(resolveCurrentLocationForDraft(forceAddressFill: true));
+    return true;
   }
 
   void startEditAddress(AddressModel address) {
@@ -544,7 +578,7 @@ class ProfileController extends GetxController {
             : 'Address save nahi ho saka. Dobara try karo.',
         snackPosition: SnackPosition.BOTTOM,
       );
-    } on SocketException {
+    } on http.ClientException {
       Get.snackbar(
         'Network Error',
         'Internet issue ki wajah se address save nahi ho saka.',
@@ -620,7 +654,7 @@ class ProfileController extends GetxController {
             : 'Address delete nahi ho saka. Dobara try karo.',
         snackPosition: SnackPosition.BOTTOM,
       );
-    } on SocketException {
+    } on http.ClientException {
       Get.snackbar(
         'Network Error',
         'Internet issue ki wajah se address delete nahi ho saka.',
@@ -737,14 +771,7 @@ class ProfileController extends GetxController {
 
   List<AddressModel> _applySelectedState(List<AddressModel> source) {
     final stored = _storedSelectedAddress;
-    if (stored == null) {
-      final active = source.firstWhereOrNull((item) => item.isSelected);
-      selectedAddressId.value = active?.id;
-      if (active != null) {
-        unawaited(_persistSelectedAddress(active));
-      }
-      return source;
-    }
+    if (stored == null) return _clearSelectedFlags(source);
 
     selectedAddressId.value = stored.id;
     return source
@@ -752,11 +779,27 @@ class ProfileController extends GetxController {
         .toList();
   }
 
-  void _restoreSelectedAddress() {
-    final stored = _storedSelectedAddress;
-    if (stored != null) {
-      selectedAddressId.value = stored.id;
-    }
+  List<AddressModel> _clearSelectedFlags(List<AddressModel> source) {
+    selectedAddressId.value = null;
+    return source.map((item) => item.copyWith(isSelected: false)).toList();
+  }
+
+  Future<void> _clearStartupSelectedAddressContext() async {
+    selectedAddressId.value = null;
+    await _storage.remove(_selectedAddressStorageKey);
+    await _storage.remove(_selectedVendorIdStorageKey);
+
+    final rawList =
+        _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
+    if (rawList.isEmpty) return;
+
+    final cleaned = rawList
+        .whereType<Map>()
+        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item)))
+        .map((item) => item.copyWith(isSelected: false))
+        .map((item) => item.toJson())
+        .toList();
+    await _storage.write(_addressStorageKey, cleaned);
   }
 
   void _restoreLocalAddresses() {
@@ -848,12 +891,7 @@ class ProfileController extends GetxController {
     try {
       final response = await Get.find<ApiService>().patch(
         endpoint: ApiConstants.user,
-        data: {
-          'name': user.name,
-          'fullName': user.name,
-          'email': user.email,
-          'phone': user.phone,
-        },
+        data: {'name': user.name, 'fullName': user.name, 'phone': user.phone},
       );
       final raw = _extractObject(response);
       final userRaw = raw['user'] is Map
@@ -1172,14 +1210,12 @@ class ProfileController extends GetxController {
     final user = currentUser;
     nameController.text = user?.name ?? '';
     phoneController.text = user?.phone ?? '';
-    emailController.text = user?.email ?? '';
   }
 
   @override
   void onClose() {
     nameController.dispose();
     phoneController.dispose();
-    emailController.dispose();
     addressNameController.dispose();
     addressPhoneController.dispose();
     addressLineController.dispose();

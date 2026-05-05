@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -425,7 +425,7 @@ class PackageController extends GetxController {
     if (!await _updateRouteSummary(showErrors: true) || !canSubmitReview) {
       _showSnack(
         'Review Incomplete',
-        'Pickup, drop, package type aur valid distance complete karo.',
+        'Please complete pickup, drop, package type, and valid distance details.',
       );
       return;
     }
@@ -467,7 +467,7 @@ class PackageController extends GetxController {
       if (order == null) {
         _showSnack(
           'Order Creation Failed',
-          'Package order create nahi hua. Please check connection and try again.',
+          'Package order could not be created. Please check your connection and try again.',
         );
         return;
       }
@@ -569,7 +569,7 @@ class PackageController extends GetxController {
       debugPrint('PackageController.cancelPackageOrder failed: $error');
       _showSnack(
         'Cancel Failed',
-        'Package cancel nahi ho saka. Dobara try karo.',
+        'Package order could not be cancelled. Please try again.',
       );
     }
   }

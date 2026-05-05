@@ -45,6 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>GoogleMapsApiKey</key>
@@ -63,20 +65,30 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
+		<string>mailto</string>
+		<string>sms</string>
+		<string>geo</string>
 		<string>maps</string>
 		<string>comgooglemaps</string>
+		<string>google.navigation</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SonicKart uses the camera so you can capture photos for your account and orders.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>SonicKart uses your location to help track and deliver active orders.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>SonicKart uses your location to help track and deliver active orders.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SonicKart uses your location to help you select delivery and pickup addresses.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>SonicKartPreciseLocation</key>
+		<string>SonicKart uses precise location to check service availability and place the delivery pin accurately.</string>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SonicKart uses the microphone when audio input is needed while using the app.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

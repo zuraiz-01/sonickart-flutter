@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -24,8 +24,9 @@ class AddressBookView extends GetView<ProfileController> {
                     ? controller.logout
                     : controller.isLoadingAddresses.value
                     ? null
-                    : () async {
-                        await controller.startAddAddress();
+                    : () {
+                        final canOpen = controller.startAddAddress();
+                        if (!canOpen) return;
                         if (!context.mounted) return;
                         _showAddressSheet(context);
                       },

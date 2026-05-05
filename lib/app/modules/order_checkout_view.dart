@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import '../data/models/cart_item_model.dart';
+import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import 'cart/controllers/cart_controller.dart';
 import 'order_controller.dart';
@@ -17,16 +18,33 @@ class OrderCheckoutView extends GetView<OrderController> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F8FF),
       appBar: AppBar(
-        title: const Text('Checkout'),
+        title: Text(
+          'Checkout',
+          style: TextStyle(fontSize: 18.spx, fontWeight: FontWeight.w800),
+        ),
         centerTitle: true,
         backgroundColor: const Color(0xFFF5F8FF),
         surfaceTintColor: const Color(0xFFF5F8FF),
       ),
       body: Obx(() {
-        final items = cartController.items.toList(growable: false);
+        final items = cartController.items
+            .where((item) => item.quantity > 0)
+            .toList(growable: false);
         final totals = controller.calculateCheckoutTotals(items);
         final freeLeft = controller.freeDeliveryAmountLeft(items);
         final selectedCoupon = controller.selectedCoupon.value;
+        final shouldLeaveCheckout =
+            !cartController.isSyncingCart.value &&
+            !controller.isPlacingOrder.value &&
+            (items.isEmpty || totals.grandTotal <= 0);
+        if (shouldLeaveCheckout) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (Get.currentRoute == AppRoutes.checkout) {
+              Get.offNamed(AppRoutes.dashboard);
+            }
+          });
+          return const SizedBox.shrink();
+        }
         if (selectedCoupon != null) {
           final couponError = controller.couponEligibilityMessage(
             selectedCoupon,
@@ -52,8 +70,10 @@ class OrderCheckoutView extends GetView<OrderController> {
                 ],
                 _AddressCard(controller: controller),
                 SizedBox(height: 14.hpx),
-                _OrderListCard(items: items, cart: cartController),
-                SizedBox(height: 14.hpx),
+                if (items.isNotEmpty) ...[
+                  _OrderListCard(items: items, cart: cartController),
+                  SizedBox(height: 14.hpx),
+                ],
                 _CouponRow(controller: controller, totals: totals),
                 SizedBox(height: 14.hpx),
                 _BillDetails(totals: totals),
@@ -79,8 +99,9 @@ class OrderCheckoutView extends GetView<OrderController> {
     Get.dialog(
       AlertDialog(
         title: const Text('Continue with selected address?'),
-        content: Text(
-          'Selected address:\n${controller.deliveryAddressPreview}',
+        content: _ConfirmationAddressCard(
+          recipient: controller.deliveryRecipient,
+          address: controller.deliveryAddressPreview,
         ),
         actions: [
           TextButton(onPressed: Get.back, child: const Text('Cancel')),
@@ -117,6 +138,82 @@ class OrderCheckoutView extends GetView<OrderController> {
   }
 }
 
+class _ConfirmationAddressCard extends StatelessWidget {
+  const _ConfirmationAddressCard({
+    required this.recipient,
+    required this.address,
+  });
+
+  final String recipient;
+  final String address;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your order will be delivered to:',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
+            fontSize: 13.spx,
+          ),
+        ),
+        SizedBox(height: 10.hpx),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(12.rpx),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFF),
+            borderRadius: BorderRadius.circular(14.rpx),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                color: AppColors.primary,
+                size: 22.spx,
+              ),
+              SizedBox(width: 10.wpx),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recipient,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15.spx,
+                      ),
+                    ),
+                    SizedBox(height: 4.hpx),
+                    Text(
+                      address,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.spx,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FreeDeliveryHint extends StatelessWidget {
   const _FreeDeliveryHint({required this.amountLeft});
 
@@ -138,11 +235,11 @@ class _FreeDeliveryHint extends StatelessWidget {
           SizedBox(width: 12.wpx),
           Expanded(
             child: Text(
-              'Add Rs ${amountLeft.toStringAsFixed(2)} more for free delivery',
+              'Add ₹${amountLeft.toStringAsFixed(2)} more for free delivery',
               style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w800,
-                fontSize: 13.spx,
+                fontSize: 15.spx,
               ),
             ),
           ),
@@ -184,7 +281,8 @@ class _AddressCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 12.spx,
+                      fontSize: 14.spx,
+                      height: 1.35,
                     ),
                   ),
                   SizedBox(height: 4.hpx),
@@ -193,7 +291,8 @@ class _AddressCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
-                      fontSize: 15.spx,
+                      fontSize: 17.spx,
+                      height: 1.35,
                     ),
                   ),
                   SizedBox(height: 4.hpx),
@@ -204,7 +303,7 @@ class _AddressCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
-                      fontSize: 12.spx,
+                      fontSize: 14.spx,
                       height: 1.35,
                     ),
                   ),
@@ -266,7 +365,7 @@ class _AddressCard extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 13.spx,
+                          fontSize: 14.spx,
                         ),
                       ),
                     ),
@@ -320,7 +419,7 @@ class _AddressCard extends StatelessWidget {
                                         style: TextStyle(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w800,
-                                          fontSize: 14.spx,
+                                          fontSize: 16.spx,
                                         ),
                                       ),
                                       SizedBox(height: 4.hpx),
@@ -329,7 +428,7 @@ class _AddressCard extends StatelessWidget {
                                         style: TextStyle(
                                           color: AppColors.textSecondary,
                                           fontWeight: FontWeight.w600,
-                                          fontSize: 12.spx,
+                                          fontSize: 14.spx,
                                           height: 1.35,
                                         ),
                                       ),
@@ -421,16 +520,16 @@ class _OrderItemTile extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 15.spx,
+                    fontSize: 16.spx,
                   ),
                 ),
                 SizedBox(height: 4.hpx),
                 Text(
-                  'Rs ${item.unitPrice.toStringAsFixed(2)}',
+                  '₹${item.unitPrice.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
-                    fontSize: 13.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
               ],
@@ -546,17 +645,17 @@ class _CouponRow extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
-                      fontSize: 16.spx,
+                      fontSize: 17.spx,
                     ),
                   ),
                   if (totals.appliedCoupon != null) ...[
                     SizedBox(height: 4.hpx),
                     Text(
-                      '${totals.appliedCoupon!.code} applied | Save Rs ${totals.couponDiscount.toStringAsFixed(2)}',
+                      '${totals.appliedCoupon!.code} applied | Save ₹${totals.couponDiscount.toStringAsFixed(2)}',
                       style: TextStyle(
                         color: AppColors.success,
                         fontWeight: FontWeight.w700,
-                        fontSize: 12.spx,
+                        fontSize: 13.spx,
                       ),
                     ),
                   ],
@@ -657,7 +756,7 @@ class _CouponRow extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 12.spx,
+                      fontSize: 14.spx,
                     ),
                   ),
                 ],
@@ -677,27 +776,27 @@ class _CouponRow extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 12.spx,
+                          fontSize: 13.spx,
                         ),
                       ),
                       SizedBox(height: 4.hpx),
                       Text(
-                        'Rs ${totals.grandTotal.toStringAsFixed(2)}',
+                        '₹${totals.grandTotal.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w900,
-                          fontSize: 18.spx,
+                          fontSize: 19.spx,
                         ),
                       ),
                       if (totals.appliedCoupon != null &&
                           totals.couponDiscount > 0) ...[
                         SizedBox(height: 4.hpx),
                         Text(
-                          'Applied ${totals.appliedCoupon!.code} | Saved Rs ${totals.couponDiscount.toStringAsFixed(2)}',
+                          'Applied ${totals.appliedCoupon!.code} | Saved ₹${totals.couponDiscount.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: AppColors.success,
                             fontWeight: FontWeight.w700,
-                            fontSize: 12.spx,
+                            fontSize: 13.spx,
                           ),
                         ),
                       ],
@@ -710,7 +809,7 @@ class _CouponRow extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 15.spx,
+                    fontSize: 17.spx,
                   ),
                 ),
                 SizedBox(height: 8.hpx),
@@ -724,7 +823,7 @@ class _CouponRow extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w700,
-                              fontSize: 13.spx,
+                              fontSize: 14.spx,
                             ),
                           ),
                         )
@@ -782,7 +881,7 @@ class _CouponCard extends StatelessWidget {
     final eligible = eligibilityMessage == null;
     final value = coupon.discountType == CouponDiscountType.percentage
         ? '${coupon.discountValue.toStringAsFixed(0)}% OFF'
-        : 'SAVE Rs ${coupon.discountValue.toStringAsFixed(0)}';
+        : 'SAVE ₹${coupon.discountValue.toStringAsFixed(0)}';
     return Container(
       padding: EdgeInsets.all(14.rpx),
       decoration: BoxDecoration(
@@ -802,7 +901,7 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 15.spx,
+                    fontSize: 16.spx,
                   ),
                 ),
                 SizedBox(height: 4.hpx),
@@ -811,7 +910,7 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
                 if (coupon.description.isNotEmpty) ...[
@@ -821,7 +920,7 @@ class _CouponCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
-                      fontSize: 12.spx,
+                      fontSize: 13.spx,
                     ),
                   ),
                 ],
@@ -832,18 +931,18 @@ class _CouponCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
-                      fontSize: 11.spx,
+                      fontSize: 12.spx,
                     ),
                   ),
                 ],
                 if (coupon.minimumOrderAmount > 0) ...[
                   SizedBox(height: 4.hpx),
                   Text(
-                    'Min order: Rs ${coupon.minimumOrderAmount.toStringAsFixed(coupon.minimumOrderAmount == coupon.minimumOrderAmount.roundToDouble() ? 0 : 2)}',
+                    'Min order: ₹${coupon.minimumOrderAmount.toStringAsFixed(coupon.minimumOrderAmount == coupon.minimumOrderAmount.roundToDouble() ? 0 : 2)}',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
-                      fontSize: 11.spx,
+                      fontSize: 12.spx,
                     ),
                   ),
                 ],
@@ -853,7 +952,7 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: eligible ? AppColors.success : AppColors.error,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11.spx,
+                    fontSize: 12.spx,
                   ),
                 ),
               ],
@@ -876,7 +975,7 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.white,
                     fontWeight: FontWeight.w900,
-                    fontSize: 10.spx,
+                    fontSize: 11.spx,
                   ),
                 ),
               ),
@@ -897,7 +996,7 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: eligible ? AppColors.success : AppColors.error,
                     fontWeight: FontWeight.w800,
-                    fontSize: 10.spx,
+                    fontSize: 11.spx,
                   ),
                 ),
               ),
@@ -988,16 +1087,16 @@ class _BillDetails extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
-                      fontSize: 17.spx,
+                      fontSize: 18.spx,
                     ),
                   ),
                 ),
                 Text(
-                  'Rs ${totals.grandTotal.toStringAsFixed(2)}',
+                  '₹${totals.grandTotal.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 17.spx,
+                    fontSize: 18.spx,
                   ),
                 ),
               ],
@@ -1025,8 +1124,8 @@ class _BillRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final display = value < 0
-        ? '-Rs ${value.abs().toStringAsFixed(2)}'
-        : 'Rs ${value.toStringAsFixed(2)}';
+        ? '-₹${value.abs().toStringAsFixed(2)}'
+        : '₹${value.toStringAsFixed(2)}';
     return Row(
       children: [
         Icon(icon, color: AppColors.accent, size: 18.spx),
@@ -1046,7 +1145,7 @@ class _BillRow extends StatelessWidget {
           style: TextStyle(
             color: isDiscount ? AppColors.success : AppColors.primary,
             fontWeight: FontWeight.w800,
-            fontSize: 13.spx,
+            fontSize: 14.spx,
           ),
         ),
       ],
@@ -1105,7 +1204,7 @@ class _CheckoutFooter extends StatelessWidget {
                   'PLACE ORDER',
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 15.spx,
+                    fontSize: 17.spx,
                   ),
                 ),
         ),

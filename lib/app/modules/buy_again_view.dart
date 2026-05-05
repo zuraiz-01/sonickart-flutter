@@ -8,7 +8,7 @@ import 'cart/controllers/cart_controller.dart';
 import 'order_controller.dart';
 
 class BuyAgainView extends GetView<OrderController> {
-  BuyAgainView({super.key});
+  const BuyAgainView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class BuyAgainView extends GetView<OrderController> {
         return ListView.separated(
           padding: EdgeInsets.all(16.rpx),
           itemCount: orders.length,
-          separatorBuilder: (_, __) => SizedBox(height: 12.hpx),
+          separatorBuilder: (_, _) => SizedBox(height: 12.hpx),
           itemBuilder: (context, index) {
             final order = orders[index];
             return Container(
@@ -50,7 +50,7 @@ class BuyAgainView extends GetView<OrderController> {
                   ),
                   SizedBox(height: 8.hpx),
                   Text(
-                    '${order.items.length} items - Rs ${order.totalPrice.toStringAsFixed(0)}',
+                    '${order.items.length} items - ₹${order.totalPrice.toStringAsFixed(0)}',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,

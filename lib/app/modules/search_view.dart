@@ -10,7 +10,7 @@ import 'cart/widgets/cart_summary_bar.dart';
 import 'cart/widgets/universal_add.dart';
 
 class SearchView extends StatefulWidget {
-  SearchView({super.key});
+  const SearchView({super.key});
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -132,7 +132,7 @@ class _SearchViewState extends State<SearchView> {
                       112.hpx,
                     ),
                     itemCount: _results.length,
-                    separatorBuilder: (_, __) => SizedBox(height: 10.hpx),
+                    separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
                     itemBuilder: (context, index) {
                       final product = _results[index];
                       return _ProductTile(product: product);
@@ -150,7 +150,7 @@ class _SearchViewState extends State<SearchView> {
 }
 
 class _ProductTile extends StatelessWidget {
-  _ProductTile({required this.product});
+  const _ProductTile({required this.product});
 
   final ProductModel product;
 
@@ -201,7 +201,7 @@ class _ProductTile extends StatelessWidget {
                   ),
                   SizedBox(height: 6.hpx),
                   Text(
-                    'Rs ${product.displayPrice}',
+                    '₹${product.displayPrice}',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w800,
@@ -222,7 +222,7 @@ class _ProductTile extends StatelessWidget {
 }
 
 class _ProductVisual extends StatelessWidget {
-  _ProductVisual({required this.product, required this.size});
+  const _ProductVisual({required this.product, required this.size});
 
   final ProductModel product;
   final double size;
@@ -238,7 +238,7 @@ class _ProductVisual extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _fallback(),
+          errorBuilder: (_, _, _) => _fallback(),
         ),
       );
     }
@@ -269,7 +269,7 @@ class _ProductVisual extends StatelessWidget {
 }
 
 class _SearchState extends StatelessWidget {
-  _SearchState({
+  const _SearchState({
     required this.icon,
     required this.title,
     required this.subtitle,

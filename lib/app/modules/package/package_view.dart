@@ -158,13 +158,13 @@ class _SendPane extends StatelessWidget {
             _InitialStep(controller: controller),
           if (controller.currentStep.value == PackageStep.pickup)
             _AddressStep(
-              title: 'Pickup address',
+              title: 'Pickup location',
               subtitle:
                   controller.packageOrderType.value == PackageOrderType.receive
                   ? 'Where should we pick up the package from?'
                   : 'Where should we pick up your package?',
-              hint: 'Enter pickup address',
-              icon: Icons.store_mall_directory_outlined,
+              hint: 'Enter pickup location',
+              icon: Icons.home_outlined,
               fieldController: controller.pickupController,
               onChanged: controller.onPickupChanged,
               suggestions: controller.pickupSuggestions,
@@ -181,12 +181,12 @@ class _SendPane extends StatelessWidget {
             ),
           if (controller.currentStep.value == PackageStep.drop)
             _AddressStep(
-              title: 'Drop address',
+              title: 'Drop location',
               subtitle:
                   controller.packageOrderType.value == PackageOrderType.receive
                   ? 'Where should we deliver the package to you?'
                   : 'Where should we deliver your package?',
-              hint: 'Enter drop address',
+              hint: 'Enter drop location',
               icon: Icons.location_on_outlined,
               fieldController: controller.dropController,
               onChanged: controller.onDropChanged,
@@ -231,7 +231,7 @@ class _InitialStep extends StatelessWidget {
           ),
           SizedBox(height: 8.hpx),
           Text(
-            'Send ya receive package flow select karo.',
+            'Choose whether you want to send or receive a package.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textSecondary,
@@ -758,7 +758,7 @@ class _ReviewStep extends StatelessWidget {
             _PackageMapPreview(controller: controller),
             SizedBox(height: 20.hpx),
             Container(
-              padding: EdgeInsets.all(16.rpx),
+              padding: EdgeInsets.all(18.rpx),
               decoration: BoxDecoration(
                 color: Color(0xFFEEF4FF),
                 borderRadius: BorderRadius.circular(18.rpx),
@@ -783,7 +783,7 @@ class _ReviewStep extends StatelessWidget {
                         : 'Send Package',
                   ),
                   _ReviewTile(
-                    icon: Icons.store_mall_directory_outlined,
+                    icon: Icons.home_outlined,
                     label: 'Pickup',
                     value: controller.pickupController.text.trim(),
                   ),
@@ -818,6 +818,7 @@ class _ReviewStep extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w600,
+                              fontSize: 14.spx,
                             ),
                           ),
                         ],
@@ -836,8 +837,8 @@ class _ReviewStep extends StatelessWidget {
                     ),
                   ],
                   Container(
-                    margin: EdgeInsets.only(top: 10.hpx),
-                    padding: EdgeInsets.only(top: 15.hpx),
+                    margin: EdgeInsets.only(top: 12.hpx),
+                    padding: EdgeInsets.only(top: 17.hpx),
                     decoration: BoxDecoration(
                       border: Border(top: BorderSide(color: Color(0xFFD9E6FF))),
                     ),
@@ -850,15 +851,17 @@ class _ReviewStep extends StatelessWidget {
                                 ?.copyWith(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w800,
+                                  fontSize: 17.spx,
                                 ),
                           ),
                         ),
                         Text(
-                          'Rs ${controller.deliveryCharge.round()}',
+                          '₹${controller.deliveryCharge.round()}',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w800,
+                                fontSize: 24.spx,
                               ),
                         ),
                       ],
@@ -872,7 +875,7 @@ class _ReviewStep extends StatelessWidget {
               onTap: controller.toggleAgreement,
               borderRadius: BorderRadius.circular(16.rpx),
               child: Container(
-                padding: EdgeInsets.all(16.rpx),
+                padding: EdgeInsets.all(18.rpx),
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(16.rpx),
@@ -884,8 +887,8 @@ class _ReviewStep extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 20.wpx,
-                      height: 20.hpx,
+                      width: 22.wpx,
+                      height: 22.hpx,
                       margin: EdgeInsets.only(top: 2),
                       decoration: BoxDecoration(
                         color: controller.agreementChecked.value
@@ -895,7 +898,11 @@ class _ReviewStep extends StatelessWidget {
                         border: Border.all(color: AppColors.primary, width: 2),
                       ),
                       child: controller.agreementChecked.value
-                          ? Icon(Icons.check, size: 14, color: AppColors.white)
+                          ? Icon(
+                              Icons.check,
+                              size: 15.spx,
+                              color: AppColors.white,
+                            )
                           : null,
                     ),
                     SizedBox(width: 12.wpx),
@@ -904,8 +911,9 @@ class _ReviewStep extends StatelessWidget {
                         'I declare that this package does not contain any prohibited, illegal, or restricted items including cash, jewellery, liquor, drugs, or hazardous materials.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.primary,
-                          height: 1.45,
+                          height: 1.5,
                           fontWeight: FontWeight.w600,
+                          fontSize: 13.spx,
                         ),
                       ),
                     ),
@@ -921,14 +929,17 @@ class _ReviewStep extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.white,
                   backgroundColor: AppColors.textSecondary,
-                  padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                  padding: EdgeInsets.symmetric(vertical: 16.hpx),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14.rpx),
                   ),
                 ),
                 child: Text(
                   'Back',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15.spx,
+                  ),
                 ),
               ),
             ),
@@ -949,7 +960,7 @@ class _ReviewStep extends StatelessWidget {
                     alpha: 0.45,
                   ),
                   foregroundColor: AppColors.white,
-                  padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                  padding: EdgeInsets.symmetric(vertical: 16.hpx),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14.rpx),
                   ),
@@ -968,7 +979,10 @@ class _ReviewStep extends StatelessWidget {
                                 PackageOrderType.receive
                             ? 'Confirm & Receive'
                             : 'Confirm & Send',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15.spx,
+                        ),
                       ),
               ),
             ),
@@ -1542,7 +1556,7 @@ class _OrdersPane extends StatelessWidget {
                       Expanded(
                         child: _StatPill(
                           label: 'Charge',
-                          value: 'Rs ${order.totalPrice.toStringAsFixed(0)}',
+                          value: '₹${order.totalPrice.toStringAsFixed(0)}',
                         ),
                       ),
                     ],
@@ -1635,12 +1649,12 @@ class _ReviewTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 14.hpx),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primary, size: 18),
-          SizedBox(width: 10.wpx),
+          Icon(icon, color: AppColors.primary, size: 21.spx),
+          SizedBox(width: 12.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1649,16 +1663,18 @@ class _ReviewTile extends StatelessWidget {
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.spx,
                   ),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: 4.hpx),
                 Text(
                   value,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    height: 1.4,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15.spx,
+                    height: 1.45,
                   ),
                 ),
               ],

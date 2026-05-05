@@ -1,4 +1,4 @@
-import 'product_model.dart';
+﻿import 'product_model.dart';
 
 class CartItemModel {
   const CartItemModel({required this.product, required this.quantity});

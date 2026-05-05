@@ -8,7 +8,7 @@ import '../../dashboard/controllers/dashboard_controller.dart';
 import '../controllers/cart_controller.dart';
 
 class CartSummaryBar extends StatelessWidget {
-  CartSummaryBar({super.key});
+  const CartSummaryBar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +62,7 @@ class CartSummaryBar extends StatelessWidget {
                                 width: 42.wpx,
                                 height: 42.hpx,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (_, _, _) => Container(
                                   width: 42.wpx,
                                   height: 42.hpx,
                                   color: AppColors.surface,

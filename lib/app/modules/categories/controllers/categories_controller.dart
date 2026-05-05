@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/category_model.dart';

@@ -12,7 +12,7 @@ import '../../dashboard/controllers/dashboard_controller.dart';
 import '../controllers/categories_controller.dart';
 
 class CategoriesView extends GetView<CategoriesController> {
-  CategoriesView({super.key});
+  const CategoriesView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +171,7 @@ class CategoriesView extends GetView<CategoriesController> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w800,
                                           fontSize: 12.spx,
                                           color: AppColors.primary,
                                         ),
@@ -191,7 +191,7 @@ class CategoriesView extends GetView<CategoriesController> {
                                       ),
                                       SizedBox(height: 4.hpx),
                                       Text(
-                                        'Rs ${product.displayPrice}',
+                                        '₹${product.displayPrice}',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 12.spx,
@@ -217,7 +217,7 @@ class CategoriesView extends GetView<CategoriesController> {
                                           ),
                                           if (product.displayMrp.isNotEmpty)
                                             Text(
-                                              'Rs ${product.displayMrp}',
+                                              '₹${product.displayMrp}',
                                               style: TextStyle(
                                                 fontSize: 10.spx,
                                                 color: AppColors.textSecondary,
@@ -255,7 +255,7 @@ class CategoriesView extends GetView<CategoriesController> {
 }
 
 class _CategoriesBottomNav extends StatelessWidget {
-  _CategoriesBottomNav();
+  const _CategoriesBottomNav();
 
   @override
   Widget build(BuildContext context) {
@@ -416,7 +416,7 @@ class _CategoriesBottomNav extends StatelessWidget {
 }
 
 class _CategoryThumb extends StatelessWidget {
-  _CategoryThumb({required this.category});
+  const _CategoryThumb({required this.category});
 
   final CategoryModel category;
 
@@ -438,7 +438,7 @@ class _CategoryThumb extends StatelessWidget {
               width: 46.wpx,
               height: 46.hpx,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => _categoryFallback(),
+              errorBuilder: (_, _, _) => _categoryFallback(),
             )
           : _categoryFallback(),
     );
@@ -461,7 +461,7 @@ class _CategoryThumb extends StatelessWidget {
 }
 
 class _ProductImageBox extends StatelessWidget {
-  _ProductImageBox({required this.product});
+  const _ProductImageBox({required this.product});
 
   final ProductModel product;
 
@@ -483,7 +483,7 @@ class _ProductImageBox extends StatelessWidget {
               width: double.infinity,
               height: 82.hpx,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => _fallback(),
+              errorBuilder: (_, _, _) => _fallback(),
               loadingBuilder: (context, child, progress) {
                 if (progress == null) return child;
                 return Center(

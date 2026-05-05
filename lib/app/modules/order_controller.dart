@@ -324,7 +324,7 @@ class OrderController extends GetxController {
     final totals = calculateCheckoutTotals(items);
     if (totals.itemsTotal <= 0) return 'Add items before applying a coupon.';
     if (totals.itemsTotal < coupon.minimumOrderAmount) {
-      return 'Minimum order Rs. ${_formatAmount(coupon.minimumOrderAmount)} required.';
+      return 'Minimum order ₹${_formatAmount(coupon.minimumOrderAmount)} required.';
     }
     return null;
   }
@@ -420,6 +420,11 @@ class OrderController extends GetxController {
 
   void openOrder(OrderModel order) {
     selectedOrder.value = order;
+    if (order.isProductOrder && !order.isInactive) {
+      activeProductOrder.value = order;
+      Get.toNamed(AppRoutes.liveTracking, arguments: {'orderId': order.id});
+      return;
+    }
     Get.toNamed(
       AppRoutes.customerOrderDetails,
       arguments: {'orderId': order.id},
@@ -480,8 +485,11 @@ class OrderController extends GetxController {
 
   Future<void> placeOrder() async {
     final cart = _cartController;
-    final totals = calculateCheckoutTotals(cart.items);
-    if (cart.items.isEmpty || totals.grandTotal <= 0) {
+    final checkoutItems = cart.items
+        .where((item) => item.quantity > 0)
+        .toList(growable: false);
+    final totals = calculateCheckoutTotals(checkoutItems);
+    if (checkoutItems.isEmpty || totals.grandTotal <= 0) {
       Get.snackbar('Cart Empty', 'Add items before checkout.');
       return;
     }
@@ -505,7 +513,7 @@ class OrderController extends GetxController {
       final address = await _ensureAddressContext();
       final vendorResolution = await _resolveVendor(address);
       final unavailable = _findUnavailableCartItems(
-        cart.items,
+        checkoutItems,
         vendorResolution,
       );
       if (unavailable.isNotEmpty) {
@@ -514,7 +522,7 @@ class OrderController extends GetxController {
       }
 
       final vendorContext = _resolveCheckoutVendorContext(
-        cart.items,
+        checkoutItems,
         vendorResolution,
       );
       if (vendorContext.error != null) {
@@ -541,7 +549,7 @@ class OrderController extends GetxController {
       }
 
       final payload = _buildOrderPayload(
-        items: cart.items,
+        items: checkoutItems,
         address: finalAddress,
         latitude: finalLatitude,
         longitude: finalLongitude,
@@ -558,7 +566,40 @@ class OrderController extends GetxController {
       final raw = response['data'] is Map
           ? Map<String, dynamic>.from(response['data'] as Map)
           : response;
-      final createdOrder = OrderModel.fromJson(raw);
+      final parsedOrder = OrderModel.fromJson(raw);
+      final createdOrder = parsedOrder.deliveryAddress.trim().isEmpty
+          ? OrderModel(
+              id: parsedOrder.id,
+              items: parsedOrder.items,
+              customerName: parsedOrder.customerName.isNotEmpty
+                  ? parsedOrder.customerName
+                  : address.fullName,
+              customerPhone: parsedOrder.customerPhone.isNotEmpty
+                  ? parsedOrder.customerPhone
+                  : address.contactNumber,
+              deliveryAddress: finalAddress,
+              paymentMode: parsedOrder.paymentMode,
+              totalPrice: parsedOrder.totalPrice,
+              status: parsedOrder.status,
+              createdAt: parsedOrder.createdAt,
+              raw: {
+                ...parsedOrder.raw,
+                'deliveryAddress': finalAddress,
+                'deliveryLocation': {
+                  ...(parsedOrder.raw['deliveryLocation'] is Map
+                      ? Map<String, dynamic>.from(
+                          parsedOrder.raw['deliveryLocation'] as Map,
+                        )
+                      : const <String, dynamic>{}),
+                  'address': finalAddress,
+                  'fullName': address.fullName,
+                  'contactNumber': address.contactNumber,
+                  'latitude': finalLatitude,
+                  'longitude': finalLongitude,
+                },
+              },
+            )
+          : parsedOrder;
       if (createdOrder.id.isEmpty) {
         throw ApiException(
           statusCode: 0,
@@ -1231,7 +1272,7 @@ class OrderController extends GetxController {
       if (token == null || token.trim().isEmpty) return null;
       return {'Authorization': 'Bearer $token'};
     } catch (error) {
-      debugPrint('OrderController._firebaseAuthHeaders failed: $error');
+      debugPrint('OrderController._firebaseAuthHeadersfailed: $error');
       return null;
     }
   }

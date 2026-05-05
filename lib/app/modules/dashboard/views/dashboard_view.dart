@@ -20,7 +20,7 @@ import '../../profile/profile_view.dart';
 import '../controllers/dashboard_controller.dart';
 
 class DashboardView extends GetView<DashboardController> {
-  DashboardView({super.key});
+  const DashboardView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +79,9 @@ class DashboardView extends GetView<DashboardController> {
         bottomNavigationBar: _BottomNav(
           index: controller.currentIndex.value,
           onTap: (value) {
+            if (controller.currentIndex.value == 4 && value != 4) {
+              profileController.clearTransientOverlays();
+            }
             if (value == 1) {
               Get.toNamed(AppRoutes.categories);
               return;
@@ -92,7 +95,7 @@ class DashboardView extends GetView<DashboardController> {
 }
 
 class _HomeTab extends StatelessWidget {
-  _HomeTab({
+  const _HomeTab({
     required this.user,
     required this.controller,
     required this.profileController,
@@ -143,7 +146,7 @@ class _HomeTab extends StatelessWidget {
 }
 
 class _HeaderCard extends StatelessWidget {
-  _HeaderCard({required this.primaryLabel, required this.address});
+  const _HeaderCard({required this.primaryLabel, required this.address});
   final String primaryLabel;
   final String address;
 
@@ -155,13 +158,15 @@ class _HeaderCard extends StatelessWidget {
         onTap: () => Get.toNamed(AppRoutes.addressBook),
         borderRadius: BorderRadius.circular(18.rpx),
         child: Container(
-          padding: EdgeInsets.all(14.rpx),
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 14.wpx, vertical: 12.hpx),
           decoration: BoxDecoration(
             color: Color(0xFFF3F7FF),
             borderRadius: BorderRadius.circular(18.rpx),
+            border: Border.all(color: Color(0xFFF3F7FF)),
             boxShadow: [
               BoxShadow(
-                color: Color(0x14000000),
+                color: AppColors.black.withValues(alpha: 0.08),
                 blurRadius: 12,
                 offset: Offset(0, 6),
               ),
@@ -174,17 +179,26 @@ class _HeaderCard extends StatelessWidget {
                 primaryLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                textAlign: TextAlign.left,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.primary,
+                  fontSize: 14.spx,
                   fontWeight: FontWeight.w800,
+                  height: 1.15,
+                  letterSpacing: 0.2,
                 ),
               ),
               SizedBox(height: 4.hpx),
               Text(
-                'Everything you need, delivered fast',
+                'Everything you need, delivered fast \u26A1',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.left,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 12.spx,
+                  fontWeight: FontWeight.w800,
+                  height: 1.42,
                 ),
               ),
               SizedBox(height: 10.hpx),
@@ -203,30 +217,33 @@ class _HeaderCard extends StatelessWidget {
                       width: 24.wpx,
                       height: 24.hpx,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.white,
                         borderRadius: BorderRadius.circular(12.rpx),
                       ),
                       child: Icon(
                         Icons.location_on,
-                        size: 14,
+                        size: 14.spx,
                         color: AppColors.primary,
                       ),
                     ),
-                    SizedBox(width: 8.wpx),
+                    SizedBox(width: 6.wpx),
                     Expanded(
                       child: Text(
                         address,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 12.spx,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                     Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: AppColors.primary,
+                      size: 16.spx,
                     ),
                   ],
                 ),
@@ -240,7 +257,7 @@ class _HeaderCard extends StatelessWidget {
 }
 
 class _SearchBar extends StatelessWidget {
-  _SearchBar({required this.controller});
+  const _SearchBar({required this.controller});
   final DashboardController controller;
 
   @override
@@ -291,7 +308,7 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _PromoSection extends StatelessWidget {
-  _PromoSection({required this.controller});
+  const _PromoSection({required this.controller});
   final DashboardController controller;
 
   @override
@@ -360,7 +377,7 @@ class _PromoSection extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  _SectionTitle(this.title);
+  const _SectionTitle(this.title);
   final String title;
   @override
   Widget build(BuildContext context) => Text(
@@ -373,7 +390,7 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _ProductGrid extends StatelessWidget {
-  _ProductGrid({required this.products, required this.loading});
+  const _ProductGrid({required this.products, required this.loading});
 
   final List<ProductModel> products;
   final bool loading;
@@ -413,7 +430,7 @@ class _ProductGrid extends StatelessWidget {
 }
 
 class _FeaturedProductCard extends StatelessWidget {
-  _FeaturedProductCard({required this.product});
+  const _FeaturedProductCard({required this.product});
 
   final ProductModel product;
 
@@ -461,7 +478,7 @@ class _FeaturedProductCard extends StatelessWidget {
                   color: AppColors.primary,
                   fontSize: 10.spx,
                   height: 1.15,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -486,7 +503,7 @@ class _FeaturedProductCard extends StatelessWidget {
                   ),
                   SizedBox(height: 2.hpx),
                   Text(
-                    'Rs ${product.displayPrice}',
+                    '₹${product.displayPrice}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -508,7 +525,7 @@ class _FeaturedProductCard extends StatelessWidget {
 }
 
 class _CategoryGrid extends StatefulWidget {
-  _CategoryGrid({required this.categories, required this.loading});
+  const _CategoryGrid({required this.categories, required this.loading});
 
   final List<CategoryModel> categories;
   final bool loading;
@@ -607,41 +624,35 @@ class _HomeTagline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lineColor = AppColors.primary.withValues(alpha: 0.12);
-    return Row(
-      children: [
-        Expanded(child: Container(height: 1, color: lineColor)),
-        Container(
-          constraints: BoxConstraints(
-            maxWidth: min(MediaQuery.of(context).size.width * 0.74, 280),
-          ),
-          margin: EdgeInsets.symmetric(horizontal: 10.wpx),
-          padding: EdgeInsets.symmetric(horizontal: 18.wpx, vertical: 12.hpx),
-          decoration: BoxDecoration(
-            color: Color(0xFFF3F7FF),
-            borderRadius: BorderRadius.circular(999.rpx),
-            border: Border.all(color: lineColor),
-          ),
-          child: Text(
-            'Your City, Your Cart in Minutes \u26A1',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.primary,
-              fontSize: 16.spx,
-              fontWeight: FontWeight.w800,
-            ),
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: min(MediaQuery.of(context).size.width * 0.86, 320),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 18.wpx, vertical: 12.hpx),
+        decoration: BoxDecoration(
+          color: Color(0xFFF3F7FF),
+          borderRadius: BorderRadius.circular(999.rpx),
+        ),
+        child: Text(
+          'Your City, Your Cart in Minutes \u26A1',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 16.spx,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        Expanded(child: Container(height: 1, color: lineColor)),
-      ],
+      ),
     );
   }
 }
 
 class _HomeCategoryCard extends StatelessWidget {
-  _HomeCategoryCard({required this.category});
+  const _HomeCategoryCard({required this.category});
 
   final CategoryModel category;
 
@@ -704,7 +715,7 @@ class _HomeCategoryCard extends StatelessWidget {
 }
 
 class _DashboardImageBox extends StatelessWidget {
-  _DashboardImageBox({required this.product, required this.height});
+  const _DashboardImageBox({required this.product, required this.height});
 
   final ProductModel product;
   final double height;
@@ -727,7 +738,7 @@ class _DashboardImageBox extends StatelessWidget {
               width: double.infinity,
               height: height,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => _fallback(),
+              errorBuilder: (_, _, _) => _fallback(),
             )
           : _fallback(),
     );
@@ -746,7 +757,7 @@ class _DashboardImageBox extends StatelessWidget {
 }
 
 class _CategoryImageBox extends StatelessWidget {
-  _CategoryImageBox({required this.category, required this.height});
+  const _CategoryImageBox({required this.category, required this.height});
 
   final CategoryModel category;
   final double height;
@@ -760,7 +771,7 @@ class _CategoryImageBox extends StatelessWidget {
       width: double.infinity,
       height: height,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => _fallback(),
+      errorBuilder: (_, _, _) => _fallback(),
     );
   }
 
@@ -780,7 +791,7 @@ String _initial(String value) =>
     value.trim().isEmpty ? 'P' : value.trim().characters.first.toUpperCase();
 
 class _ActiveOrderCard extends StatelessWidget {
-  _ActiveOrderCard({required this.order});
+  const _ActiveOrderCard({required this.order});
 
   final OrderModel order;
 
@@ -909,7 +920,7 @@ class _ActiveOrderCard extends StatelessWidget {
 }
 
 class _SimpleTab extends StatelessWidget {
-  _SimpleTab({required this.title, required this.icon});
+  const _SimpleTab({required this.title, required this.icon});
   final String title;
   final IconData icon;
 
@@ -942,7 +953,7 @@ class _SimpleTab extends StatelessWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  _BottomNav({required this.index, required this.onTap});
+  const _BottomNav({required this.index, required this.onTap});
   final int index;
   final ValueChanged<int> onTap;
 

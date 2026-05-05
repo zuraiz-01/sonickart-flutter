@@ -4,7 +4,7 @@ import 'package:sonic_cart/app/core/utils/responsive.dart';
 import '../../../../theme/app_colors.dart';
 
 class AuthScaffold extends StatelessWidget {
-  AuthScaffold({
+  const AuthScaffold({
     super.key,
     required this.title,
     required this.subtitle,

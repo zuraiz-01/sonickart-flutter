@@ -1,4 +1,4 @@
-class PackageOrderModel {
+﻿class PackageOrderModel {
   const PackageOrderModel({
     required this.id,
     required this.customerName,

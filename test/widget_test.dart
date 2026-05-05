@@ -6,26 +6,29 @@ import 'package:sonic_cart/main.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const MethodChannel pathProviderChannel =
-      MethodChannel('plugins.flutter.io/path_provider');
+  const MethodChannel pathProviderChannel = MethodChannel(
+    'plugins.flutter.io/path_provider',
+  );
 
   setUpAll(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(pathProviderChannel, (MethodCall methodCall) async {
-      switch (methodCall.method) {
-        case 'getApplicationDocumentsDirectory':
-        case 'getTemporaryDirectory':
-        case 'getApplicationSupportDirectory':
-        case 'getLibraryDirectory':
-        case 'getExternalStorageDirectory':
-          return '.dart_tool/test_storage';
-        case 'getExternalCacheDirectories':
-        case 'getExternalStorageDirectories':
-          return <String>['.dart_tool/test_storage'];
-        default:
-          return '.dart_tool/test_storage';
-      }
-    });
+        .setMockMethodCallHandler(pathProviderChannel, (
+          MethodCall methodCall,
+        ) async {
+          switch (methodCall.method) {
+            case 'getApplicationDocumentsDirectory':
+            case 'getTemporaryDirectory':
+            case 'getApplicationSupportDirectory':
+            case 'getLibraryDirectory':
+            case 'getExternalStorageDirectory':
+              return '.dart_tool/test_storage';
+            case 'getExternalCacheDirectories':
+            case 'getExternalStorageDirectories':
+              return <String>['.dart_tool/test_storage'];
+            default:
+              return '.dart_tool/test_storage';
+          }
+        });
 
     await GetStorage.init();
   });

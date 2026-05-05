@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
-
+﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 class PlaceSuggestion {
   const PlaceSuggestion({
@@ -69,8 +68,7 @@ class LocationLookupService {
   static const String _distanceMatrixUrl =
       'https://maps.googleapis.com/maps/api/distancematrix/json';
 
-  final HttpClient _client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 12);
+  final http.Client _client = http.Client();
 
   bool get isConfigured => _googleMapsApiKey.trim().isNotEmpty;
 
@@ -262,12 +260,10 @@ class LocationLookupService {
 
     final uri = Uri.parse(url).replace(queryParameters: query);
     try {
-      final request = await _client.getUrl(uri);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response = await request.close().timeout(
-        const Duration(seconds: 15),
-      );
-      final body = await response.transform(utf8.decoder).join();
+      final response = await _client
+          .get(uri, headers: const {'accept': 'application/json'})
+          .timeout(const Duration(seconds: 15));
+      final body = response.body;
       if (body.trim().isEmpty) return null;
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic>) {

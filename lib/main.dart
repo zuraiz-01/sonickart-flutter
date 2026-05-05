@@ -12,11 +12,27 @@ import 'app/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
+  await _clearLaunchAddressSelection();
   if (!Get.isRegistered<SessionController>()) {
     Get.put(SessionController(GetStorage()), permanent: true);
   }
   await _initializeFirebase();
   runApp(const SonicCartApp());
+}
+
+Future<void> _clearLaunchAddressSelection() async {
+  final storage = GetStorage();
+  await storage.remove('selectedAddress');
+  await storage.remove('selectedVendorId');
+
+  final rawAddresses = storage.read<List<dynamic>>('saved_addresses');
+  if (rawAddresses == null || rawAddresses.isEmpty) return;
+
+  final cleanedAddresses = rawAddresses
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item)..['isSelected'] = false)
+      .toList();
+  await storage.write('saved_addresses', cleanedAddresses);
 }
 
 Future<void> _initializeFirebase() async {

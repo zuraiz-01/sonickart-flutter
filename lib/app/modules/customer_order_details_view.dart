@@ -7,7 +7,7 @@ import '../theme/app_colors.dart';
 import 'order_controller.dart';
 
 class CustomerOrderDetailsView extends GetView<OrderController> {
-  CustomerOrderDetailsView({super.key});
+  const CustomerOrderDetailsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +94,7 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                           '${item.quantity} x ${item.product.unit}',
                         ),
                         trailing: Text(
-                          'Rs ${item.totalPrice.toStringAsFixed(0)}',
+                          '₹${item.totalPrice.toStringAsFixed(0)}',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w800,
@@ -126,7 +126,7 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
                         ),
                       ),
                       Text(
-                        'Rs ${order.totalPrice.toStringAsFixed(2)}',
+                        '₹${order.totalPrice.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w800,
@@ -142,7 +142,7 @@ class CustomerOrderDetailsView extends GetView<OrderController> {
 }
 
 class _DetailLine extends StatelessWidget {
-  _DetailLine({required this.label, required this.value});
+  const _DetailLine({required this.label, required this.value});
 
   final String label;
   final String value;

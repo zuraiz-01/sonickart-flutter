@@ -1,4 +1,4 @@
-class AddressModel {
+﻿class AddressModel {
   const AddressModel({
     required this.id,
     required this.fullName,

@@ -1,4 +1,4 @@
-import 'cart_item_model.dart';
+﻿import 'cart_item_model.dart';
 
 class OrderModel {
   const OrderModel({
@@ -110,6 +110,15 @@ class OrderModel {
     final deliveryLocation = json['deliveryLocation'] is Map
         ? Map<String, dynamic>.from(json['deliveryLocation'] as Map)
         : const <String, dynamic>{};
+    final deliveryOrder = _firstMap([
+      json['deliveryOrder'],
+      json['delivery_order'],
+      json['delivery'],
+      json['deliveryDetails'],
+      json['delivery_details'],
+      json['deliveryStatusInfo'],
+      json['delivery_status_info'],
+    ]);
     return OrderModel(
       id:
           (json['id'] ?? json['_id'] ?? json['orderId'] ?? json['orderNumber'])
@@ -153,7 +162,12 @@ class OrderModel {
             json['amount'],
       ),
       status:
-          (json['deliveryStatus'] ?? json['delivery_status'] ?? json['status'])
+          (json['deliveryStatus'] ??
+                  json['delivery_status'] ??
+                  deliveryOrder['deliveryStatus'] ??
+                  deliveryOrder['delivery_status'] ??
+                  deliveryOrder['status'] ??
+                  json['status'])
               ?.toString() ??
           'placed',
       createdAt:
@@ -203,6 +217,22 @@ class OrderModel {
       if (found.isNotEmpty) return found;
     }
     return const [];
+  }
+
+  static Map<String, dynamic> _firstMap(List<Object?> values) {
+    for (final value in values) {
+      if (value is Map) {
+        return Map<String, dynamic>.from(value);
+      }
+      if (value is List) {
+        for (final item in value) {
+          if (item is Map) {
+            return Map<String, dynamic>.from(item);
+          }
+        }
+      }
+    }
+    return const <String, dynamic>{};
   }
 
   static double _number(Object? value) {

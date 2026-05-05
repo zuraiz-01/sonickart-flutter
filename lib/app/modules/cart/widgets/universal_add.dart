@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -66,11 +66,12 @@ class UniversalAdd extends StatelessWidget {
                   final isCompact = constraints.maxWidth < 56;
                   return Padding(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isCompact ? 1.wpx : 4.wpx,
+                      horizontal: 4.wpx,
                       vertical: 5.hpx,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         _CounterTap(
                           icon: Icons.remove_rounded,
@@ -78,20 +79,15 @@ class UniversalAdd extends StatelessWidget {
                           onTap: () => cart.removeItem(product.id),
                         ),
                         Flexible(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isCompact ? 1.wpx : 3.wpx,
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '$count',
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: AppColors.white,
-                                  fontSize: (isCompact ? 12 : 13).spx,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '$count',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: AppColors.white,
+                                fontSize: 13.spx,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -210,9 +206,9 @@ class _CounterTap extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16.rpx),
       child: SizedBox(
-        width: compact ? 16 : 28.rpx,
-        height: compact ? 22 : 28.rpx,
-        child: Icon(icon, color: AppColors.white, size: compact ? 13 : 16),
+        width: compact ? 14.wpx : 18.wpx,
+        height: 30.hpx,
+        child: Icon(icon, color: AppColors.white, size: 13.spx),
       ),
     );
   }

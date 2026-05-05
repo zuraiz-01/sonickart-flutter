@@ -7,7 +7,7 @@ import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
 
 class CartView extends GetView<CartController> {
-  CartView({super.key, this.showScaffold = false});
+  const CartView({super.key, this.showScaffold = false});
 
   final bool showScaffold;
 
@@ -51,7 +51,7 @@ class CartView extends GetView<CartController> {
 }
 
 class _SummaryCard extends StatelessWidget {
-  _SummaryCard({required this.totalItems, required this.isSyncing});
+  const _SummaryCard({required this.totalItems, required this.isSyncing});
 
   final int totalItems;
   final bool isSyncing;
@@ -92,7 +92,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _ItemsCard extends StatelessWidget {
-  _ItemsCard({required this.controller});
+  const _ItemsCard({required this.controller});
 
   final CartController controller;
 
@@ -157,7 +157,7 @@ class _ItemsCard extends StatelessWidget {
 }
 
 class _CartItemRow extends StatelessWidget {
-  _CartItemRow({
+  const _CartItemRow({
     required this.itemId,
     required this.emoji,
     required this.name,
@@ -255,7 +255,7 @@ class _CartItemRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'Rs ${totalPrice.toStringAsFixed(0)}',
+                '₹${totalPrice.toStringAsFixed(0)}',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w800,
@@ -277,7 +277,7 @@ class _CartItemRow extends StatelessWidget {
 }
 
 class _QuantityButton extends StatelessWidget {
-  _QuantityButton({required this.icon, required this.onTap});
+  const _QuantityButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -301,7 +301,7 @@ class _QuantityButton extends StatelessWidget {
 }
 
 class _PriceCard extends StatelessWidget {
-  _PriceCard({required this.subtotal, required this.total});
+  const _PriceCard({required this.subtotal, required this.total});
 
   final double subtotal;
   final double total;
@@ -345,7 +345,11 @@ class _PriceCard extends StatelessWidget {
 }
 
 class _PriceRow extends StatelessWidget {
-  _PriceRow({required this.label, required this.value, this.isStrong = false});
+  const _PriceRow({
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+  });
 
   final String label;
   final double value;
@@ -366,7 +370,7 @@ class _PriceRow extends StatelessWidget {
           ),
         ),
         Text(
-          'Rs ${value.toStringAsFixed(0)}',
+          '₹${value.toStringAsFixed(0)}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.primary,
             fontWeight: weight,
@@ -378,7 +382,7 @@ class _PriceRow extends StatelessWidget {
 }
 
 class _ActionSection extends StatelessWidget {
-  _ActionSection({required this.controller});
+  const _ActionSection({required this.controller});
 
   final CartController controller;
 
@@ -467,7 +471,7 @@ class _ActionSection extends StatelessWidget {
 }
 
 class _CartEmptyState extends StatelessWidget {
-  _CartEmptyState({required this.isSyncing});
+  const _CartEmptyState({required this.isSyncing});
 
   final bool isSyncing;
 

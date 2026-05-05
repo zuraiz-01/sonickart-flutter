@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -344,21 +344,33 @@ class ServiceAreaRule {
     required String id,
     required Map<String, dynamic> fields,
   }) {
-    final status = fields['status']?.toString() == 'not_working'
+    final areaType = fields['areaType']?.toString().trim().toLowerCase() ?? '';
+    final rawStatus = fields['status']?.toString().trim().toLowerCase() ?? '';
+    final status =
+        areaType == 'not_working_area' ||
+            areaType == 'non_working_area' ||
+            areaType == 'blocked_area' ||
+            rawStatus == 'not_working'
         ? 'not_working'
         : 'working';
+    final activeValue = fields.containsKey('appEnabled')
+        ? fields['appEnabled']
+        : fields['isActive'];
     return ServiceAreaRule(
-      id: id,
+      id: fields['id']?.toString().trim().isNotEmpty == true
+          ? fields['id'].toString().trim()
+          : id,
       name: fields['name']?.toString() ?? '',
       city: fields['city']?.toString() ?? '',
-      province: fields['province']?.toString() ?? '',
+      province:
+          fields['province']?.toString() ?? fields['state']?.toString() ?? '',
       status: status,
       message:
           fields['message']?.toString() ??
           (status == 'not_working'
               ? 'Service is not available in this area yet.'
               : 'Service is available in this area.'),
-      isActive: fields['isActive'] != false,
+      isActive: activeValue != false,
       sortOrder: _toInt(fields['sortOrder']),
       latitude: _toDouble(fields['latitude']),
       longitude: _toDouble(fields['longitude']),

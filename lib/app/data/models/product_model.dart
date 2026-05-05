@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import '../../core/constants/api_constants.dart';
 
@@ -53,12 +53,26 @@ class ProductModel {
   }
 
   List<String> get resolvedGalleryImageUrls {
-    final rawImages = raw['images'];
-    final gallery = <String>[
-      imageUrl,
-      if (rawImages is List) ...rawImages.map(_imageString),
-      if (rawImages is String) ..._decodeImageList(rawImages),
-    ];
+    final gallery = <String>[imageUrl];
+    for (final key in [
+      'images',
+      'product_images',
+      'productImages',
+      'media',
+      'gallery',
+      'galleryImages',
+      'gallery_images',
+    ]) {
+      final rawImages = raw[key];
+      if (rawImages is List) {
+        gallery.addAll(rawImages.map(_imageString));
+      } else if (rawImages is String) {
+        gallery.addAll(_decodeImageList(rawImages));
+        gallery.add(rawImages);
+      } else if (rawImages != null) {
+        gallery.add(_imageString(rawImages));
+      }
+    }
     final seen = <String>{};
     return gallery
         .map(_resolveUrl)

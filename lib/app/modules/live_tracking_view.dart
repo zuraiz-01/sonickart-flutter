@@ -61,35 +61,30 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
     return Obx(() {
       final order = _resolveOrder();
       return Scaffold(
-        backgroundColor: AppColors.white,
-        appBar: AppBar(
-          title: Text('Live Tracking'),
-          centerTitle: true,
-          actions: [
-            if (_refreshing)
-              Padding(
-                padding: EdgeInsets.only(right: 16.wpx),
-                child: SizedBox(
-                  width: 18.rpx,
-                  height: 18.rpx,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
-                  ),
+        backgroundColor: AppColors.primary,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _LiveTrackingHeader(order: order, refreshing: _refreshing),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  color: AppColors.white,
+                  child: order == null
+                      ? Center(child: Text('No active order found.'))
+                      : RefreshIndicator(
+                          color: AppColors.primary,
+                          onRefresh: _refreshOrder,
+                          child: _TrackingBody(
+                            order: order,
+                            controller: widget.controller,
+                          ),
+                        ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
-        body: order == null
-            ? Center(child: Text('No active order found.'))
-            : RefreshIndicator(
-                color: AppColors.primary,
-                onRefresh: _refreshOrder,
-                child: _TrackingBody(
-                  order: order,
-                  controller: widget.controller,
-                ),
-              ),
       );
     });
   }
@@ -108,6 +103,105 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
   }
 }
 
+class _LiveTrackingHeader extends StatelessWidget {
+  const _LiveTrackingHeader({required this.order, required this.refreshing});
+
+  final OrderModel? order;
+  final bool refreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order?.status ?? '';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.wpx, vertical: 8.hpx),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              onPressed: () => Get.offNamed(AppRoutes.dashboard),
+              icon: Icon(
+                Icons.chevron_left_rounded,
+                color: AppColors.white,
+                size: 22.spx,
+              ),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _headerTitle(status),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.spx,
+                ),
+              ),
+              SizedBox(height: 2.hpx),
+              Text(
+                order == null
+                    ? 'Live Tracking'
+                    : _headerSubtitle(status, order!.raw['etaMinutes']),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22.spx,
+                ),
+              ),
+            ],
+          ),
+          if (refreshing)
+            Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: 18.rpx,
+                height: 18.rpx,
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _headerTitle(String status) {
+    final lower = status.toLowerCase();
+    if (lower == 'cancelled') return 'Order Cancelled';
+    if (lower == 'delivered') return 'Order Delivered';
+    if (lower == 'confirmed' || lower == 'accepted' || lower == 'assigned') {
+      return 'Arriving Soon';
+    }
+    if (lower == 'arriving' ||
+        lower == 'picked' ||
+        lower == 'out_for_delivery') {
+      return 'Order Picked Up';
+    }
+    return 'Packing your order';
+  }
+
+  static String _headerSubtitle(String status, Object? etaValue) {
+    final lower = status.toLowerCase();
+    if (lower == 'cancelled') return 'Cancelled';
+    if (lower == 'delivered') return 'Fastest Delivery';
+    final eta = etaValue is num ? etaValue.toInt() : int.tryParse('$etaValue');
+    if (eta == null || eta <= 0) {
+      return lower == 'pending' ? 'Getting things ready' : 'Tracking live';
+    }
+    if (eta <= 1) return 'Arriving any moment';
+    return 'Arriving in $eta minutes';
+  }
+}
+
 class _TrackingBody extends StatelessWidget {
   const _TrackingBody({required this.order, required this.controller});
 
@@ -119,60 +213,43 @@ class _TrackingBody extends StatelessWidget {
     final eta = controller.etaFor(order);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.all(16.rpx),
+      padding: EdgeInsets.fromLTRB(15.wpx, 15.hpx, 15.wpx, 150.hpx),
       children: [
         _LiveMapCard(order: order, etaLabel: _etaLabel(order.status, eta)),
-        SizedBox(height: 16.hpx),
-        _InfoCard(
-          title: _statusTitle(order.status),
-          rows: [
-            ('Order', order.id),
-            ('Status', order.status),
-            ('Payment', order.paymentMode),
-            ('Address', order.deliveryAddress),
-            ('Total', 'Rs ${order.totalPrice.toStringAsFixed(0)}'),
-          ],
-        ),
-        SizedBox(height: 16.hpx),
+        SizedBox(height: 10.hpx),
         _LiveStatusCard(order: order, controller: controller),
-        SizedBox(height: 16.hpx),
+        SizedBox(height: 10.hpx),
         _PartnerCard(order: order),
-        SizedBox(height: 16.hpx),
-        _InfoCard(
-          title: 'Ordered Items (${order.items.length})',
-          rows: order.items
-              .map(
-                (item) => (
-                  item.product.name,
-                  '${item.quantity} x Rs ${item.product.price}',
-                ),
-              )
-              .toList(),
-        ),
+        SizedBox(height: 10.hpx),
+        _OrderSummaryCard(order: order),
+        SizedBox(height: 10.hpx),
+        _OrderedItemsCard(order: order),
+        SizedBox(height: 10.hpx),
+        _DeliveryAddressCard(order: order),
+        SizedBox(height: 10.hpx),
+        _BillDetailsCard(order: order),
         SizedBox(height: 16.hpx),
         if (order.status.toLowerCase() != 'cancelled' &&
             order.status.toLowerCase() != 'delivered')
-          FilledButton.icon(
-            onPressed: () => _cancelOrder(context),
-            icon: Icon(Icons.cancel_outlined),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.primary,
-              padding: EdgeInsets.symmetric(vertical: 14),
-            ),
-            label: Text(
-              'Cancel Order',
-              style: TextStyle(fontWeight: FontWeight.w800),
+          Container(
+            margin: EdgeInsets.symmetric(vertical: 6.hpx),
+            child: FilledButton.icon(
+              onPressed: () => _cancelOrder(context),
+              icon: Icon(Icons.cancel_outlined),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.white,
+                padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.rpx),
+                ),
+              ),
+              label: Text(
+                'Cancel Order',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
-        SizedBox(height: 8.hpx),
-        OutlinedButton(
-          onPressed: () => Get.toNamed(
-            AppRoutes.customerOrderDetails,
-            arguments: {'orderId': order.id},
-          ),
-          child: Text('View Order Details'),
-        ),
       ],
     );
   }
@@ -192,20 +269,6 @@ class _TrackingBody extends StatelessWidget {
     await controller.cancelOrder(order, reason: reason);
   }
 
-  String _statusTitle(String status) {
-    final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Order Cancelled';
-    if (lower == 'delivered') return 'Order Delivered';
-    if (lower == 'confirmed' || lower == 'accepted') return 'Arriving Soon';
-    if (lower == 'assigned') return 'Arriving Soon';
-    if (lower == 'prepared' || lower == 'ready') return 'Preparing order';
-    if (lower == 'arriving' || lower == 'out_for_delivery') {
-      return 'Order Picked Up';
-    }
-    if (lower == 'picked') return 'Order Picked Up';
-    return 'Packing your order';
-  }
-
   String _etaLabel(String status, int? eta) {
     final lower = status.toLowerCase();
     if (lower == 'cancelled') return 'Cancelled';
@@ -215,6 +278,495 @@ class _TrackingBody extends StatelessWidget {
     }
     if (eta <= 1) return 'ETA Arriving now';
     return 'ETA $eta mins';
+  }
+}
+
+class _DeliveryAddressCard extends StatelessWidget {
+  const _DeliveryAddressCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = order.deliveryAddress.trim().isEmpty
+        ? 'Delivery address unavailable'
+        : order.deliveryAddress.trim();
+    final recipient = order.customerName.trim().isEmpty
+        ? 'Delivery address'
+        : order.customerName.trim();
+    return Container(
+      padding: EdgeInsets.all(16.rpx),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(15.rpx),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _RoundIcon(icon: Icons.location_on_outlined),
+          SizedBox(width: 12.wpx),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Delivering to',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.spx,
+                  ),
+                ),
+                SizedBox(height: 4.hpx),
+                Text(
+                  recipient,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16.spx,
+                  ),
+                ),
+                SizedBox(height: 4.hpx),
+                Text(
+                  address,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.spx,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderSummaryCard extends StatelessWidget {
+  const _OrderSummaryCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final orderId = order.id.isEmpty ? '--' : order.id;
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            icon: Icons.receipt_long_outlined,
+            title: 'Order Summary',
+            subtitle: 'Order #$orderId',
+          ),
+          SizedBox(height: 10.hpx),
+          _SummaryRow(label: 'Status', value: _statusLabel(order.status)),
+          _SummaryRow(label: 'Payment', value: order.paymentMode),
+          _SummaryRow(
+            label: 'Items',
+            value:
+                '${order.resolvedItemCount} item${order.resolvedItemCount == 1 ? '' : 's'}',
+          ),
+          _SummaryRow(
+            label: 'Total',
+            value: '₹${order.totalPrice.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _statusLabel(String status) {
+    final normalized = status.trim().replaceAll('_', ' ');
+    if (normalized.isEmpty) return 'Tracking live';
+    return normalized.capitalizeFirst ?? normalized;
+  }
+}
+
+class _OrderedItemsCard extends StatelessWidget {
+  const _OrderedItemsCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      padding: EdgeInsets.symmetric(vertical: 10.hpx),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10.wpx),
+            child: _SectionHeader(
+              icon: Icons.shopping_bag_outlined,
+              title: 'Ordered Items (${order.items.length})',
+              subtitle: 'Items in your order',
+            ),
+          ),
+          SizedBox(height: 10.hpx),
+          ...order.items.map((item) => _OrderedItemTile(item: item)),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderedItemTile extends StatelessWidget {
+  const _OrderedItemTile({required this.item});
+
+  final dynamic item;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = item.product.resolvedImageUrl;
+    return Container(
+      margin: EdgeInsets.fromLTRB(10.wpx, 0, 10.wpx, 10.hpx),
+      padding: EdgeInsets.all(10.rpx),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12.rpx),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 60.wpx,
+            height: 60.wpx,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(15.rpx),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: image.isNotEmpty
+                ? Image.network(
+                    image,
+                    width: 42.wpx,
+                    height: 42.wpx,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.image_outlined,
+                      color: AppColors.textSecondary,
+                      size: 20.spx,
+                    ),
+                  )
+                : Icon(
+                    Icons.image_outlined,
+                    color: AppColors.textSecondary,
+                    size: 20.spx,
+                  ),
+          ),
+          SizedBox(width: 12.wpx),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.product.name.isEmpty ? 'Item' : item.product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.spx,
+                    height: 1.25,
+                  ),
+                ),
+                SizedBox(height: 4.hpx),
+                Text(
+                  '₹${item.product.displayPrice}',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.spx,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 10.wpx),
+          Column(
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 12.wpx,
+                  vertical: 6.hpx,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(16.rpx),
+                ),
+                child: Text(
+                  '${item.quantity}',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.spx,
+                  ),
+                ),
+              ),
+              SizedBox(height: 3.hpx),
+              Text(
+                'Qty',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10.spx,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BillDetailsCard extends StatelessWidget {
+  const _BillDetailsCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final itemsTotal = order.items.fold<double>(
+      0,
+      (sum, item) => sum + item.totalPrice,
+    );
+    final deliveryCharge = _number(
+      order.raw['deliveryCharge'] ??
+          order.raw['delivery_charge'] ??
+          order.raw['shippingCharge'] ??
+          order.raw['shipping_charge'],
+    );
+    final grandTotal = order.totalPrice > 0
+        ? order.totalPrice
+        : itemsTotal + deliveryCharge;
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bill Details',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w900,
+              fontSize: 17.spx,
+            ),
+          ),
+          SizedBox(height: 14.hpx),
+          _BillRowLine(
+            icon: Icons.article_outlined,
+            label: 'Items total',
+            value: '₹${itemsTotal.toStringAsFixed(2)}',
+          ),
+          SizedBox(height: 12.hpx),
+          _BillRowLine(
+            icon: Icons.pedal_bike_outlined,
+            label: 'Delivery charge',
+            value: '₹${deliveryCharge.toStringAsFixed(2)}',
+          ),
+          Divider(height: 28.hpx, color: AppColors.border),
+          _SummaryRow(
+            label: 'Grand Total',
+            value: '₹${grandTotal.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double _number(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding ?? EdgeInsets.all(15.rpx),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(15.rpx),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _RoundIcon(icon: icon),
+        SizedBox(width: 10.wpx),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15.spx,
+                ),
+              ),
+              SizedBox(height: 2.hpx),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.spx,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoundIcon extends StatelessWidget {
+  const _RoundIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40.rpx,
+      height: 40.rpx,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: AppColors.accent, size: 20.spx),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
+    required this.label,
+    required this.value,
+    this.strong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 9.hpx),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: strong ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+                fontSize: strong ? 15.spx : 13.spx,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: strong ? FontWeight.w900 : FontWeight.w800,
+              fontSize: strong ? 15.spx : 13.spx,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BillRowLine extends StatelessWidget {
+  const _BillRowLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.accent, size: 18.spx),
+        SizedBox(width: 8.wpx),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13.spx,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w800,
+            fontSize: 13.spx,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -229,20 +781,41 @@ class _LiveStatusCard extends StatelessWidget {
     final mapData = _TrackingMapData.fromOrder(order);
     final eta = controller.etaFor(order);
     final distance = mapData.liveDistanceKm;
-    return _InfoCard(
-      title: 'Live Tracking',
-      rows: [
-        (
-          'ETA',
-          eta == null
-              ? 'Tracking live'
-              : eta <= 1
-              ? 'Arriving now'
-              : '$eta mins',
-        ),
-        if (distance != null) ('Distance', '${distance.toStringAsFixed(2)} km'),
-        ('Status', _statusCopy(order.status)),
-      ],
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            icon: Icons.route_outlined,
+            title: 'Live Tracking',
+            subtitle: 'Latest delivery movement',
+          ),
+          SizedBox(height: 12.hpx),
+          _LiveMetricRow(
+            icon: Icons.schedule_outlined,
+            label: 'ETA',
+            value: eta == null
+                ? 'Tracking live'
+                : eta <= 1
+                ? 'Arriving now'
+                : '$eta mins',
+          ),
+          if (distance != null) ...[
+            SizedBox(height: 9.hpx),
+            _LiveMetricRow(
+              icon: Icons.near_me_outlined,
+              label: 'Distance',
+              value: '${distance.toStringAsFixed(2)} km',
+            ),
+          ],
+          SizedBox(height: 9.hpx),
+          _LiveMetricRow(
+            icon: Icons.info_outline,
+            label: 'Status',
+            value: _statusCopy(order.status),
+          ),
+        ],
+      ),
     );
   }
 
@@ -262,6 +835,52 @@ class _LiveStatusCard extends StatelessWidget {
     }
     if (normalized.isEmpty) return 'Tracking live';
     return normalized.replaceAll('_', ' ').capitalizeFirst ?? normalized;
+  }
+}
+
+class _LiveMetricRow extends StatelessWidget {
+  const _LiveMetricRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.accent, size: 18.spx),
+        SizedBox(width: 10.wpx),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.spx,
+                ),
+              ),
+              SizedBox(height: 1.hpx),
+              Text(
+                value,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.spx,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -290,25 +909,16 @@ class _PartnerCard extends StatelessWidget {
       order.raw['deliveryPartnerPhone'],
     ]);
     return Container(
-      padding: EdgeInsets.all(16.rpx),
+      padding: EdgeInsets.all(10.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18.rpx),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        borderRadius: BorderRadius.circular(15.rpx),
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.7)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 42.rpx,
-            height: 42.rpx,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEF4FF),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              phone == null ? Icons.shopping_bag_outlined : Icons.phone,
-              color: AppColors.accent,
-            ),
+          _RoundIcon(
+            icon: phone == null ? Icons.shopping_bag_outlined : Icons.phone,
           ),
           SizedBox(width: 12.wpx),
           Expanded(
@@ -383,67 +993,6 @@ class _PartnerCard extends StatelessWidget {
       return;
     }
     await launchUrl(uri);
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.rows});
-
-  final String title;
-  final List<(String, String)> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(16.rpx),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18.rpx),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 12.hpx),
-          ...rows.map(
-            (row) => Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 92.wpx,
-                    child: Text(
-                      row.$1,
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      row.$2,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

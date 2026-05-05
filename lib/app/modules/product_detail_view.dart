@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -8,14 +8,22 @@ import '../theme/app_colors.dart';
 import 'cart/controllers/cart_controller.dart';
 import 'dashboard/controllers/dashboard_controller.dart';
 
-class ProductDetailView extends StatelessWidget {
-  ProductDetailView({super.key});
+class ProductDetailView extends StatefulWidget {
+  const ProductDetailView({super.key});
+
+  @override
+  State<ProductDetailView> createState() => _ProductDetailViewState();
+}
+
+class _ProductDetailViewState extends State<ProductDetailView> {
+  int _activeSlide = 0;
 
   ProductModel? _resolveProduct() {
     final value = Get.arguments?['product'];
     if (value is ProductModel) return value;
-    if (value is Map)
+    if (value is Map) {
       return ProductModel.fromJson(Map<String, dynamic>.from(value));
+    }
     return null;
   }
 
@@ -34,6 +42,8 @@ class ProductDetailView extends StatelessWidget {
     debugPrint(
       '[IMAGE][PRODUCT] raw="${product.imageUrl}" resolved="${product.resolvedImageUrl}" featured="${product.resolvedFeaturedImageUrl}"',
     );
+    final carouselImages = product.resolvedGalleryImageUrls;
+    debugPrint('[IMAGE][GALLERY] count=${carouselImages.length}');
     debugPrint(
       '[PRODUCT][META] category=${product.categoryId} vendor=${product.vendorId} branch=${product.branchId}',
     );
@@ -47,31 +57,18 @@ class ProductDetailView extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.all(16.rpx),
         children: [
-          Container(
-            height: 280.hpx,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(18.rpx),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.08),
-              ),
-            ),
-            child: product.resolvedImageUrl.isNotEmpty
-                ? Image.network(
-                    product.resolvedImageUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        _FallbackProductArt(product: product, size: 120),
-                  )
-                : _FallbackProductArt(product: product, size: 120),
+          _ProductImageCarousel(
+            product: product,
+            imageUrls: carouselImages,
+            activeSlide: _activeSlide,
+            onSlideChanged: (value) => setState(() => _activeSlide = value),
           ),
           SizedBox(height: 20.hpx),
           Text(
             product.name,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: AppColors.primary,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
           SizedBox(height: 12.hpx),
@@ -93,7 +90,7 @@ class ProductDetailView extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Rs ${product.displayPrice}',
+                '₹${product.displayPrice}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w900,
@@ -102,7 +99,7 @@ class ProductDetailView extends StatelessWidget {
               SizedBox(width: 12.wpx),
               if (product.displayMrp.isNotEmpty)
                 Text(
-                  'Rs ${product.displayMrp}',
+                  '₹${product.displayMrp}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     decoration: TextDecoration.lineThrough,
@@ -140,8 +137,83 @@ class ProductDetailView extends StatelessWidget {
   }
 }
 
+class _ProductImageCarousel extends StatelessWidget {
+  const _ProductImageCarousel({
+    required this.product,
+    required this.imageUrls,
+    required this.activeSlide,
+    required this.onSlideChanged,
+  });
+
+  final ProductModel product;
+  final List<String> imageUrls;
+  final int activeSlide;
+  final ValueChanged<int> onSlideChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 280.hpx,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16.rpx),
+        border: Border.all(color: AppColors.surface),
+      ),
+      child: imageUrls.isEmpty
+          ? Center(child: _FallbackProductArt(product: product, size: 120))
+          : Stack(
+              alignment: Alignment.center,
+              children: [
+                PageView.builder(
+                  itemCount: imageUrls.length,
+                  onPageChanged: onSlideChanged,
+                  itemBuilder: (context, index) {
+                    final imageUrl = imageUrls[index];
+                    return Center(
+                      child: Image.network(
+                        imageUrl,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _FallbackProductArt(product: product, size: 120),
+                      ),
+                    );
+                  },
+                ),
+                if (imageUrls.length > 1)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 12.hpx,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(imageUrls.length, (index) {
+                        final isActive = index == activeSlide;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 8.rpx,
+                          height: 8.rpx,
+                          margin: EdgeInsets.symmetric(horizontal: 4.wpx),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppColors.secondaryBlue
+                                : AppColors.border.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(4.rpx),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
 class _DetailCartActions extends StatelessWidget {
-  _DetailCartActions({
+  const _DetailCartActions({
     required this.product,
     required this.cart,
     required this.quantity,
@@ -304,7 +376,7 @@ class _DetailCartActions extends StatelessWidget {
 }
 
 class _FallbackProductArt extends StatelessWidget {
-  _FallbackProductArt({required this.product, required this.size});
+  const _FallbackProductArt({required this.product, required this.size});
 
   final ProductModel product;
   final double size;

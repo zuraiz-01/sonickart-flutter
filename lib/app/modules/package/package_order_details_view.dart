@@ -526,14 +526,14 @@ class _PackageBillCard extends StatelessWidget {
           SizedBox(height: 10.hpx),
           _BillRow(
             label: 'Delivery Charge',
-            value: 'Rs ${order.deliveryCharge.round()}',
+            value: '₹${order.deliveryCharge.round()}',
           ),
           SizedBox(height: 10.hpx),
           Divider(height: 1, color: AppColors.border),
           SizedBox(height: 10.hpx),
           _BillRow(
             label: 'Grand Total',
-            value: 'Rs ${order.totalPrice.round()}',
+            value: '₹${order.totalPrice.round()}',
             strong: true,
           ),
         ],

@@ -1,10 +1,9 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:http/http.dart' as http;
 
 import '../constants/api_constants.dart';
 import '../services/session_controller.dart';
@@ -13,8 +12,7 @@ class ApiService {
   ApiService({GetStorage? storage}) : _storage = storage ?? GetStorage();
 
   final GetStorage _storage;
-  final HttpClient _client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 12);
+  final http.Client _client = http.Client();
 
   String buildUrl(String endpoint) {
     if (endpoint.startsWith('http')) return endpoint;
@@ -109,27 +107,18 @@ class ApiService {
     debugPrint('ApiService.$method: $uri payload=${_redactForLog(data) ?? {}}');
 
     try {
-      final request = await _client.openUrl(method, uri);
-      request.headers
-        ..set(HttpHeaders.acceptHeader, 'application/json')
-        ..set(HttpHeaders.contentTypeHeader, 'application/json');
-      final token = _storage.read<String>('accessToken');
-      if (authenticated && token != null && token.isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      }
-      headers?.forEach((key, value) {
-        if (value.trim().isNotEmpty) {
-          request.headers.set(key, value);
-        }
-      });
-      if (data != null) {
-        request.add(utf8.encode(jsonEncode(data)));
-      }
-
-      final response = await request.close().timeout(
-        const Duration(seconds: 18),
-      );
-      final body = await response.transform(utf8.decoder).join();
+      final response = await _client
+          .send(
+            _buildRequest(
+              method: method,
+              uri: uri,
+              authenticated: authenticated,
+              headers: headers,
+              data: data,
+            ),
+          )
+          .timeout(const Duration(seconds: 18));
+      final body = await response.stream.bytesToString();
       final decoded = _decodeBody(body);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return _normalizeResponse(decoded, uri.toString());
@@ -159,7 +148,7 @@ class ApiService {
     } on TimeoutException catch (error) {
       debugPrint('ApiService.$method timeout: $error');
       rethrow;
-    } on SocketException catch (error) {
+    } on http.ClientException catch (error) {
       debugPrint('ApiService.$method network error: $error');
       rethrow;
     } catch (error) {
@@ -191,6 +180,32 @@ class ApiService {
       }
     });
     return uri.replace(queryParameters: existing);
+  }
+
+  http.Request _buildRequest({
+    required String method,
+    required Uri uri,
+    required bool authenticated,
+    Map<String, String>? headers,
+    Map<String, dynamic>? data,
+  }) {
+    final request = http.Request(method, uri);
+    request.headers
+      ..['accept'] = 'application/json'
+      ..['content-type'] = 'application/json';
+    final token = _storage.read<String>('accessToken');
+    if (authenticated && token != null && token.isNotEmpty) {
+      request.headers['authorization'] = 'Bearer $token';
+    }
+    headers?.forEach((key, value) {
+      if (value.trim().isNotEmpty) {
+        request.headers[key] = value;
+      }
+    });
+    if (data != null) {
+      request.body = jsonEncode(data);
+    }
+    return request;
   }
 
   Object? _decodeBody(String body) {
@@ -233,16 +248,17 @@ class ApiService {
       final uri = Uri.parse(
         '${ApiConstants.baseUrl}${ApiConstants.refreshToken}',
       );
-      final request = await _client.openUrl('POST', uri);
-      request.headers
-        ..set(HttpHeaders.acceptHeader, 'application/json')
-        ..set(HttpHeaders.contentTypeHeader, 'application/json');
-      request.add(utf8.encode(jsonEncode({'refreshToken': refreshToken})));
-
-      final response = await request.close().timeout(
-        const Duration(seconds: 18),
-      );
-      final body = await response.transform(utf8.decoder).join();
+      final response = await _client
+          .send(
+            _buildRequest(
+              method: 'POST',
+              uri: uri,
+              authenticated: false,
+              data: {'refreshToken': refreshToken},
+            ),
+          )
+          .timeout(const Duration(seconds: 18));
+      final body = await response.stream.bytesToString();
       final decoded = _decodeBody(body);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         await _clearAuthTokens();

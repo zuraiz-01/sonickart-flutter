@@ -6,7 +6,7 @@ import '../../theme/app_colors.dart';
 import 'controllers/profile_controller.dart';
 
 class ProfileView extends GetView<ProfileController> {
-  ProfileView({super.key});
+  const ProfileView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +19,7 @@ class ProfileView extends GetView<ProfileController> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(16.wpx, 14.hpx, 16.wpx, 24.hpx),
               children: [
+                SizedBox(height: 20.hpx),
                 Container(
                   padding: EdgeInsets.fromLTRB(18.wpx, 16.hpx, 18.wpx, 18.hpx),
                   decoration: BoxDecoration(
@@ -155,7 +156,6 @@ class ProfileView extends GetView<ProfileController> {
                     ],
                   ),
                 ),
-                SizedBox(height: 20.hpx),
                 Container(
                   padding: EdgeInsets.all(20.rpx),
                   decoration: BoxDecoration(
@@ -172,94 +172,100 @@ class ProfileView extends GetView<ProfileController> {
                       ),
                     ],
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Container(
-                        width: 44.wpx,
-                        height: 44.hpx,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(12.rpx),
-                        ),
-                        child: Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                      SizedBox(width: 12.wpx),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SonicKart Wallet & Gift Card',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 44.wpx,
+                            height: 44.hpx,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12.rpx),
                             ),
-                            SizedBox(height: 4.hpx),
-                            Text(
-                              'Manage payments and offers at one place',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textSecondary),
+                            child: Icon(
+                              Icons.account_balance_wallet_outlined,
+                              color: AppColors.accent,
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 12.hpx),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18.rpx),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Available Balance',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                            SizedBox(height: 4.hpx),
-                            Text(
-                              'Rs ${controller.walletBalance.value.toStringAsFixed(0)}',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      FilledButton(
-                        onPressed: () => controller.openInfoModal('wallet'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.rpx),
                           ),
-                        ),
-                        child: Text(
-                          'Add Balance',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                          SizedBox(width: 12.wpx),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'SonicKart Wallet & Gift Card',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                SizedBox(height: 4.hpx),
+                                Text(
+                                  'Manage payments and offers at one place',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16.hpx),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Available Balance',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
+                                ),
+                                SizedBox(height: 4.hpx),
+                                Text(
+                                  '₹${controller.walletBalance.value.toStringAsFixed(0)}',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          FilledButton(
+                            onPressed: () => controller.openInfoModal('wallet'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 24.wpx,
+                                vertical: 12.hpx,
+                              ),
+                              minimumSize: Size(0, 44.hpx),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.rpx),
+                              ),
+                            ),
+                            child: Text(
+                              'Add Balance',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.spx,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -369,7 +375,7 @@ class ProfileView extends GetView<ProfileController> {
 }
 
 class _QuickActionCard extends StatelessWidget {
-  _QuickActionCard({
+  const _QuickActionCard({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -410,7 +416,7 @@ class _QuickActionCard extends StatelessWidget {
 }
 
 class _MenuAction extends StatelessWidget {
-  _MenuAction({
+  const _MenuAction({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -463,161 +469,167 @@ class _MenuAction extends StatelessWidget {
 }
 
 class _EditProfileDialog extends StatelessWidget {
-  _EditProfileDialog({required this.controller});
+  const _EditProfileDialog({required this.controller});
 
   final ProfileController controller;
 
   @override
   Widget build(BuildContext context) {
-    if (!controller.isEditModalVisible.value) {
-      return SizedBox.shrink();
-    }
-    return _OverlayCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Edit Profile',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 16.hpx),
-          TextField(
-            controller: controller.nameController,
-            decoration: InputDecoration(
-              labelText: 'Full Name',
-              prefixIcon: Icon(Icons.person_outline_rounded),
-            ),
-          ),
-          SizedBox(height: 12.hpx),
-          TextField(
-            controller: controller.phoneController,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              labelText: 'Phone number',
-              prefixIcon: Icon(Icons.call_outlined),
-            ),
-          ),
-          SizedBox(height: 12.hpx),
-          TextField(
-            controller: controller.emailController,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.email_outlined),
-            ),
-          ),
-          SizedBox(height: 16.hpx),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: controller.closeEditProfile,
-                  child: Text('Cancel'),
-                ),
+    return Obx(() {
+      if (!controller.isEditModalVisible.value) {
+        return SizedBox.shrink();
+      }
+      return _OverlayCard(
+        onDismiss: controller.closeEditProfile,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Edit Profile',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
               ),
-              SizedBox(width: 12.wpx),
-              Expanded(
-                child: FilledButton(
-                  onPressed: controller.saveProfile,
-                  child: controller.isSavingProfile.value
-                      ? SizedBox(
-                          width: 16.wpx,
-                          height: 16.hpx,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.white,
-                          ),
-                        )
-                      : Text('Save'),
-                ),
+            ),
+            SizedBox(height: 16.hpx),
+            TextField(
+              controller: controller.nameController,
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                prefixIcon: Icon(Icons.person_outline_rounded),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
+            ),
+            SizedBox(height: 12.hpx),
+            TextField(
+              controller: controller.phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: 'Phone number',
+                prefixIcon: Icon(Icons.call_outlined),
+              ),
+            ),
+            SizedBox(height: 16.hpx),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: controller.closeEditProfile,
+                    child: Text('Cancel'),
+                  ),
+                ),
+                SizedBox(width: 12.wpx),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: controller.saveProfile,
+                    child: controller.isSavingProfile.value
+                        ? SizedBox(
+                            width: 16.wpx,
+                            height: 16.hpx,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
 class _InfoDialog extends StatelessWidget {
-  _InfoDialog({required this.controller});
+  const _InfoDialog({required this.controller});
 
   final ProfileController controller;
 
   @override
   Widget build(BuildContext context) {
-    final key = controller.activeInfoModal.value;
-    if (key == null) {
-      return SizedBox.shrink();
-    }
-    final content = controller.infoModalContent(key);
-    return _OverlayCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            content.$1,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
+    return Obx(() {
+      final key = controller.activeInfoModal.value;
+      if (key == null) {
+        return SizedBox.shrink();
+      }
+      final content = controller.infoModalContent(key);
+      return _OverlayCard(
+        onDismiss: controller.closeInfoModal,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              content.$1,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          SizedBox(height: 16.hpx),
-          Text(
-            content.$2,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
+            SizedBox(height: 16.hpx),
+            Text(
+              content.$2,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
             ),
-          ),
-          SizedBox(height: 16.hpx),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: controller.closeInfoModal,
-              child: Text('OK'),
+            SizedBox(height: 16.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: controller.closeInfoModal,
+                child: Text('OK'),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 }
 
 class _OverlayCard extends StatelessWidget {
-  _OverlayCard({required this.child});
+  const _OverlayCard({required this.child, required this.onDismiss});
 
   final Widget child;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: Material(
         color: Colors.black.withValues(alpha: 0.5),
-        child: Center(
-          child: Container(
-            margin: EdgeInsets.all(20.rpx),
-            padding: EdgeInsets.all(20.rpx),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(16.rpx),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x26092774),
-                  blurRadius: 18,
-                  offset: Offset(0, 12),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onDismiss,
+          child: Center(
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
+                margin: EdgeInsets.all(20.rpx),
+                padding: EdgeInsets.all(20.rpx),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(16.rpx),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x26092774),
+                      blurRadius: 18,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
                 ),
-              ],
+                child: child,
+              ),
             ),
-            child: child,
           ),
         ),
       ),

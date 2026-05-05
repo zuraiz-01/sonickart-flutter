@@ -7,7 +7,7 @@ import '../theme/app_colors.dart';
 import 'order_controller.dart';
 
 class CustomerOrdersView extends GetView<OrderController> {
-  CustomerOrdersView({super.key});
+  const CustomerOrdersView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +71,7 @@ class CustomerOrdersView extends GetView<OrderController> {
         return ListView.separated(
           padding: EdgeInsets.all(16.rpx),
           itemCount: controller.orders.length,
-          separatorBuilder: (_, __) => SizedBox(height: 12.hpx),
+          separatorBuilder: (context, index) => SizedBox(height: 12.hpx),
           itemBuilder: (context, index) {
             final order = controller.orders[index];
             return _OrderCard(
@@ -86,7 +86,7 @@ class CustomerOrdersView extends GetView<OrderController> {
 }
 
 class _OrderCard extends StatelessWidget {
-  _OrderCard({required this.order, required this.onTap});
+  const _OrderCard({required this.order, required this.onTap});
 
   final OrderModel order;
   final VoidCallback onTap;
@@ -97,6 +97,11 @@ class _OrderCard extends StatelessWidget {
       0,
       (sum, item) => sum + item.quantity,
     );
+    final displayItemCount = itemCount > 0
+        ? itemCount
+        : order.resolvedItemCount;
+    final statusMeta = _OrderStatusMeta.fromOrder(order);
+    final inactive = order.isInactive;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24.rpx),
@@ -145,22 +150,18 @@ class _OrderCard extends StatelessWidget {
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Color(0xFFFFF5DE),
+                    color: statusMeta.backgroundColor,
                     borderRadius: BorderRadius.circular(14.rpx),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.schedule_rounded,
-                        size: 15,
-                        color: Color(0xFFD18A00),
-                      ),
+                      Icon(statusMeta.icon, size: 15, color: statusMeta.color),
                       SizedBox(width: 6.wpx),
                       Text(
-                        'Preparing',
+                        statusMeta.label,
                         style: TextStyle(
-                          color: Color(0xFFD18A00),
+                          color: statusMeta.color,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -176,7 +177,9 @@ class _OrderCard extends StatelessWidget {
               children: [
                 _InfoPill(
                   icon: Icons.shopping_basket_outlined,
-                  label: '$itemCount items',
+                  label: displayItemCount > 0
+                      ? '$displayItemCount item${displayItemCount == 1 ? '' : 's'}'
+                      : 'Items unavailable',
                 ),
                 _InfoPill(
                   icon: Icons.calendar_month_outlined,
@@ -196,11 +199,11 @@ class _OrderCard extends StatelessWidget {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: order.items.take(3).map((item) {
+                children: _previewLines(order).map((line) {
                   return Padding(
                     padding: EdgeInsets.only(bottom: 6),
                     child: Text(
-                      '${item.quantity} x ${item.product.name}',
+                      line,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -228,7 +231,7 @@ class _OrderCard extends StatelessWidget {
                       ),
                       SizedBox(height: 4.hpx),
                       Text(
-                        'Rs ${order.totalPrice.toStringAsFixed(2)}',
+                        '₹${order.totalPrice.toStringAsFixed(2)}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w800,
@@ -240,7 +243,7 @@ class _OrderCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'View details',
+                      inactive ? 'View details' : 'Track order',
                       style: TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w700,
@@ -260,10 +263,92 @@ class _OrderCard extends StatelessWidget {
       ),
     );
   }
+
+  List<String> _previewLines(OrderModel order) {
+    if (order.items.isEmpty) {
+      return const ['Items will appear when order details sync.'];
+    }
+    return order.items.take(3).map((item) {
+      final quantity = item.quantity > 0 ? item.quantity : 1;
+      final name = item.product.name.trim().isEmpty
+          ? 'Item'
+          : item.product.name;
+      return '$quantity x $name';
+    }).toList();
+  }
+}
+
+class _OrderStatusMeta {
+  const _OrderStatusMeta({
+    required this.label,
+    required this.icon,
+    required this.backgroundColor,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color backgroundColor;
+  final Color color;
+
+  factory _OrderStatusMeta.fromOrder(OrderModel order) {
+    final status =
+        (order.raw['deliveryStatus'] ??
+                order.raw['delivery_status'] ??
+                order.status)
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    if (status == 'delivered' || status == 'completed') {
+      return _OrderStatusMeta(
+        label: 'Delivered',
+        icon: Icons.verified_rounded,
+        backgroundColor: const Color(0xFFEAF8EF),
+        color: AppColors.success,
+      );
+    }
+
+    if (status == 'cancelled' || status == 'canceled') {
+      return _OrderStatusMeta(
+        label: 'Cancelled',
+        icon: Icons.cancel_rounded,
+        backgroundColor: const Color(0xFFFDECEC),
+        color: AppColors.error,
+      );
+    }
+
+    if (status == 'confirmed' || status == 'assigned' || status == 'accepted') {
+      return _OrderStatusMeta(
+        label: 'In Progress',
+        icon: Icons.local_shipping_outlined,
+        backgroundColor: const Color(0xFFEAF1FF),
+        color: AppColors.primary,
+      );
+    }
+
+    if (status == 'picked' ||
+        status == 'arriving' ||
+        status == 'out_for_delivery') {
+      return _OrderStatusMeta(
+        label: 'On the way',
+        icon: Icons.delivery_dining_rounded,
+        backgroundColor: const Color(0xFFEAF1FF),
+        color: AppColors.primary,
+      );
+    }
+
+    return _OrderStatusMeta(
+      label: 'Preparing',
+      icon: Icons.schedule_rounded,
+      backgroundColor: const Color(0xFFFFF5DE),
+      color: const Color(0xFFD18A00),
+    );
+  }
 }
 
 class _InfoPill extends StatelessWidget {
-  _InfoPill({required this.icon, required this.label});
+  const _InfoPill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
