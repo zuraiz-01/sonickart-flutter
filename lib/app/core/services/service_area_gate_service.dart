@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../../firebase_options.dart';
 import '../network/api_service.dart';
+import 'firebase_bootstrap.dart';
 import 'location_lookup_service.dart';
 
 class ServiceAreaGateService {
@@ -32,6 +33,14 @@ class ServiceAreaGateService {
   Future<ServiceAreaGateResult> evaluate() async {
     try {
       final areas = await _fetchServiceAreas();
+      debugPrint(
+        'ServiceAreaGateService.evaluate: fetched ${areas.length} service areas',
+      );
+      if (areas.isNotEmpty) {
+        debugPrint(
+          'ServiceAreaGateService.evaluate: areas=${areas.map(_debugAreaSummary).join(' | ')}',
+        );
+      }
       if (areas.isEmpty) {
         return _blockedWithCurrentLocation(
           message: _serviceAreasUnavailableMessage,
@@ -44,6 +53,9 @@ class ServiceAreaGateService {
       final workingAreas = activeCoordinateAreas
           .where((area) => area.status == 'working')
           .toList();
+      debugPrint(
+        'ServiceAreaGateService.evaluate: activeCoordinateAreas=${activeCoordinateAreas.length}, workingAreas=${workingAreas.length}',
+      );
 
       if (workingAreas.isEmpty) {
         return _blockedWithCurrentLocation(
@@ -62,6 +74,9 @@ class ServiceAreaGateService {
       }
 
       final position = positionResult.position!;
+      debugPrint(
+        'ServiceAreaGateService.evaluate: checking position ${_coordinateLabel(position.latitude, position.longitude)}',
+      );
       final notWorkingMatch = _firstMatchingArea(
         activeCoordinateAreas.where((area) => area.status == 'not_working'),
         position,
@@ -133,7 +148,12 @@ class ServiceAreaGateService {
       headers: headers,
     );
     final documents = response['documents'];
-    if (documents is! List) return const [];
+    if (documents is! List) {
+      debugPrint(
+        'ServiceAreaGateService._fetchServiceAreas: no documents list in Firestore response',
+      );
+      return const [];
+    }
 
     return documents
         .whereType<Map>()
@@ -160,12 +180,28 @@ class ServiceAreaGateService {
 
   Future<Map<String, String>?> _firebaseAuthHeaders() async {
     try {
-      if (Firebase.apps.isEmpty) return null;
+      if (Firebase.apps.isEmpty) {
+        debugPrint(
+          'ServiceAreaGateService._firebaseAuthHeaders: Firebase not initialized, retrying initialization',
+        );
+        await FirebaseBootstrap.initialize();
+        if (Firebase.apps.isEmpty) {
+          debugPrint(
+            'ServiceAreaGateService._firebaseAuthHeaders: Firebase still not initialized. lastError=${FirebaseBootstrap.lastError}',
+          );
+          return null;
+        }
+      }
       final auth = _firebaseAuth ?? FirebaseAuth.instance;
       var user = auth.currentUser;
       user ??= (await auth.signInAnonymously()).user;
       final token = await user?.getIdToken();
-      if (token == null || token.trim().isEmpty) return null;
+      if (token == null || token.trim().isEmpty) {
+        debugPrint(
+          'ServiceAreaGateService._firebaseAuthHeaders: missing Firebase auth token',
+        );
+        return null;
+      }
       return {'Authorization': 'Bearer $token'};
     } catch (error) {
       debugPrint('ServiceAreaGateService._firebaseAuthHeaders failed: $error');
@@ -243,6 +279,9 @@ class ServiceAreaGateService {
         area.latitude!,
         area.longitude!,
       );
+      debugPrint(
+        'ServiceAreaGateService._firstMatchingArea: ${area.id} distance=${distanceKm.toStringAsFixed(2)}km radius=${area.radiusKm}km status=${area.status}',
+      );
       if (distanceKm <= area.radiusKm!) {
         return area;
       }
@@ -275,6 +314,10 @@ class ServiceAreaGateService {
 
   static String _coordinateLabel(double latitude, double longitude) =>
       '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+
+  static String _debugAreaSummary(ServiceAreaRule area) {
+    return '${area.id}{status:${area.status}, active:${area.isActive}, lat:${area.latitude}, lng:${area.longitude}, radiusKm:${area.radiusKm}}';
+  }
 
   Map<String, dynamic> _decodeFirestoreFields(Object? fields) {
     if (fields is! Map) return const {};

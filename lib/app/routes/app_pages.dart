@@ -10,6 +10,7 @@ import '../modules/buy_again_view.dart';
 import '../modules/dashboard/bindings/dashboard_binding.dart';
 import '../modules/dashboard/views/dashboard_view.dart';
 import '../modules/live_tracking_view.dart';
+import '../modules/notifications/notifications_view.dart';
 import '../modules/order_checkout_view.dart';
 import '../modules/order_success_view.dart';
 import '../modules/package/package_view.dart';
@@ -108,6 +109,11 @@ class AppPages {
     GetPage(
       name: AppRoutes.addressBook,
       page: AddressBookView.new,
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.notifications,
+      page: NotificationsView.new,
       binding: DashboardBinding(),
     ),
   ];

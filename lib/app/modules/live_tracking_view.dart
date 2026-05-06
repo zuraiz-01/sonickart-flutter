@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/widgets/app_snackbar.dart';
 import '../data/models/order_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
@@ -984,12 +985,15 @@ class _PartnerCard extends StatelessWidget {
   static Future<void> _callPhone(String phone) async {
     final sanitized = phone.trim().replaceAll(RegExp(r'[^\d+]'), '');
     if (sanitized.isEmpty) {
-      Get.snackbar('Call failed', 'Phone number is not available.');
+      AppSnackBar.show('Call failed', 'Phone number is not available.');
       return;
     }
     final uri = Uri(scheme: 'tel', path: sanitized);
     if (!await canLaunchUrl(uri)) {
-      Get.snackbar('Call failed', 'Your device cannot place calls right now.');
+      AppSnackBar.show(
+        'Call failed',
+        'Your device cannot place calls right now.',
+      );
       return;
     }
     await launchUrl(uri);

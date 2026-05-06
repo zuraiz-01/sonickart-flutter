@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +11,8 @@ import '../../../../firebase_options.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/location_lookup_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/package_order_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -475,6 +477,13 @@ class PackageController extends GetxController {
       selectedOrder.value = order;
       debugPrint(
         'PackageController.submitOrder: order created ${order.id} total=${order.totalPrice}',
+      );
+      final label = order.packageOrderType == 'receive'
+          ? 'Package Receive Order Placed'
+          : 'Package Order Placed';
+      _notifyAction(
+        label,
+        'Your package order ${order.id} has been placed successfully.',
       );
       resetDraft(keepOrders: true);
       viewMode.value = PackageViewMode.orders;
@@ -1341,7 +1350,19 @@ class PackageController extends GetxController {
   }
 
   void _showSnack(String title, String message) {
-    Get.snackbar(title, message, snackPosition: SnackPosition.BOTTOM);
+    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+  }
+
+  void _notifyAction(String title, String message) {
+    _showSnack(title, message);
+    if (!Get.isRegistered<NotificationService>()) return;
+    unawaited(
+      Get.find<NotificationService>().record(
+        title: title,
+        message: message,
+        category: 'package',
+      ),
+    );
   }
 
   void _showDistanceExceeded(double distanceKm) {

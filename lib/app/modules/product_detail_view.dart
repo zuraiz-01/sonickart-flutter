@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../core/widgets/app_snackbar.dart';
 import '../data/models/product_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
@@ -90,7 +91,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           Row(
             children: [
               Text(
-                '₹${product.displayPrice}',
+                '?${product.displayPrice}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w900,
@@ -99,7 +100,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
               SizedBox(width: 12.wpx),
               if (product.displayMrp.isNotEmpty)
                 Text(
-                  '₹${product.displayMrp}',
+                  '?${product.displayMrp}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     decoration: TextDecoration.lineThrough,
@@ -351,7 +352,7 @@ class _DetailCartActions extends StatelessWidget {
       '[CART][ADD_DONE] id=${product.id} quantity=${cart.getItemCount(product.id)} totalItems=${cart.totalItems}',
     );
     if (showFeedback) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Added to Cart',
         '${product.name.trim()} added successfully.',
         snackPosition: SnackPosition.BOTTOM,

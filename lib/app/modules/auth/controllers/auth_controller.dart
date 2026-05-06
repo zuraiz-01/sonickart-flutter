@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/services/firebase_bootstrap.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../routes/app_routes.dart';
@@ -54,7 +55,7 @@ class AuthController extends GetxController {
   bool get isLoggedIn => _storage.read('isLoggedIn') == true;
 
   String get enteredPhoneDigits =>
-      phoneController.text.replaceAll(RegExp(r'\D'), '');
+      phoneInput.value.replaceAll(RegExp(r'\D'), '');
 
   String get normalizedPhone {
     final digits = enteredPhoneDigits;
@@ -77,7 +78,7 @@ class AuthController extends GetxController {
       !_loginInProgress;
 
   bool get canSubmitOtp =>
-      otpController.text.replaceAll(RegExp(r'\D'), '').length == 6 &&
+      otpInput.value.replaceAll(RegExp(r'\D'), '').length == 6 &&
       agreementChecked.value &&
       !isSendingOtp.value &&
       !isVerifyingOtp.value &&
@@ -125,7 +126,7 @@ class AuthController extends GetxController {
 
   Future<void> sendOtp() async {
     if (!agreementChecked.value) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Agreement Required',
         'Please agree to Terms & Conditions and Privacy Policy to continue.',
         snackPosition: SnackPosition.BOTTOM,
@@ -156,7 +157,7 @@ class AuthController extends GetxController {
 
   Future<void> verifyOtp() async {
     if (!agreementChecked.value) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Agreement Required',
         'Please agree to Terms & Conditions and Privacy Policy to continue.',
         snackPosition: SnackPosition.BOTTOM,
@@ -165,7 +166,7 @@ class AuthController extends GetxController {
     }
 
     if (validateOtp(otpController.text) != null) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Invalid OTP',
         'Please enter a valid 6 digit OTP.',
         snackPosition: SnackPosition.BOTTOM,
@@ -181,7 +182,7 @@ class AuthController extends GetxController {
         : fullPhone;
     if (phoneForVerification.replaceAll(RegExp(r'\D'), '').length <
         phoneDigitLength) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Invalid Number',
         'Mobile number incomplete hai. Number dobara enter karo.',
         snackPosition: SnackPosition.BOTTOM,
@@ -225,7 +226,7 @@ class AuthController extends GetxController {
       } else if (error.code == 'invalid-verification-code') {
         otpController.clear();
       }
-      Get.snackbar(
+      AppSnackBar.show(
         _firebaseErrorTitle(error),
         _firebaseErrorMessage(error),
         snackPosition: SnackPosition.BOTTOM,
@@ -233,7 +234,7 @@ class AuthController extends GetxController {
     } on AuthFlowException catch (error) {
       await _clearFirebaseUser();
       resetOtpFlow();
-      Get.snackbar(
+      AppSnackBar.show(
         'Login Failed',
         '${error.message} Please request OTP again.',
         snackPosition: SnackPosition.BOTTOM,
@@ -297,14 +298,14 @@ class AuthController extends GetxController {
     } on FirebaseAuthException catch (error) {
       _logFirebaseAuthError('_requestFirebaseOtp', error);
       isSendingOtp.value = false;
-      Get.snackbar(
+      AppSnackBar.show(
         _firebaseErrorTitle(error),
         _firebaseErrorMessage(error),
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (error) {
       isSendingOtp.value = false;
-      Get.snackbar(
+      AppSnackBar.show(
         'OTP Failed',
         'Firebase OTP start nahi ho saka. Dobara try karo.',
         snackPosition: SnackPosition.BOTTOM,
@@ -331,7 +332,7 @@ class AuthController extends GetxController {
           }
         } on FirebaseAuthException catch (error) {
           _logFirebaseAuthError('verificationCompleted', error);
-          Get.snackbar(
+          AppSnackBar.show(
             _firebaseErrorTitle(error),
             _firebaseErrorMessage(error),
             snackPosition: SnackPosition.BOTTOM,
@@ -339,7 +340,7 @@ class AuthController extends GetxController {
         } on AuthFlowException catch (error) {
           await _clearFirebaseUser();
           resetOtpFlow();
-          Get.snackbar(
+          AppSnackBar.show(
             'Login Failed',
             '${error.message} Please request OTP again.',
             snackPosition: SnackPosition.BOTTOM,
@@ -357,10 +358,13 @@ class AuthController extends GetxController {
         _resendToken = forceResendingToken;
         pendingPhone.value = phone;
         isOtpSent.value = true;
+        if (!forceResend) {
+          agreementChecked.value = false;
+        }
         otpController.clear();
         isSendingOtp.value = false;
         _startResendTimer();
-        Get.snackbar(
+        AppSnackBar.show(
           forceResend ? 'OTP Resent' : 'OTP Sent',
           'A verification code has been sent to $phone.',
           snackPosition: SnackPosition.BOTTOM,
@@ -378,7 +382,7 @@ class AuthController extends GetxController {
   }) async {
     isSendingOtp.value = false;
     isVerifyingOtp.value = false;
-    Get.snackbar(
+    AppSnackBar.show(
       _firebaseErrorTitle(error),
       _firebaseErrorMessage(error),
       snackPosition: SnackPosition.BOTTOM,
@@ -433,7 +437,7 @@ class AuthController extends GetxController {
       return true;
     }
     final details = _firebaseSetupGuidance();
-    Get.snackbar(
+    AppSnackBar.show(
       'Firebase Not Ready',
       details,
       snackPosition: SnackPosition.BOTTOM,

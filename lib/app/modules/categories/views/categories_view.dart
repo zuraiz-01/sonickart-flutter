@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../../cart/widgets/cart_summary_bar.dart';
@@ -326,7 +327,7 @@ class _CategoriesBottomNav extends StatelessWidget {
                           openDashboardTab(4);
                           return;
                         }
-                        Get.snackbar(
+                        AppSnackBar.show(
                           tabs[i].$1,
                           '${tabs[i].$1} tab abhi pending hai.',
                           snackPosition: SnackPosition.BOTTOM,

@@ -9,6 +9,7 @@ import '../../../data/models/order_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
+import '../../../core/services/notification_service.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../cart/widgets/cart_summary_bar.dart';
@@ -152,6 +153,7 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final notifications = Get.find<NotificationService>();
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -240,6 +242,8 @@ class _HeaderCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    _NotificationBell(controller: notifications),
+                    SizedBox(width: 4.wpx),
                     Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: AppColors.primary,
@@ -253,6 +257,80 @@ class _HeaderCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.controller});
+
+  final NotificationService controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final count = controller.unreadCount;
+      return InkWell(
+        onTap: () async {
+          await controller.markAllRead();
+          Get.toNamed(AppRoutes.notifications);
+        },
+        borderRadius: BorderRadius.circular(18.rpx),
+        child: SizedBox(
+          width: 38.rpx,
+          height: 34.rpx,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 31.rpx,
+                height: 31.rpx,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(16.rpx),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.black.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.notifications_rounded,
+                  color: AppColors.primary,
+                  size: 19.spx,
+                ),
+              ),
+              if (count > 0)
+                Positioned(
+                  right: 0,
+                  top: -1,
+                  child: Container(
+                    height: 16.rpx,
+                    constraints: BoxConstraints(minWidth: 16.rpx),
+                    padding: EdgeInsets.symmetric(horizontal: 4.wpx),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(9.rpx),
+                      border: Border.all(color: AppColors.white, width: 1.2),
+                    ),
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontSize: 8.spx,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 }
 

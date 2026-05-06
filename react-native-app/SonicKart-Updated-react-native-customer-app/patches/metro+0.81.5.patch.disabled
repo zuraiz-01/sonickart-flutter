@@ -1,0 +1,49 @@
+diff --git a/node_modules/metro/src/Server.js b/node_modules/metro/src/Server.js
+index 378be32..6d73290 100644
+--- a/node_modules/metro/src/Server.js
++++ b/node_modules/metro/src/Server.js
+@@ -974,8 +974,37 @@ class Server {
+         createActionStartEntry("Symbolicating")
+       );
+       debug("Start symbolication");
+-      const body = await req.rawBody;
+-      const parsedBody = JSON.parse(body);
++      const rawBody = await req.rawBody;
++      const body = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : rawBody;
++      if (typeof body !== "string" || body.trim().length === 0) {
++        res.statusCode = 400;
++        res.end(
++          JSON.stringify({
++            error: "Missing symbolicate request body.",
++          })
++        );
++        return;
++      }
++      let parsedBody;
++      try {
++        parsedBody = JSON.parse(body);
++      } catch {
++        res.statusCode = 400;
++        res.end(
++          JSON.stringify({
++            error: "Invalid symbolicate request body.",
++          })
++        );
++        return;
++      }
++      if (
++        parsedBody == null ||
++        typeof parsedBody !== "object" ||
++        !Array.isArray(parsedBody.stack)
++      ) {
++        res.statusCode = 400;
++        res.end(
++          JSON.stringify({
++            error: "Invalid symbolicate payload.",
++          })
++        );
++        return;
++      }
+       const rewriteAndNormalizeStackFrame = (frame, lineNumber) => {
+         invariant(
+           frame != null && typeof frame === "object",

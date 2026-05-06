@@ -13,6 +13,7 @@ abstract class AppRoutes {
   static const packageDetails = '/package-details';
   static const profile = '/profile';
   static const addressBook = '/address-book';
+  static const notifications = '/notifications';
   static const checkout = '/checkout';
   static const orderSuccess = '/order-success';
   static const customerOrders = '/customer-orders';

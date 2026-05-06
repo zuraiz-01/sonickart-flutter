@@ -45,6 +45,7 @@ dependencies:
   socket_io_client: ^3.1.4
   url_launcher: ^6.3.2
   http: ^1.4.0
+  awesome_snackbar_content: ^0.1.8
 
 dev_dependencies:
   flutter_test:

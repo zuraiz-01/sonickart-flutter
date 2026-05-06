@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/widgets/app_snackbar.dart';
 import '../../core/services/package_socket_service.dart';
 import '../../data/models/package_order_model.dart';
 import '../../theme/app_colors.dart';
@@ -1123,12 +1124,12 @@ String _firstString(List<Object?> values) {
 Future<void> _callPartner(String phone) async {
   final dialable = _dialablePhone(phone);
   if (dialable.isEmpty) {
-    Get.snackbar('Call failed', 'Phone number is not available.');
+    AppSnackBar.show('Call failed', 'Phone number is not available.');
     return;
   }
   final uri = Uri(scheme: 'tel', path: dialable);
   if (!await launchUrl(uri)) {
-    Get.snackbar('Call failed', 'Unable to open phone dialer.');
+    AppSnackBar.show('Call failed', 'Unable to open phone dialer.');
   }
 }
 

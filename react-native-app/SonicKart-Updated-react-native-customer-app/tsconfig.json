@@ -1,0 +1,20 @@
+{
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "typeRoots": ["node_modules/@types", "src/types"],
+    "types": ["react", "react-native", "jest", "node"],
+    "paths": {
+      "@assets/*": ["./src/assets/*"],
+      "@features/*": ["./src/features/*"],
+      "@service/*": ["./src/service/*"],
+      "@styles/*": ["./src/styles/*"],
+      "@navigation/*": ["./src/navigation/*"],
+      "@components/*": ["./src/components/*"],
+      "@state/*": ["./src/state/*"],
+      "@utils/*": ["./src/utils/*"]
+    }
+  },
+  "include": ["App.tsx", "src/**/*", "index.js"],
+  "exclude": ["node_modules", "android", "ios"]
+}

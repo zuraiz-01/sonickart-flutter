@@ -1,9 +1,13 @@
-﻿import 'package:flutter/foundation.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/cart_item_model.dart';
 import '../../../data/models/product_model.dart';
 
@@ -62,7 +66,7 @@ class CartController extends GetxController {
 
   Future<void> addItem(ProductModel product) async {
     if (product.id.isEmpty) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Product Error',
         'This product cannot be added right now.',
         snackPosition: SnackPosition.BOTTOM,
@@ -86,6 +90,10 @@ class CartController extends GetxController {
       debugPrint('CartController.addItem: added new product ${product.id}');
     }
     await _persistCart();
+    _notifyAction(
+      'Cart Updated',
+      '${product.name.trim().isEmpty ? 'Product' : product.name.trim()} added to cart.',
+    );
     await _trySyncLine(product.id, getItemCount(product.id));
   }
 
@@ -98,6 +106,9 @@ class CartController extends GetxController {
     }
 
     final currentItem = items[itemIndex];
+    final productName = currentItem.product.name.trim().isEmpty
+        ? 'Product'
+        : currentItem.product.name.trim();
     if (currentItem.quantity > 1) {
       items[itemIndex] = currentItem.copyWith(
         quantity: currentItem.quantity - 1,
@@ -110,10 +121,11 @@ class CartController extends GetxController {
       debugPrint('CartController.removeItem: removed line for $productId');
     }
     await _persistCart();
+    _notifyAction('Cart Updated', '$productName removed from cart.');
     await _trySyncLine(productId, getItemCount(productId));
   }
 
-  Future<void> clearCart() async {
+  Future<void> clearCart({bool notify = true}) async {
     debugPrint('CartController.clearCart: clear cart requested');
     if (isClearingCart.value) {
       debugPrint('CartController.clearCart: already clearing, skipping');
@@ -125,6 +137,9 @@ class CartController extends GetxController {
       items.clear();
       await _persistCart();
       await _tryClearServerCart();
+      if (notify) {
+        _notifyAction('Cart Cleared', 'All items were removed from your cart.');
+      }
       debugPrint('CartController.clearCart: cart cleared successfully');
     } finally {
       isClearingCart.value = false;
@@ -140,6 +155,10 @@ class CartController extends GetxController {
 
     items.removeWhere((item) => ids.contains(item.product.id));
     await _persistCart();
+    _recordNotification(
+      'Cart Updated',
+      '${ids.length} unavailable item${ids.length == 1 ? '' : 's'} removed from cart.',
+    );
     for (final id in ids) {
       await _trySyncLine(id, 0);
     }
@@ -234,5 +253,21 @@ class CartController extends GetxController {
   bool get _hasAccessToken {
     final token = _storage.read<String>('accessToken');
     return token != null && token.trim().isNotEmpty;
+  }
+
+  void _notifyAction(String title, String message) {
+    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+    _recordNotification(title, message);
+  }
+
+  void _recordNotification(String title, String message) {
+    if (!Get.isRegistered<NotificationService>()) return;
+    unawaited(
+      Get.find<NotificationService>().record(
+        title: title,
+        message: message,
+        category: 'cart',
+      ),
+    );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -11,6 +12,8 @@ import '../../firebase_options.dart';
 import '../core/constants/api_constants.dart';
 import '../core/network/api_service.dart';
 import '../core/services/location_lookup_service.dart';
+import '../core/services/notification_service.dart';
+import '../core/widgets/app_snackbar.dart';
 import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
 import '../data/models/order_model.dart';
@@ -332,11 +335,14 @@ class OrderController extends GetxController {
   Future<void> selectAddress(AddressModel address) async {
     final normalizedAddress = address.address.trim();
     if (normalizedAddress.isEmpty) {
-      Get.snackbar('Invalid address', 'Selected address is missing details.');
+      AppSnackBar.show(
+        'Invalid address',
+        'Selected address is missing details.',
+      );
       return;
     }
     if (!_hasValidCoordinates(address.latitude, address.longitude)) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Invalid address location',
         'Selected address does not have valid map coordinates. Please update this address and try again.',
         snackPosition: SnackPosition.BOTTOM,
@@ -347,6 +353,11 @@ class OrderController extends GetxController {
     selectedCheckoutAddress.value = address;
     deliveryAddressController.text = normalizedAddress;
     await _updateUserLocation(address);
+    _notifyAction(
+      'Address Selected',
+      'Delivery address selected for checkout.',
+      category: 'address',
+    );
     final vendorResolution = await _resolveVendor(address);
     final unavailable = _findUnavailableCartItems(
       _cartController.items,
@@ -490,7 +501,7 @@ class OrderController extends GetxController {
         .toList(growable: false);
     final totals = calculateCheckoutTotals(checkoutItems);
     if (checkoutItems.isEmpty || totals.grandTotal <= 0) {
-      Get.snackbar('Cart Empty', 'Add items before checkout.');
+      AppSnackBar.show('Cart Empty', 'Add items before checkout.');
       return;
     }
     if (isPlacingOrder.value) return;
@@ -526,7 +537,7 @@ class OrderController extends GetxController {
         vendorResolution,
       );
       if (vendorContext.error != null) {
-        Get.snackbar(
+        AppSnackBar.show(
           'No vendor available',
           vendorContext.error!,
           snackPosition: SnackPosition.BOTTOM,
@@ -617,7 +628,12 @@ class OrderController extends GetxController {
       selectedCoupon.value = null;
       couponCodeController.clear();
       couponFeedback.value = null;
-      await cart.clearCart();
+      _notifyAction(
+        'Order Placed',
+        'Your order ${createdOrder.id} has been placed successfully.',
+        category: 'order',
+      );
+      await cart.clearCart(notify: false);
       Get.offNamed(
         AppRoutes.orderSuccess,
         arguments: {'orderId': createdOrder.id},
@@ -627,7 +643,7 @@ class OrderController extends GetxController {
           ? error.message
           : error.toString().replaceFirst('Exception: ', '');
       if (message != 'ADDRESS_REQUIRED' && message != 'LOCATION_REQUIRED') {
-        Get.snackbar(
+        AppSnackBar.show(
           'Order creation failed',
           message.isEmpty ? 'Please try again.' : message,
           snackPosition: SnackPosition.BOTTOM,
@@ -682,7 +698,7 @@ class OrderController extends GetxController {
       );
     } catch (error) {
       debugPrint('OrderController.cancelOrder failed: $error');
-      Get.snackbar(
+      AppSnackBar.show(
         'Error',
         'Failed to cancel order. Please try again.',
         snackPosition: SnackPosition.BOTTOM,
@@ -692,7 +708,7 @@ class OrderController extends GetxController {
 
     final refreshed = await refreshOrderDetails(order);
     if (refreshed != null) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Order Cancelled',
         'Your order has been cancelled successfully.',
         snackPosition: SnackPosition.BOTTOM,
@@ -723,7 +739,7 @@ class OrderController extends GetxController {
       activeProductOrder.value = null;
     }
     await _persistOrders();
-    Get.snackbar(
+    AppSnackBar.show(
       'Order Cancelled',
       'Your order has been cancelled successfully.',
       snackPosition: SnackPosition.BOTTOM,
@@ -738,7 +754,7 @@ class OrderController extends GetxController {
       final rawAddress = deliveryAddressController.text.trim();
       final user = _authController?.currentUser;
       if (rawAddress.isEmpty || rawAddress.startsWith('Deliver to ')) {
-        Get.snackbar(
+        AppSnackBar.show(
           'Add an address',
           'Please add or select a delivery address before placing the order.',
           snackPosition: SnackPosition.BOTTOM,
@@ -775,7 +791,7 @@ class OrderController extends GetxController {
     }
 
     if (!_hasValidCoordinates(latitude, longitude)) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Location required',
         'Please enable location services so we can deliver to the right place.',
         snackPosition: SnackPosition.BOTTOM,
@@ -1495,6 +1511,18 @@ class OrderController extends GetxController {
     deliveryAddressController.dispose();
     couponCodeController.dispose();
     super.onClose();
+  }
+
+  void _notifyAction(String title, String message, {required String category}) {
+    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+    if (!Get.isRegistered<NotificationService>()) return;
+    unawaited(
+      Get.find<NotificationService>().record(
+        title: title,
+        message: message,
+        category: category,
+      ),
+    );
   }
 }
 

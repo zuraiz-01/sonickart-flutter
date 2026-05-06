@@ -1,0 +1,497 @@
+SONICKART FRONTEND APP - USER MANUAL AND CODE MAP
+Generated: 2026-02-18
+Project root: E:\flutter\zia tech projects\sonic cart ecommers REACT_NATIVE
+
+====================================================================
+1) PROJECT SUMMARY
+====================================================================
+This is a React Native mobile app for SonicKart with customer-side grocery ordering and package delivery flows.
+
+Main active user journey:
+- Customer login with phone number and agreement checkbox.
+- Browse categories and products.
+- Add to cart and place order (COD or Online via Razorpay).
+- Track active product order live on map.
+- Manage profile and address book.
+- Create package orders (send/receive flow) and track package details.
+
+Delivery-partner code exists, but delivery routes are currently not mounted in main navigation.
+
+====================================================================
+2) TECH STACK
+====================================================================
+- React Native 0.77.x
+- TypeScript
+- Zustand + MMKV persistence
+- React Navigation (native stack)
+- Axios for REST API
+- Socket.IO client for live order updates
+- react-native-maps + Google maps
+- Razorpay SDK for online payment
+- Reanimated, gesture-handler, safe-area-context, vector-icons
+
+====================================================================
+3) FEATURE STATUS (IMPLEMENTED VS NOT)
+====================================================================
+3.1 Implemented and active (customer side)
+- Customer login flow.
+- Token storage, token refresh, proactive token monitoring.
+- Session expired modal and forced re-login path.
+- Product dashboard, category browsing, product search.
+- Product detail page (carousel + add/buy now).
+- Cart sync with backend and checkout.
+- Product order placement with address selection.
+- COD and Online payment via Razorpay.
+- Live tracking screen for regular product orders.
+- Customer order history screen.
+- Profile screen and profile update API.
+- Address book CRUD with map picker and place suggestions.
+- Package booking flow (send or receive), distance checks, order creation.
+- Package order list and package order detail screen.
+
+3.2 Implemented but partially wired/limited
+- Wallet section is UI only (balance static, no wallet API actions).
+- Buy Again screen is placeholder only.
+- Several profile actions open "coming soon" modals.
+- Global order socket listener skips package orders by design.
+- LiveTracking screen has package-specific logic commented out and currently runs as regular order tracker.
+
+3.3 Present in code but disabled or not routed
+- DeliveryLogin screen exists but navigation route is commented.
+- DeliveryDashboard exists but not mounted in Navigation.
+- DeliveryMap exists but not mounted in Navigation.
+- withLiveOrder HOC "Continue" delivery map navigation is commented.
+- Delivery order card navigation to DeliveryMap is commented.
+- MyLocation screen exists but not mounted.
+- TokenDebugInfo component exists but not mounted.
+- NoticeAnimation, Notice, AdCarousal, ProductSlider exist but are not used in active customer flow.
+
+====================================================================
+4) RECENT UI AND FLOW CHANGES
+====================================================================
+- Map toolbar buttons (Google action buttons on map) removed in customer live tracking by passing:
+  showMapToolbar={false}
+  File: src/features/map/LiveTracking.tsx
+
+- Marker/icon blinking reduced by:
+  - Removing pulse animation wrapper.
+  - Setting tracksViewChanges={false} for markers.
+  File: src/components/map/Markers.tsx
+
+- Add-to-cart action dialog now renders as true full-screen modal overlay and respects safe area:
+  - Modal flags: presentationStyle=overFullScreen, statusBarTranslucent, navigationBarTranslucent.
+  - Overlay is absolute full screen to avoid half-screen clipping.
+  File: src/components/ui/ActionOptionsModal.tsx
+
+- Product card add-flow modal mounting improved:
+  - ActionOptionsModal is rendered outside card view (sibling in fragment) to prevent clipping.
+  - Card uses overflow: visible for safer modal interaction.
+  File: src/features/category/ProductItem.tsx
+
+- Category page left category sheet/rail is now fixed and always visible (not collapsible overlay):
+  - Sidebar stays pinned on left.
+  - Product list remains on right panel.
+  Files: src/features/category/ProductCategories.tsx, src/features/category/Sidebar.tsx
+
+====================================================================
+5) NAVIGATION FLOW (ACTIVE)
+====================================================================
+Defined in: src/navigation/Navigation.tsx
+
+Active stack screens:
+- SplashScreen
+- Profile
+- AddressBook
+- ProductDashboard
+- LiveTracking
+- ProductCategories
+- BuyAgain
+- Package
+- PackageOrderDetails
+- SearchScreen
+- CartScreen
+- ProductOrder
+- ProductDetail
+- CustomerOrders
+- OrderSuccess
+- CustomerLogin
+
+Commented (inactive) screens:
+- DeliveryMap
+- DeliveryDashboard
+- DeliveryLogin
+
+====================================================================
+6) AUTH, TOKEN, AND SESSION HANDLING
+====================================================================
+- Login API: /customer/login
+- Refresh API: /refresh-token
+- Token storage: MMKV (tokenStorage)
+- Token monitor refreshes every 30 minutes and on app foreground.
+- Axios interceptor retries 401 requests after refresh.
+- If refresh fails: storage cleared and SessionExpiredModal shown.
+
+Core files:
+- App.tsx
+- src/service/authService.tsx
+- src/service/tokenManager.tsx
+- src/service/apiInterceptors.tsx
+- src/components/ui/SessionExpiredModal.tsx
+- src/state/authStore.tsx
+- src/state/storage.tsx
+
+====================================================================
+7) SOCKET / LIVE UPDATES
+====================================================================
+- Global listener updates currentOrder on live events for non-package orders.
+  File: src/components/GlobalOrderSocketListener.tsx
+
+- withLiveStatus HOC joins order room and refreshes order details for both product/package order contexts.
+  File: src/features/map/withLiveStatus.tsx
+
+- Delivery-side withLiveOrder HOC sends driver location updates (delivery flow codebase, currently not routed).
+  File: src/features/delivery/withLiveOrder.tsx
+
+====================================================================
+8) API ENDPOINT MAP (FRONTEND USAGE)
+====================================================================
+Base:
+- BASE_URL = https://api.sonickartnow.com/mobile/api
+- SOCKET_URL = https://api.sonickartnow.com/mobile
+
+Auth and user
+- POST /customer/login
+- POST /refresh-token
+- GET /user
+- PATCH /user
+
+Products and categories
+- GET /categories
+- GET /products/:categoryId
+- GET /products/search
+
+Cart
+- POST /cart/add
+- DELETE /cart/remove
+- DELETE /cart/clear (fallback POST /cart/clear)
+- GET /cart/fetch
+- POST /cart/apply-coupon
+
+Address
+- POST /address/save
+- GET /address/list
+- PUT /address/:id
+- DELETE /address/:id
+- GET /address/resolve-vendor
+
+Regular order
+- POST /order
+- GET /order/:id
+- GET /order?customerId=:id
+- GET /order?status=... (delivery side)
+- PATCH /order/:id/status
+- POST /order/:id/confirm
+- POST /order/:id/cancel-items
+
+Package order
+- POST /order/package
+- GET /order/package/:id
+- GET /order/package (with params)
+- POST /order/package/:id/accept
+- PATCH /order/package/:id/status
+- POST /order/package/:id/cancel
+
+Payments
+- POST /create-order
+- POST /verify-payment
+
+Maps (Google APIs called directly via axios)
+- Geocode API
+- Place Autocomplete API
+- Place Details API
+- Distance Matrix API
+- Directions API
+
+====================================================================
+9) FILE-BY-FILE CODE MAP
+====================================================================
+9.1 Root files
+- App.tsx: App bootstrap, safe areas, token monitor start/stop.
+- index.js: AppRegistry entry.
+- app.json: App name and Android package metadata.
+- package.json: scripts, dependencies.
+- babel.config.js: module aliases and reanimated plugin.
+- metro.config.js: svg transformer config.
+- tsconfig.json: TypeScript + alias paths.
+- react-native.config.js: asset/font linking config.
+- jest.config.js: test preset.
+
+9.2 Navigation
+- src/navigation/Navigation.tsx: main stack, global session modal, global socket listener.
+
+9.3 State (Zustand + MMKV)
+- src/state/authStore.tsx: user, currentOrder, session-expired modal state.
+- src/state/cartStore.tsx: cart state, backend sync, add/remove/clear, coupon hook.
+- src/state/locationStore.tsx: selected address and selected vendor IDs.
+- src/state/categoryStore.tsx: remembers last selected category.
+- src/state/mapStore.tsx: mapRef store for live map manipulation.
+- src/state/storage.tsx: MMKV setup for token and app storage.
+
+9.4 Services
+- src/service/config.tsx: base API/socket URLs and Google API key export.
+- src/service/apiInterceptors.tsx: axios instance + auth/error interceptors.
+- src/service/authService.tsx: login, token refresh, user profile/location updates.
+- src/service/tokenManager.tsx: proactive token expiry checks and refresh scheduling.
+- src/service/productService.tsx: categories, category products, search products.
+- src/service/cartService.tsx: backend cart actions.
+- src/service/orderService.tsx: regular + package order APIs, status and cancellation.
+- src/service/packageService.tsx: package order create/get by id with retry/fallback.
+- src/service/addressService.tsx: address CRUD and vendor resolution.
+- src/service/mapService.tsx: geocode, places, distance matrix, directions utilities.
+- src/service/paymentService.tsx: Razorpay order and verification APIs.
+
+9.5 Auth feature
+- src/features/auth/SplashScreen.tsx: startup token checks and initial redirect logic.
+- src/features/auth/CustomerLogin.tsx: phone login, agreement required, hidden delivery gesture path commented.
+- src/features/auth/DeliveryLogin.tsx: delivery login UI exists; underlying deliveryLogin API function is commented in authService, and route not mounted.
+
+9.6 Dashboard feature
+- src/features/dashboard/ProductDashboard.tsx: main home screen with collapsible header, content and bottom tab.
+- src/features/dashboard/AnimatedHeader.tsx: animated header visibility on scroll.
+- src/features/dashboard/StickSearchBar.tsx: sticky search UI.
+- src/features/dashboard/Visuals.tsx: top gradient/cloud visuals.
+- src/features/dashboard/NoticeAnimation.tsx: animated notice wrapper (currently unused in active flow).
+- src/features/dashboard/BuyAgainScreen.tsx: placeholder "Coming Soon".
+- src/features/dashboard/PackageScreen.tsx: full package booking flow + package orders list tab.
+
+9.7 Dashboard components
+- src/components/dashboard/Header.tsx: greeting + address CTA + profile shortcut.
+- src/components/dashboard/SearchBar.tsx: animated placeholder search bar.
+- src/components/dashboard/Content.tsx: fetches categories and renders category container.
+- src/components/dashboard/CategoryContainer.tsx: category grid cards and expand/collapse.
+- src/components/dashboard/Notice.tsx: weather/rain notice card with wave svg.
+- src/components/dashboard/AdCarousal.tsx: promo card component (not currently used).
+
+9.8 Category and product browsing
+- src/features/category/ProductCategories.tsx: category page with fixed left sidebar and vendor-aware product load.
+- src/features/category/Sidebar.tsx: fixed left category rail (always open) with selected-category highlight.
+- src/features/category/ProductList.tsx: 2-column products list.
+- src/features/category/ProductItem.tsx: product card with add/buy flow, image handling, and full-screen action modal trigger.
+- src/features/product/ProductDetail.tsx: product detail with image carousel + CTA buttons.
+- src/features/search/SearchScreen.tsx: debounced product search screen.
+
+9.9 Cart and checkout
+- src/features/cart/WithCart.tsx: HOC to overlay cart summary strip.
+- src/features/cart/CartAnimationWrapper.tsx: slide-in animation for cart strip.
+- src/features/cart/CartSummary.tsx: compact cart footer with modal preview.
+- src/features/cart/CartScreen.tsx: full cart screen, sync, clear cart, checkout CTA.
+
+9.10 Order placement and billing
+- src/features/order/ProductOrder.tsx: checkout orchestration, address selection, geocode fallback, payment mode handling, order creation.
+- src/features/order/OrderList.tsx: cart order items list for checkout.
+- src/features/order/OrderItem.tsx: per-item qty controls and item-level rendering.
+- src/features/order/BillDetails.tsx: GST, delivery fee and total bill calculations.
+- src/features/order/OrderSuccess.tsx: animation and redirect to LiveTracking.
+- src/features/order/CustomerOrders.tsx: customer orders list + refresh.
+- src/features/order/PackageBillDetails.tsx: package bill summary block and optional full description CTA.
+- src/features/order/PackageOrderDetails.tsx: package tracking detail screen with map and partner details.
+
+9.11 Live tracking and map
+- src/features/map/LiveTracking.tsx: active regular order tracking UI and cancellation reason modal.
+- src/features/map/LiveMap.tsx: map wrapper and camera follow logic.
+- src/features/map/LiveHeader.tsx: heading for customer/delivery tracking screens.
+- src/features/map/DeliveryDetails.tsx: delivery address details card.
+- src/features/map/OrderSummary.tsx: order summary card (package summary intentionally disabled).
+- src/features/map/withLiveStatus.tsx: HOC for socket updates and order refresh.
+- src/features/map/MyLocation.tsx: standalone current-location map demo (not routed).
+
+9.12 Shared map components
+- src/components/map/MapView.tsx: base Google map, polylines, directions and map props.
+- src/components/map/Markers.tsx: pickup/drop/rider markers (pulse removed, tracksViewChanges false).
+- src/components/map/mapUtils.tsx: fit and animate helpers.
+- src/components/map/getPoints.js: quadratic curve points generator for dotted route lines.
+
+9.13 Delivery-side modules (present, not wired in main nav)
+- src/features/delivery/DeliveryDashboard.tsx: delivery partner order list.
+- src/features/delivery/DeliveryMap.tsx: delivery partner live order handling and status transitions.
+- src/features/delivery/withLiveOrder.tsx: HOC for driver location updates.
+- src/components/delivery/OrderItem.tsx: order card for delivery side.
+- src/components/delivery/DeliveryHeader.tsx: delivery profile header.
+- src/components/delivery/TabBar.tsx: delivery tab component.
+
+9.14 Profile and address book
+- src/features/profile/Profile.tsx: profile page, edit form, quick actions, menu actions, logout.
+- src/features/profile/AddressBook.tsx: address CRUD, geolocation, autocomplete, map picker, vendor resolution.
+- src/features/profile/ActionButton.tsx: row-style profile menu button.
+- src/features/profile/OrderItem.tsx: order row used in customer orders list.
+- src/features/profile/WalletSection.tsx: wallet/gift card card (static placeholder).
+- src/features/profile/WalletItem.tsx: wallet row item component.
+
+9.15 UI shared components
+- src/components/ui/CustomText.tsx: typography wrapper component.
+- src/components/ui/CustomInput.tsx: input with optional left/right icons.
+- src/components/ui/CustomButton.tsx: themed button with loading state.
+- src/components/ui/CustomHeader.tsx: top header with back button.
+- src/components/ui/ArrowButton.tsx: directional CTA button used in order flow.
+- src/components/ui/UniversalAdd.tsx: add/increase/decrease item control connected to cart store.
+- src/components/ui/BottomTabBar.tsx: customer bottom tabs.
+- src/components/ui/ActionOptionsModal.tsx: generic modal options chooser.
+- src/components/ui/CancellationReasonModal.tsx: order cancellation reason chooser.
+- src/components/ui/CustomAlert.tsx: app-specific alert modal.
+- src/components/ui/DistanceExceededModal.tsx: package distance-limit modal.
+- src/components/ui/SessionExpiredModal.tsx: login again modal after token expiry.
+- src/components/ui/TokenDebugInfo.tsx: token expiry debug badge (not mounted).
+- src/components/ui/ScalePress.tsx: scale animation wrapper.
+
+9.16 Global and helper components
+- src/components/GlobalOrderSocketListener.tsx: global order socket watcher.
+- src/components/global/CustomSafeAreaView.tsx: safe area wrapper.
+- src/components/login/ProductSlider.tsx: auto-scroll slider component (currently not used).
+
+9.17 Hooks
+- src/hooks/useCustomAlert.tsx: custom alert state + helper methods.
+
+9.18 Utility modules
+- src/utils/Constants.tsx: color aliases and font enum.
+- src/theme/colors.js: central color palette.
+- src/styles/GlobalStyles.tsx: shared floating cart container style.
+- src/styles/Typography.tsx: typography presets.
+- src/utils/NavigationUtils.tsx: global navigation helpers.
+- src/utils/locationUtils.ts: coordinate normalization and map region helpers.
+- src/utils/distanceValidation.ts: 30 km delivery range validation.
+- src/utils/validation.ts: package form validation utilities.
+- src/utils/orderCalculations.ts: checkout bill breakdown helper.
+- src/utils/CustomMap.tsx: custom map style for Google map.
+- src/utils/imageUtils.ts: image URL normalization.
+- src/utils/apiRetry.ts: retry with backoff helper.
+- src/utils/stringUtils.ts: title case helper.
+- src/utils/DateUtils.tsx: date formatting helper.
+- src/utils/useKeyboardOffsetHeight.tsx: keyboard offset helper.
+- src/utils/dummyData.tsx: static demo data and svg wave path.
+- src/utils/Scaling.tsx: screen size helper constants.
+
+9.19 Types and declarations
+- src/types/packageOrder.ts: package order interfaces and status types.
+- src/index.dt.ts: static asset module declarations.
+
+9.20 Tests
+- src/utils/__tests__/distanceValidation.test.ts: unit tests for distance logic.
+- src/components/ui/__tests__/SessionExpiredModal.test.tsx: tests appear outdated vs current modal text/buttons.
+
+====================================================================
+10) NATIVE / BUILD CONFIG MAP
+====================================================================
+Android:
+- android/app/src/main/AndroidManifest.xml
+  - location permissions enabled.
+  - Google Maps API key configured in manifest metadata.
+- android/app/build.gradle
+  - release signing via android/key.properties.
+  - app version: versionCode 51, versionName 51.0.
+  - ABI filters: armeabi-v7a and arm64-v8a.
+  - useLegacyPackaging false for JNI libs.
+  - vector-icons gradle integration.
+
+iOS:
+- ios/blinkit/Info.plist
+  - location permission strings.
+  - app fonts includes Okra and also Poppins entries.
+
+Patches:
+- patches/react-native-reanimated+3.16.7.patch
+- patches/react-native-mmkv+2.12.2.patch
+  - both add 16KB page-size linker flags.
+- patches/react-native-rolling-bar+1.0.0.patch
+  - TS prop typing and effect dependency improvements.
+- patches/react-native-screens+4.18.0.patch
+  - very large patch appears to include generated build artifacts.
+
+====================================================================
+11) BUILD / RUN COMMANDS
+====================================================================
+From project root:
+- Install deps: npm install (or yarn install)
+- Start metro: npm run start
+- Android debug: npm run android
+- iOS debug: npm run ios
+- Lint: npm run lint
+- Tests: npm run test
+- Release APK + AAB (Windows):
+  cd android
+  .\gradlew.bat clean assembleRelease bundleRelease
+  Outputs:
+  - android/app/build/outputs/apk/release/app-release.apk
+  - android/app/build/outputs/bundle/release/app-release.aab
+
+- Optional Windows workaround for long-path CMake issues:
+  - Build from short path clone/copy (example: C:\scbuild) if React Native reanimated CMake path errors occur.
+
+- 16KB verification (APK):
+  - zipalign -c -P 16 -v 4 android/app/build/outputs/apk/release/app-release.apk
+  - Expect: Verification successful
+
+====================================================================
+12) IMPORTANT CODE REALITY NOTES
+====================================================================
+1. Delivery role flow is present in code but disabled in main nav.
+2. LiveTracking screen currently handles regular order path only; package-specific parts are commented out there.
+3. Package tracking is handled through PackageOrderDetails screen and withLiveStatus socket updates.
+4. Buy Again and many profile subfeatures are placeholders.
+5. Wallet is UI-only (no wallet transaction APIs wired).
+6. Add-to-cart option modal was fixed to full-screen overlay behavior to prevent half-screen rendering on some Android devices.
+7. Category screen sidebar is kept fixed/open on the left for faster category switching.
+8. Release config keeps arm64-v8a for 16KB Play requirement and also includes armeabi-v7a for older 32-bit phones.
+9. 16KB check has been validated through zipalign and arm64 native lib alignment checks in release build.
+10. Some legacy/outdated references remain:
+   - src/assets/fonts/README.md and scripts/setup-fonts.js still mention Poppins.
+   - Current active font enum uses Okra family.
+11. src/utils/dummyData.tsx references assets in /assets/products and /assets/category which are not present now.
+   This is safe only while components depending on those imports stay unused.
+12. Google API key and MMKV encryption key are hardcoded in source.
+
+====================================================================
+13) WHERE TO EDIT FOR COMMON TASKS
+====================================================================
+- Add/remove screens: src/navigation/Navigation.tsx
+- Change API base URL or socket URL: src/service/config.tsx
+- Change auth/session behavior: src/service/authService.tsx, src/service/tokenManager.tsx
+- Change cart logic: src/state/cartStore.tsx, src/service/cartService.tsx
+- Change checkout/payment: src/features/order/ProductOrder.tsx, src/service/paymentService.tsx
+- Change order status APIs: src/service/orderService.tsx
+- Change address flow: src/features/profile/AddressBook.tsx, src/service/addressService.tsx
+- Change package flow: src/features/dashboard/PackageScreen.tsx, src/service/packageService.tsx
+- Change live map and markers: src/components/map/MapView.tsx, src/components/map/Markers.tsx, src/features/map/LiveMap.tsx
+- Change bottom tabs: src/components/ui/BottomTabBar.tsx
+- Change colors/fonts globally: src/theme/colors.js, src/utils/Constants.tsx
+
+====================================================================
+14) QUICK FUNCTIONAL CHECKLIST
+====================================================================
+Customer core path
+- Login: Working
+- Browse products/categories: Working
+- Search: Working
+- Add to cart: Working
+- Place order COD: Working
+- Place order online payment: Working
+- Track regular order: Working
+- Cancel regular order with reason: Working
+
+Package path
+- Create package order: Working
+- View package orders list: Working
+- View package details map: Working
+- Package-specific handling inside LiveTracking screen: Disabled/commented
+
+Delivery-partner path
+- Delivery login/screen stack in app navigation: Not enabled
+- Delivery APIs/components: Present in code, not wired in active app nav
+
+Profile and account
+- Edit profile: Working
+- Address book + select address + vendor resolve: Working
+- Wallet/rewards/wishlist/gift cards/refunds: Placeholder only
+
+====================================================================
+END OF DOCUMENT
+====================================================================

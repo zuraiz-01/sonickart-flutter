@@ -277,7 +277,7 @@ class AddressBookView extends GetView<ProfileController> {
                           color: AppColors.textSecondary,
                         ),
                       ),
-                      SizedBox(height: 14.hpx),
+                      SizedBox(height: 24.hpx),
                       Row(
                         children: [
                           Expanded(
@@ -444,7 +444,7 @@ class AddressBookView extends GetView<ProfileController> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 14.hpx),
+                      SizedBox(height: 20.hpx),
                       Container(
                         padding: EdgeInsets.all(12.rpx),
                         decoration: BoxDecoration(
@@ -532,7 +532,7 @@ class AddressBookView extends GetView<ProfileController> {
                           ],
                         ),
                       ),
-                      SizedBox(height: 16.hpx),
+                      SizedBox(height: 20.hpx),
                       _AddressFieldLabel(text: 'Full Name'),
                       SizedBox(height: 6.hpx),
                       TextField(
@@ -542,7 +542,7 @@ class AddressBookView extends GetView<ProfileController> {
                           hintText: 'Enter customer name',
                         ),
                       ),
-                      SizedBox(height: 12.hpx),
+                      SizedBox(height: 16.hpx),
                       _AddressFieldLabel(text: 'Contact Number'),
                       SizedBox(height: 6.hpx),
                       TextField(
@@ -552,7 +552,7 @@ class AddressBookView extends GetView<ProfileController> {
                           hintText: 'Enter mobile number',
                         ),
                       ),
-                      SizedBox(height: 12.hpx),
+                      SizedBox(height: 16.hpx),
                       _AddressFieldLabel(text: 'Address'),
                       SizedBox(height: 6.hpx),
                       TextField(

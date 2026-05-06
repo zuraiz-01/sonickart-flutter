@@ -12,7 +12,9 @@ import '../../../data/models/address_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../routes/app_routes.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../categories/controllers/categories_controller.dart';
@@ -213,7 +215,7 @@ class ProfileController extends GetxController {
     final trimmedPhone = phoneController.text.trim();
     final trimmedName = nameController.text.trim();
     if (trimmedPhone.length < 10) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Phone Required',
         'Enter a valid 10-digit phone number.',
         snackPosition: SnackPosition.BOTTOM,
@@ -235,6 +237,11 @@ class ProfileController extends GetxController {
       );
       closeEditProfile();
       statusMessage.value = 'Profile updated successfully.';
+      _notifyAction(
+        'Profile Updated',
+        'Your profile information was updated.',
+        category: 'profile',
+      );
     } finally {
       isSavingProfile.value = false;
     }
@@ -348,13 +355,22 @@ class ProfileController extends GetxController {
     Get.toNamed(AppRoutes.customerOrders);
   }
 
-  void openHelp() {
-    debugPrint('ProfileController.openHelp: showing help snackbar');
-    Get.snackbar(
-      'Help',
-      'Support email: support@sonickartnow.com',
-      snackPosition: SnackPosition.BOTTOM,
+  void openHelp() async {
+    debugPrint('ProfileController.openHelp: opening email composer');
+    final emailUri = Uri(
+      scheme: 'mailto',
+      path: 'support@sonickartnow.com',
+      queryParameters: {'subject': 'SonicKart Support Request'},
     );
+    if (await canLaunchUrl(emailUri)) {
+      await launchUrl(emailUri);
+    } else {
+      AppSnackBar.show(
+        'Error',
+        'Unable to open email app',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   Future<void> openWebsite() async {
@@ -369,7 +385,7 @@ class ProfileController extends GetxController {
     } catch (error) {
       debugPrint('ProfileController.openWebsite failed: $error');
     }
-    Get.snackbar(
+    AppSnackBar.show(
       'Error',
       'Unable to open website. Please visit sonickartnow.com manually.',
       snackPosition: SnackPosition.BOTTOM,
@@ -495,7 +511,7 @@ class ProfileController extends GetxController {
     final phone = addressPhoneController.text.trim();
     var addressLine = addressLineController.text.trim();
     if (fullName.isEmpty || phone.length < 10 || addressLine.isEmpty) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Address Incomplete',
         'Name, valid phone aur address zaroor enter karo.',
         snackPosition: SnackPosition.BOTTOM,
@@ -534,6 +550,11 @@ class ProfileController extends GetxController {
           await _applySelectedAddressContext(address);
         }
         debugPrint('ProfileController.saveAddress: created ${address.id}');
+        _notifyAction(
+          'Address Added',
+          'New delivery address was saved.',
+          category: 'address',
+        );
       } else {
         final index = addresses.indexWhere((item) => item.id == existing.id);
         if (index >= 0) {
@@ -553,6 +574,11 @@ class ProfileController extends GetxController {
             await _applySelectedAddressContext(updatedAddress);
           }
           debugPrint('ProfileController.saveAddress: updated ${existing.id}');
+          _notifyAction(
+            'Address Updated',
+            'Delivery address was updated.',
+            category: 'address',
+          );
         }
       }
 
@@ -571,7 +597,7 @@ class ProfileController extends GetxController {
       if (error.statusCode == 401) {
         _markAddressSessionExpired();
       }
-      Get.snackbar(
+      AppSnackBar.show(
         'Address Save Failed',
         error.message.isNotEmpty
             ? error.message
@@ -579,20 +605,20 @@ class ProfileController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
       );
     } on http.ClientException {
-      Get.snackbar(
+      AppSnackBar.show(
         'Network Error',
         'Internet issue ki wajah se address save nahi ho saka.',
         snackPosition: SnackPosition.BOTTOM,
       );
     } on TimeoutException {
-      Get.snackbar(
+      AppSnackBar.show(
         'Timeout',
         'Address save request timeout ho gayi. Dobara try karo.',
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (error) {
       debugPrint('ProfileController.saveAddress failed: $error');
-      Get.snackbar(
+      AppSnackBar.show(
         'Address Save Failed',
         'Address save nahi ho saka. Dobara try karo.',
         snackPosition: SnackPosition.BOTTOM,
@@ -605,7 +631,7 @@ class ProfileController extends GetxController {
     debugPrint('ProfileController.useAddress: selecting ${address.id}');
 
     if (!_hasValidCoordinates(address)) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Invalid address location',
         'Selected address does not have valid map coordinates. Please update this address and try again.',
         snackPosition: SnackPosition.BOTTOM,
@@ -625,6 +651,11 @@ class ProfileController extends GetxController {
           : vendorId.contains(',')
           ? 'Found ${vendorId.split(',').length} stores near selected address.'
           : 'Shopping from vendor $vendorId.';
+      _notifyAction(
+        'Address Selected',
+        'Delivery address changed to ${selected.address}.',
+        category: 'address',
+      );
     }
     await _persistAddresses();
   }
@@ -643,11 +674,16 @@ class ProfileController extends GetxController {
       }
       await _persistAddresses();
       statusMessage.value = 'Address deleted successfully.';
+      _notifyAction(
+        'Address Deleted',
+        'Saved delivery address was deleted.',
+        category: 'address',
+      );
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
         _markAddressSessionExpired();
       }
-      Get.snackbar(
+      AppSnackBar.show(
         'Delete Failed',
         error.message.isNotEmpty
             ? error.message
@@ -655,7 +691,7 @@ class ProfileController extends GetxController {
         snackPosition: SnackPosition.BOTTOM,
       );
     } on http.ClientException {
-      Get.snackbar(
+      AppSnackBar.show(
         'Network Error',
         'Internet issue ki wajah se address delete nahi ho saka.',
         snackPosition: SnackPosition.BOTTOM,
@@ -930,7 +966,7 @@ class ProfileController extends GetxController {
       return true;
     }
     _markAddressSessionExpired();
-    Get.snackbar(
+    AppSnackBar.show(
       'Login Required',
       'Address sync ke liye dobara login karo.',
       snackPosition: SnackPosition.BOTTOM,
@@ -948,7 +984,7 @@ class ProfileController extends GetxController {
   Future<bool> _ensureLocationPermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Location Off',
         'Please turn on device location to auto-fill your address.',
         snackPosition: SnackPosition.BOTTOM,
@@ -963,7 +999,7 @@ class ProfileController extends GetxController {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      Get.snackbar(
+      AppSnackBar.show(
         'Permission Required',
         'Location permission is needed to detect your current address.',
         snackPosition: SnackPosition.BOTTOM,
@@ -1221,5 +1257,17 @@ class ProfileController extends GetxController {
     addressLineController.dispose();
     _addressSuggestionDebounce?.cancel();
     super.onClose();
+  }
+
+  void _notifyAction(String title, String message, {required String category}) {
+    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+    if (!Get.isRegistered<NotificationService>()) return;
+    unawaited(
+      Get.find<NotificationService>().record(
+        title: title,
+        message: message,
+        category: category,
+      ),
+    );
   }
 }

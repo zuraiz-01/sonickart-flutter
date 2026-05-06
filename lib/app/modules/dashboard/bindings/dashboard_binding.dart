@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/services/order_socket_service.dart';
 import '../../../core/services/package_socket_service.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -22,6 +23,9 @@ class DashboardBinding extends Bindings {
     }
     if (!Get.isRegistered<CartController>()) {
       Get.put(CartController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<NotificationService>()) {
+      Get.put(NotificationService(GetStorage()), permanent: true);
     }
     if (!Get.isRegistered<OrderController>()) {
       Get.put(OrderController(GetStorage()), permanent: true);

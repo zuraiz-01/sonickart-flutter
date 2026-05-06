@@ -141,6 +141,7 @@ class _ItemsCard extends StatelessWidget {
             return _CartItemRow(
               itemId: item.product.id,
               emoji: item.product.emoji,
+              imageUrl: item.product.resolvedImageUrl,
               name: item.product.name,
               description: item.product.description,
               unit: item.product.unit,
@@ -160,6 +161,7 @@ class _CartItemRow extends StatelessWidget {
   const _CartItemRow({
     required this.itemId,
     required this.emoji,
+    required this.imageUrl,
     required this.name,
     required this.description,
     required this.unit,
@@ -171,6 +173,7 @@ class _CartItemRow extends StatelessWidget {
 
   final String itemId;
   final String emoji;
+  final String imageUrl;
   final String name;
   final String description;
   final String unit;
@@ -181,6 +184,7 @@ class _CartItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('CartView._CartItemRow: item=$itemId imageUrl=$imageUrl');
     return Padding(
       padding: EdgeInsets.all(14.rpx),
       child: Row(
@@ -194,7 +198,15 @@ class _CartItemRow extends StatelessWidget {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(14.rpx),
             ),
-            child: Text(emoji, style: TextStyle(fontSize: 28.spx)),
+            clipBehavior: Clip.antiAlias,
+            child: imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        _ProductImageFallback(emoji: emoji),
+                  )
+                : _ProductImageFallback(emoji: emoji),
           ),
           SizedBox(width: 12.wpx),
           Expanded(
@@ -295,6 +307,29 @@ class _QuantityButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12.rpx),
         ),
         child: Icon(icon, size: 18, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+class _ProductImageFallback extends StatelessWidget {
+  const _ProductImageFallback({required this.emoji});
+
+  final String emoji;
+
+  @override
+  Widget build(BuildContext context) {
+    if (emoji.trim().isNotEmpty) {
+      return Center(
+        child: Text(emoji, style: TextStyle(fontSize: 28.spx)),
+      );
+    }
+
+    return Center(
+      child: Icon(
+        Icons.image_outlined,
+        color: AppColors.primary.withValues(alpha: 0.45),
+        size: 26,
       ),
     );
   }

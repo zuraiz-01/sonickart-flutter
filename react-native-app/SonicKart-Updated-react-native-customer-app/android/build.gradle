@@ -1,0 +1,30 @@
+buildscript {
+    ext {
+        buildToolsVersion = "34.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 35
+        targetSdkVersion = 35
+        // NDK r27+ supports flexible page sizes while staying compatible with older native deps.
+        ndkVersion = "27.0.12077973"
+        kotlinVersion = "1.9.10"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.6.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath("com.google.gms:google-services:4.4.2")
+    }
+}
+
+ext.REACT_NATIVE_NODE_MODULES_DIR = file("$rootDir/../node_modules/react-native")
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url("https://www.jitpack.io") }
+    }
+}

@@ -1,0 +1,138 @@
+// Apply required Gradle plugins for Android app, Kotlin, and React Native.
+plugins {
+    // Android application module support.
+    id("com.android.application")
+    // Kotlin language support for Android source files.
+    id("org.jetbrains.kotlin.android")
+    // React Native Gradle integration (autolinking, bundling, etc.).
+    id("com.facebook.react")
+    // Google Services plugin for Firebase config processing.
+    id("com.google.gms.google-services")
+}
+
+// Copy vector icon font files into the Android app during build.
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+
+// Toggle Proguard/R8 code shrinking for release builds.
+def enableProguardInReleaseBuilds = false
+// JavaScriptCore fallback engine dependency when Hermes is disabled.
+def jscFlavor = 'org.webkit:android-jsc:+'
+
+// Point React Native tooling to node_modules location.
+ext.REACT_NATIVE_NODE_MODULES_DIR = file("$rootDir/../node_modules/react-native")
+// Preferred Node.js path for macOS-style environments.
+def defaultNodeBinary = "/usr/local/bin/node"
+// Use NODE_BINARY if set, otherwise use default path if present, else plain "node".
+def resolvedNodeBinary = System.getenv("NODE_BINARY") ?: (file(defaultNodeBinary).exists() ? defaultNodeBinary : "node")
+
+// Load signing credentials from key.properties (if file exists).
+def keystoreProperties = new Properties()
+// Resolve key.properties from the Android root project.
+def keystorePropertiesFile = rootProject.file("key.properties")
+// Read values into keystoreProperties only when file is available.
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+// Main Android build configuration block.
+android {
+    // Compile SDK version used to compile the app.
+    compileSdk rootProject.ext.compileSdkVersion
+    // Build tools version used by Android plugin.
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    // App package namespace for generated R/classes.
+    namespace "com.sonickart"
+
+    // Default configuration applied to all build variants.
+    defaultConfig {
+        // Final application id visible on Play Store/device.
+        applicationId "com.sonickart"
+        // Minimum Android SDK supported by this app.
+        minSdkVersion rootProject.ext.minSdkVersion
+        // Target Android SDK this app is tested/optimized for.
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Monotonic integer version required for updates.
+        versionCode 75
+        // Human-readable version shown to users.
+        versionName "75"
+        // Configure ABIs packaged in generated APK/AAB.
+        ndk {
+            // Keep arm64 for 16 KB page-size compliance, while also shipping armeabi-v7a
+            // so the release APK can run on older 32-bit phones.
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    // Configure signing identities for debug/release variants.
+    signingConfigs {
+        // Local debug signing config used for development installs.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        // Release signing config loaded from key.properties for store uploads.
+        release {
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+        }
+    }
+
+    // Configure build-type-specific behaviors.
+    buildTypes {
+        // Debug build with debug signing for local testing.
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        // Release build config for production artifacts.
+        release {
+            // Use release keystore for Play Store-compatible signing.
+            signingConfig signingConfigs.release
+            // Keep code shrinking disabled for safer predictable release builds.
+            minifyEnabled false
+            // Keep resource shrinking disabled to avoid accidental resource removal.
+            shrinkResources false
+            // Proguard rules list (still valid even when minify is false).
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    // Packaging behavior for generated APK/AAB native libraries.
+    packagingOptions {
+        jniLibs {
+            // Keep modern JNI packaging to preserve page-size alignment data.
+            useLegacyPackaging false
+        }
+    }
+}
+
+// React Native Gradle plugin configuration.
+react {
+    // Project root where package.json and JS source live.
+    root = file("../../")
+    // Explicit Node command used by React Native tasks.
+    nodeExecutableAndArgs = [resolvedNodeBinary]
+    // Fonts from vector-icons package that should be bundled into app assets.
+    project.ext.vectoricons = [
+        iconFontNames: ["MaterialCommunityIcons.ttf", "MaterialIcons.ttf", "Ionicons.ttf"]
+    ]
+    // Let React Native auto-discover and link native dependencies.
+    autolinkLibrariesWithApp()
+}
+
+// App/library dependencies.
+dependencies {
+    // Core React Native Android runtime dependency.
+    implementation("com.facebook.react:react-android")
+    // Choose JS engine based on hermesEnabled flag.
+    if (hermesEnabled.toBoolean()) {
+        // Hermes engine for better startup/memory in many RN apps.
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        // Fallback JavaScriptCore engine when Hermes is disabled.
+        implementation jscFlavor
+    }
+}
