@@ -72,10 +72,6 @@
 		<string>comgooglemaps</string>
 		<string>google.navigation</string>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SonicKart uses the camera so you can capture photos for your account and orders.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
