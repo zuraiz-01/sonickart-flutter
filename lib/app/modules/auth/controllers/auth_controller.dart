@@ -541,7 +541,7 @@ class AuthController extends GetxController {
       case TargetPlatform.android:
         final initError = FirebaseBootstrap.lastError;
         final base =
-            'Android Firebase config check karo: package `com.sonickart`, SHA-1 `0E:5D:0E:19:33:75:2D:6D:1E:76:40:41:94:03:6E:6F:1E:14:30:62`, SHA-256 `30:D7:43:90:19:AD:2E:13:52:C6:29:1C:AC:7D:63:1D:B4:18:05:22:65:26:1B:7F:0A:43:7A:EC:EE:2F:30:E9` Firebase console me add hone chahiye.';
+            'Android Firebase config check karo: package `com.sonickart`, SHA-1 `80:0A:31:0F:1A:F3:0B:A5:BB:BC:6C:97:E8:D8:C6:FE:68:9D:2F:56`, SHA-256 `8B:E5:18:5C:DD:CB:04:58:D6:71:28:2B:C4:83:91:E7:B5:30:7E:C2:D0:E3:D1:7B:F5:A1:17:CB:A4:A9:F4:5E` Firebase console me add hone chahiye.';
         if (initError != null) {
           return '$base Init error: $initError';
         }
