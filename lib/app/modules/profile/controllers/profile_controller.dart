@@ -355,21 +355,17 @@ class ProfileController extends GetxController {
     Get.toNamed(AppRoutes.customerOrders);
   }
 
-  void openHelp() async {
+  Future<void> openHelp() async {
     debugPrint('ProfileController.openHelp: opening email composer');
     final emailUri = Uri(
       scheme: 'mailto',
       path: 'support@sonickartnow.com',
-      queryParameters: {'subject': 'SonicKart Support Request'},
+      queryParameters: {'subject': 'Need help'},
     );
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
-    } else {
-      AppSnackBar.show(
-        'Error',
-        'Unable to open email app',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+    try {
+      await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+    } catch (error) {
+      debugPrint('ProfileController.openHelp failed: $error');
     }
   }
 
@@ -398,6 +394,10 @@ class ProfileController extends GetxController {
       case 'addresses':
         clearTransientOverlays();
         Get.toNamed(AppRoutes.addressBook);
+        return;
+      case 'notifications':
+        clearTransientOverlays();
+        Get.toNamed(AppRoutes.notifications);
         return;
       case 'edit':
         openEditProfile();

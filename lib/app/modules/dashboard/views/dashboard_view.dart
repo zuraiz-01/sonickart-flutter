@@ -154,108 +154,117 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notifications = Get.find<NotificationService>();
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => Get.toNamed(AppRoutes.addressBook),
-        borderRadius: BorderRadius.circular(18.rpx),
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 14.wpx, vertical: 12.hpx),
-          decoration: BoxDecoration(
-            color: Color(0xFFF3F7FF),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Get.toNamed(AppRoutes.addressBook),
             borderRadius: BorderRadius.circular(18.rpx),
-            border: Border.all(color: Color(0xFFF3F7FF)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.black.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: Offset(0, 6),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(14.wpx, 12.hpx, 58.wpx, 12.hpx),
+              decoration: BoxDecoration(
+                color: Color(0xFFF3F7FF),
+                borderRadius: BorderRadius.circular(18.rpx),
+                border: Border.all(color: Color(0xFFF3F7FF)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: Offset(0, 6),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                primaryLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.left,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontSize: 14.spx,
-                  fontWeight: FontWeight.w800,
-                  height: 1.15,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              SizedBox(height: 4.hpx),
-              Text(
-                'Everything you need, delivered fast \u26A1',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.left,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.primary,
-                  fontSize: 12.spx,
-                  fontWeight: FontWeight.w800,
-                  height: 1.42,
-                ),
-              ),
-              SizedBox(height: 10.hpx),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 10.wpx,
-                  vertical: 9.hpx,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12.rpx),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24.wpx,
-                      height: 24.hpx,
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(12.rpx),
-                      ),
-                      child: Icon(
-                        Icons.location_on,
-                        size: 14.spx,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    SizedBox(width: 6.wpx),
-                    Expanded(
-                      child: Text(
-                        address,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.left,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontSize: 12.spx,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    _NotificationBell(controller: notifications),
-                    SizedBox(width: 4.wpx),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    primaryLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.left,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.primary,
-                      size: 16.spx,
+                      fontSize: 16.spx,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                      letterSpacing: 0.2,
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 4.hpx),
+                  Text(
+                    'Everything you need, delivered fast \u26A1',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.left,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 13.spx,
+                      fontWeight: FontWeight.w800,
+                      height: 1.42,
+                    ),
+                  ),
+                  SizedBox(height: 10.hpx),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 10.wpx,
+                      vertical: 9.hpx,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12.rpx),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 24.wpx,
+                          height: 24.hpx,
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            borderRadius: BorderRadius.circular(12.rpx),
+                          ),
+                          child: Icon(
+                            Icons.location_on,
+                            size: 14.spx,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        SizedBox(width: 6.wpx),
+                        Expanded(
+                          child: Text(
+                            address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.primary,
+                                  fontSize: 13.5.spx,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.primary,
+                          size: 16.spx,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+        Positioned(
+          top: -2.hpx,
+          right: 10.wpx,
+          child: _NotificationBell(controller: notifications),
+        ),
+      ],
     );
   }
 }

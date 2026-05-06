@@ -14,11 +14,15 @@ class AddressBookView extends GetView<ProfileController> {
       () => Scaffold(
         backgroundColor: AppColors.white,
         appBar: AppBar(
-          title: Text('Address Book'),
-          centerTitle: true,
+          title: Text(
+            'Address Book',
+            style: TextStyle(fontSize: 18.spx, fontWeight: FontWeight.w800),
+          ),
+          centerTitle: false,
+          titleSpacing: 18.wpx,
           actions: [
             Padding(
-              padding: EdgeInsets.only(right: 12),
+              padding: EdgeInsets.only(left: 18.wpx, right: 20.wpx),
               child: FilledButton.icon(
                 onPressed: controller.requiresAddressRelogin.value
                     ? controller.logout
@@ -37,14 +41,22 @@ class AddressBookView extends GetView<ProfileController> {
                   size: 16,
                 ),
                 label: Text(
-                  controller.requiresAddressRelogin.value ? 'Login' : 'Add',
+                  controller.requiresAddressRelogin.value
+                      ? 'Login'
+                      : 'Add Address',
+                ),
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 14.wpx,
+                    vertical: 10.hpx,
+                  ),
                 ),
               ),
             ),
           ],
         ),
         body: ListView(
-          padding: EdgeInsets.fromLTRB(12.wpx, 12.hpx, 12.wpx, 20.hpx),
+          padding: EdgeInsets.fromLTRB(16.wpx, 22.hpx, 16.wpx, 28.hpx),
           children: [
             if (controller.isLoadingAddresses.value)
               _AddressStateCard(
@@ -204,9 +216,9 @@ class AddressBookView extends GetView<ProfileController> {
             ...controller.addresses.map((address) {
               final active = address.isSelected;
               return Padding(
-                padding: EdgeInsets.only(bottom: 16),
+                padding: EdgeInsets.only(bottom: 18.hpx),
                 child: Container(
-                  padding: EdgeInsets.all(14.rpx),
+                  padding: EdgeInsets.all(16.rpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(16.rpx),
@@ -395,11 +407,11 @@ class AddressBookView extends GetView<ProfileController> {
             padding: EdgeInsets.only(
               left: 16.wpx,
               right: 16.wpx,
-              top: 24.hpx,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16.hpx,
+              top: 34.hpx,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 26.hpx,
             ),
             child: Container(
-              padding: EdgeInsets.all(20.rpx),
+              padding: EdgeInsets.fromLTRB(24.wpx, 26.hpx, 24.wpx, 24.hpx),
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(20.rpx),
@@ -444,9 +456,9 @@ class AddressBookView extends GetView<ProfileController> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 20.hpx),
+                      SizedBox(height: 28.hpx),
                       Container(
-                        padding: EdgeInsets.all(12.rpx),
+                        padding: EdgeInsets.all(14.rpx),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(14.rpx),
@@ -532,9 +544,9 @@ class AddressBookView extends GetView<ProfileController> {
                           ],
                         ),
                       ),
-                      SizedBox(height: 20.hpx),
+                      SizedBox(height: 28.hpx),
                       _AddressFieldLabel(text: 'Full Name'),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 8.hpx),
                       TextField(
                         controller: controller.addressNameController,
                         textCapitalization: TextCapitalization.words,
@@ -542,9 +554,9 @@ class AddressBookView extends GetView<ProfileController> {
                           hintText: 'Enter customer name',
                         ),
                       ),
-                      SizedBox(height: 16.hpx),
+                      SizedBox(height: 20.hpx),
                       _AddressFieldLabel(text: 'Contact Number'),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 8.hpx),
                       TextField(
                         controller: controller.addressPhoneController,
                         keyboardType: TextInputType.phone,
@@ -552,9 +564,9 @@ class AddressBookView extends GetView<ProfileController> {
                           hintText: 'Enter mobile number',
                         ),
                       ),
-                      SizedBox(height: 16.hpx),
+                      SizedBox(height: 20.hpx),
                       _AddressFieldLabel(text: 'Address'),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 8.hpx),
                       TextField(
                         controller: controller.addressLineController,
                         maxLines: 3,
@@ -644,7 +656,7 @@ class AddressBookView extends GetView<ProfileController> {
                                 .toList(),
                           ),
                         ),
-                      SizedBox(height: 18.hpx),
+                      SizedBox(height: 24.hpx),
                       Row(
                         children: [
                           Expanded(

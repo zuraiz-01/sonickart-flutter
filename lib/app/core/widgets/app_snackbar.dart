@@ -1,6 +1,6 @@
-import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:toastification/toastification.dart';
 
 class AppSnackBar {
   const AppSnackBar._();
@@ -17,25 +17,37 @@ class AppSnackBar {
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          duration: duration ?? const Duration(seconds: 4),
-          content: AwesomeSnackbarContent(
-            title: title,
-            message: message,
-            contentType: _contentTypeFor(title, message),
-          ),
+    toastification.show(
+      context: context,
+      type: _toastTypeFor(title, message),
+      style: ToastificationStyle.flatColored,
+      alignment: snackPosition == SnackPosition.TOP
+          ? Alignment.topCenter
+          : Alignment.bottomCenter,
+      autoCloseDuration: duration ?? const Duration(seconds: 4),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      description: Text(message, maxLines: 3, overflow: TextOverflow.ellipsis),
+      showProgressBar: false,
+      closeOnClick: true,
+      dragToClose: true,
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x22000000),
+          blurRadius: 14,
+          offset: Offset(0, 8),
         ),
-      );
+      ],
+    );
   }
 
-  static ContentType _contentTypeFor(String title, String message) {
+  static ToastificationType _toastTypeFor(String title, String message) {
     final text = '$title $message'.toLowerCase();
     if (_containsAny(text, const [
       'success',
@@ -47,7 +59,7 @@ class AppSnackBar {
       'placed',
       'verified',
     ])) {
-      return ContentType.success;
+      return ToastificationType.success;
     }
     if (_containsAny(text, const [
       'invalid',
@@ -59,7 +71,7 @@ class AppSnackBar {
       'off',
       'expired',
     ])) {
-      return ContentType.warning;
+      return ToastificationType.warning;
     }
     if (_containsAny(text, const [
       'help',
@@ -68,9 +80,9 @@ class AppSnackBar {
       'available',
       'location',
     ])) {
-      return ContentType.help;
+      return ToastificationType.info;
     }
-    return ContentType.failure;
+    return ToastificationType.error;
   }
 
   static bool _containsAny(String value, List<String> needles) {

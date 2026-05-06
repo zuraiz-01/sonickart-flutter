@@ -36,6 +36,7 @@ class OrderCheckoutView extends GetView<OrderController> {
         final shouldLeaveCheckout =
             !cartController.isSyncingCart.value &&
             !controller.isPlacingOrder.value &&
+            !controller.isHandlingUnavailableCart.value &&
             (items.isEmpty || totals.grandTotal <= 0);
         if (shouldLeaveCheckout) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -185,7 +186,7 @@ class _ConfirmationAddressCard extends StatelessWidget {
                   children: [
                     Text(
                       recipient,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppColors.primary,
@@ -195,7 +196,18 @@ class _ConfirmationAddressCard extends StatelessWidget {
                     ),
                     SizedBox(height: 4.hpx),
                     Text(
+                      'Address',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11.spx,
+                      ),
+                    ),
+                    SizedBox(height: 3.hpx),
+                    Text(
                       address,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w700,
@@ -288,6 +300,8 @@ class _AddressCard extends StatelessWidget {
                   SizedBox(height: 4.hpx),
                   Text(
                     controller.deliveryRecipient,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
@@ -298,7 +312,7 @@ class _AddressCard extends StatelessWidget {
                   SizedBox(height: 4.hpx),
                   Text(
                     controller.deliveryAddressPreview,
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.textSecondary,
@@ -382,8 +396,8 @@ class _AddressCard extends StatelessWidget {
                             address.id;
                         return InkWell(
                           onTap: () async {
-                            await controller.selectAddress(address);
                             Get.back();
+                            await controller.selectAddress(address);
                           },
                           borderRadius: BorderRadius.circular(14.rpx),
                           child: Container(

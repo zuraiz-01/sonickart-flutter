@@ -51,16 +51,23 @@ class OrderController extends GetxController {
   final selectedCheckoutAddress = Rxn<AddressModel>();
   final activeProductOrder = Rxn<OrderModel>();
   final isSyncingActiveOrder = false.obs;
+  final isHandlingUnavailableCart = false.obs;
 
   bool get hasAddress => _deliveryAddressPreview.trim().isNotEmpty;
 
   String get deliveryRecipient {
     final auth = _authController;
-    return selectedCheckoutAddress.value?.fullName.trim().isNotEmpty == true
-        ? selectedCheckoutAddress.value!.fullName.trim()
-        : auth?.currentUser?.name.trim().isNotEmpty == true
-        ? auth!.currentUser!.name.trim()
-        : 'Select delivery address';
+    final selected = selectedCheckoutAddress.value;
+    if (selected?.fullName.trim().isNotEmpty == true) {
+      return selected!.fullName.trim();
+    }
+    if (auth?.currentUser?.name.trim().isNotEmpty == true) {
+      return auth!.currentUser!.name.trim();
+    }
+    if (selected?.contactNumber.trim().isNotEmpty == true) {
+      return selected!.contactNumber.trim();
+    }
+    return 'Select delivery address';
   }
 
   String get deliveryAddressPreview {
@@ -174,11 +181,8 @@ class OrderController extends GetxController {
       return;
     }
 
-    final authController = _authController;
-    final user = authController?.currentUser;
-    if ((deliveryAddressController.text.trim()).isEmpty &&
-        user?.phone.isNotEmpty == true) {
-      deliveryAddressController.text = 'Deliver to ${user!.phone}';
+    if (deliveryAddressController.text.trim().startsWith('Deliver to ')) {
+      deliveryAddressController.clear();
     }
   }
 
@@ -939,7 +943,11 @@ class OrderController extends GetxController {
     VendorResolution resolution,
   ) {
     final options = resolution.options;
-    if (options.isEmpty) return const [];
+    if (options.isEmpty) {
+      return items
+          .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
+          .toList();
+    }
 
     return items.where((item) {
       final vendorId = item.product.vendorId;
@@ -954,29 +962,40 @@ class OrderController extends GetxController {
   }
 
   Future<void> _handleUnavailableCartItems(List<CartItemModel> items) async {
-    await _cartController.removeItemsCompletely(
-      items.map((item) => item.product.id).toList(),
-    );
-    selectedCoupon.value = null;
-    couponCodeController.clear();
-    couponFeedback.value = null;
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Item unavailable'),
-        content: const Text(
-          'This item is not available at your location and has been removed from your cart.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Get.back();
-              Get.offAllNamed(AppRoutes.dashboard);
-            },
-            child: const Text('OK'),
+    isHandlingUnavailableCart.value = true;
+    try {
+      final productIds = items.map((item) => item.product.id).toList();
+      if (productIds.where((id) => id.trim().isNotEmpty).isEmpty) {
+        await _cartController.clearCart(notify: false);
+      } else {
+        await _cartController.removeItemsCompletely(productIds);
+      }
+      selectedCoupon.value = null;
+      couponCodeController.clear();
+      couponFeedback.value = null;
+      await Get.dialog<void>(
+        AlertDialog(
+          title: const Text('Item unavailable'),
+          content: Text(
+            items.length == 1
+                ? 'This item is not available at your location and has been removed from your cart.'
+                : 'These items are not available at your location and have been removed from your cart.',
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () {
+                Get.back();
+                Get.offAllNamed(AppRoutes.dashboard);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+        barrierDismissible: false,
+      );
+    } finally {
+      isHandlingUnavailableCart.value = false;
+    }
   }
 
   Map<String, dynamic> _buildOrderPayload({
