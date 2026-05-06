@@ -866,19 +866,29 @@ class OrderController extends GetxController {
   }
 
   Future<VendorResolution> _resolveVendor(AddressModel address) async {
+    final payload = {
+      'latitude': address.latitude,
+      'longitude': address.longitude,
+      'radiusKm': productRadiusKm.value,
+    };
     try {
       final response = await _api.post(
         endpoint: ApiConstants.resolveVendor,
-        data: {
-          'latitude': address.latitude,
-          'longitude': address.longitude,
-          'radiusKm': productRadiusKm.value,
-        },
+        data: payload,
       );
       return VendorResolution.fromJson(response);
     } catch (error) {
-      debugPrint('OrderController._resolveVendor failed: $error');
-      return VendorResolution.empty();
+      debugPrint('OrderController._resolveVendor POST failed: $error');
+    }
+    try {
+      final response = await _api.get(
+        endpoint: ApiConstants.resolveVendor,
+        query: payload,
+      );
+      return VendorResolution.fromJson(response);
+    } catch (error) {
+      debugPrint('OrderController._resolveVendor GET failed: $error');
+      return VendorResolution.unresolved();
     }
   }
 
@@ -944,9 +954,9 @@ class OrderController extends GetxController {
   ) {
     final options = resolution.options;
     if (options.isEmpty) {
-      return items
-          .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
-          .toList();
+      return resolution.wasResolved
+          ? items.where((item) => item.quantity > 0).toList(growable: false)
+          : const [];
     }
 
     return items.where((item) {
@@ -964,12 +974,7 @@ class OrderController extends GetxController {
   Future<void> _handleUnavailableCartItems(List<CartItemModel> items) async {
     isHandlingUnavailableCart.value = true;
     try {
-      final productIds = items.map((item) => item.product.id).toList();
-      if (productIds.where((id) => id.trim().isNotEmpty).isEmpty) {
-        await _cartController.clearCart(notify: false);
-      } else {
-        await _cartController.removeItemsCompletely(productIds);
-      }
+      await _cartController.clearCart(notify: false);
       selectedCoupon.value = null;
       couponCodeController.clear();
       couponFeedback.value = null;
@@ -978,8 +983,8 @@ class OrderController extends GetxController {
           title: const Text('Item unavailable'),
           content: Text(
             items.length == 1
-                ? 'This item is not available at your location and has been removed from your cart.'
-                : 'These items are not available at your location and have been removed from your cart.',
+                ? 'This item is not available at your selected address. Your cart has been cleared.'
+                : 'These items are not available at your selected address. Your cart has been cleared.',
           ),
           actions: [
             TextButton(
@@ -1861,11 +1866,15 @@ class _CouponParser {
 }
 
 class VendorResolution {
-  VendorResolution({required this.options});
+  VendorResolution({required this.options, this.wasResolved = true});
 
   final List<ResolvedVendorOption> options;
+  final bool wasResolved;
 
   factory VendorResolution.empty() => VendorResolution(options: const []);
+
+  factory VendorResolution.unresolved() =>
+      VendorResolution(options: const [], wasResolved: false);
 
   factory VendorResolution.fromJson(Map<String, dynamic> json) {
     final options = <ResolvedVendorOption>[];

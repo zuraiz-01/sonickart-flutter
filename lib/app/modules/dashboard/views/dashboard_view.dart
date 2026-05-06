@@ -154,117 +154,119 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notifications = Get.find<NotificationService>();
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => Get.toNamed(AppRoutes.addressBook),
-            borderRadius: BorderRadius.circular(18.rpx),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(14.wpx, 12.hpx, 58.wpx, 12.hpx),
-              decoration: BoxDecoration(
-                color: Color(0xFFF3F7FF),
-                borderRadius: BorderRadius.circular(18.rpx),
-                border: Border.all(color: Color(0xFFF3F7FF)),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.black.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    offset: Offset(0, 6),
-                  ),
-                ],
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(14.rpx),
+      decoration: BoxDecoration(
+        color: Color(0xFFF3F7FF),
+        borderRadius: BorderRadius.circular(18.rpx),
+        border: Border.all(color: Color(0xFFF3F7FF)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      primaryLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 16.spx,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    SizedBox(height: 4.hpx),
+                    Text(
+                      'Everything you need, delivered fast \u26A1',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 13.spx,
+                        fontWeight: FontWeight.w800,
+                        height: 1.42,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    primaryLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.left,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 16.spx,
-                      fontWeight: FontWeight.w800,
-                      height: 1.15,
-                      letterSpacing: 0.2,
+              SizedBox(width: 10.wpx),
+              _NotificationBell(controller: notifications),
+            ],
+          ),
+          SizedBox(height: 12.hpx),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => Get.toNamed(AppRoutes.addressBook),
+              borderRadius: BorderRadius.circular(12.rpx),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 10.wpx,
+                  vertical: 9.hpx,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12.rpx),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24.wpx,
+                      height: 24.hpx,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12.rpx),
+                      ),
+                      child: Icon(
+                        Icons.location_on,
+                        size: 14.spx,
+                        color: AppColors.primary,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 4.hpx),
-                  Text(
-                    'Everything you need, delivered fast \u26A1',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.left,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 13.spx,
-                      fontWeight: FontWeight.w800,
-                      height: 1.42,
-                    ),
-                  ),
-                  SizedBox(height: 10.hpx),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 10.wpx,
-                      vertical: 9.hpx,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12.rpx),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24.wpx,
-                          height: 24.hpx,
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(12.rpx),
-                          ),
-                          child: Icon(
-                            Icons.location_on,
-                            size: 14.spx,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        SizedBox(width: 6.wpx),
-                        Expanded(
-                          child: Text(
-                            address,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.left,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: AppColors.primary,
-                                  fontSize: 13.5.spx,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.keyboard_arrow_down_rounded,
+                    SizedBox(width: 6.wpx),
+                    Expanded(
+                      child: Text(
+                        address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.primary,
-                          size: 16.spx,
+                          fontSize: 13.5.spx,
+                          fontWeight: FontWeight.w800,
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.primary,
+                      size: 16.spx,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          top: -2.hpx,
-          right: 10.wpx,
-          child: _NotificationBell(controller: notifications),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -278,64 +280,80 @@ class _NotificationBell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final count = controller.unreadCount;
-      return InkWell(
-        onTap: () async {
-          await controller.markAllRead();
-          Get.toNamed(AppRoutes.notifications);
-        },
-        borderRadius: BorderRadius.circular(18.rpx),
-        child: SizedBox(
-          width: 38.rpx,
-          height: 34.rpx,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 31.rpx,
-                height: 31.rpx,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(16.rpx),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.black.withValues(alpha: 0.12),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            await controller.markAllRead();
+            Get.toNamed(AppRoutes.notifications);
+          },
+          borderRadius: BorderRadius.circular(22.rpx),
+          child: SizedBox(
+            width: 44.rpx,
+            height: 44.rpx,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 40.rpx,
+                  height: 40.rpx,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(20.rpx),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.08),
                     ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.notifications_rounded,
-                  color: AppColors.primary,
-                  size: 19.spx,
-                ),
-              ),
-              if (count > 0)
-                Positioned(
-                  right: 0,
-                  top: -1,
-                  child: Container(
-                    height: 16.rpx,
-                    constraints: BoxConstraints(minWidth: 16.rpx),
-                    padding: EdgeInsets.symmetric(horizontal: 4.wpx),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.error,
-                      borderRadius: BorderRadius.circular(9.rpx),
-                      border: Border.all(color: AppColors.white, width: 1.2),
-                    ),
-                    child: Text(
-                      count > 9 ? '9+' : '$count',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: 8.spx,
-                        fontWeight: FontWeight.w900,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.black.withValues(alpha: 0.10),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 28.rpx,
+                      height: 28.rpx,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(14.rpx),
+                      ),
+                      child: Icon(
+                        Icons.notifications_rounded,
+                        color: AppColors.primary,
+                        size: 18.spx,
                       ),
                     ),
                   ),
                 ),
-            ],
+                if (count > 0)
+                  Positioned(
+                    right: 1.rpx,
+                    top: 0,
+                    child: Container(
+                      height: 17.rpx,
+                      constraints: BoxConstraints(minWidth: 17.rpx),
+                      padding: EdgeInsets.symmetric(horizontal: 4.wpx),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(9.rpx),
+                        border: Border.all(color: AppColors.white, width: 1.5),
+                      ),
+                      child: Text(
+                        count > 9 ? '9+' : '$count',
+                        style: TextStyle(
+                          color: AppColors.white,
+                          fontSize: 8.spx,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       );

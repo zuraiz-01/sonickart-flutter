@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:sizer/sizer.dart';
+import 'package:toastification/toastification.dart';
 
 import 'app/core/services/firebase_bootstrap.dart';
 import 'app/core/services/session_controller.dart';
@@ -50,13 +51,15 @@ class SonicCartApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Sizer(
       builder: (context, orientation, deviceType) {
-        return GetMaterialApp(
-          title: 'sonickart',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          initialRoute: AppRoutes.splash,
-          getPages: AppPages.routes,
-          builder: (context, child) => SessionExpiredOverlay(child: child),
+        return ToastificationWrapper(
+          child: GetMaterialApp(
+            title: 'sonickart',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            initialRoute: AppRoutes.splash,
+            getPages: AppPages.routes,
+            builder: (context, child) => SessionExpiredOverlay(child: child),
+          ),
         );
       },
     );
