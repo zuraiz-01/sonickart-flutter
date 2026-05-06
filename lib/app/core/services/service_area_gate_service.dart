@@ -201,6 +201,9 @@ class ServiceAreaGateService {
           timeLimit: Duration(seconds: 12),
         ),
       );
+      debugPrint(
+        'Splash live location -> latitude: ${position.latitude}, longitude: ${position.longitude}',
+      );
       return _PositionResult(
         label: _coordinateLabel(position.latitude, position.longitude),
         position: position,
