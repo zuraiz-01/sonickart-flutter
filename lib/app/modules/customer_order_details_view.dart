@@ -1110,12 +1110,18 @@ Map<String, dynamic> _deliveryPartner(OrderModel order) {
 
 double _deliveryCharge(OrderModel order, double itemsTotal) {
   final explicit = _readNumber(order.raw, const [
+    'deliveryFee',
+    'delivery_fee',
     'deliveryCharge',
     'delivery_charge',
     'productDeliveryCharge',
     'product_delivery_charge',
     'shippingCharge',
     'shipping_charge',
+    'shippingFee',
+    'shipping_fee',
+    'deliveryCost',
+    'delivery_cost',
   ]);
   if (explicit > 0) return explicit;
   final inferred = order.totalPrice - itemsTotal;

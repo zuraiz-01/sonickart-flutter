@@ -67,11 +67,65 @@ class CartItemModel {
     });
     return CartItemModel(
       product: ProductModel.fromJson(productJson),
-      quantity:
-          (json['quantity'] as num?)?.toInt() ??
-          (json['count'] as num?)?.toInt() ??
-          (json['qty'] as num?)?.toInt() ??
-          0,
+      quantity: _quantityFrom(json) ?? 0,
     );
+  }
+
+  static int? _quantityFrom(Map<String, dynamic> source) {
+    for (final key in [
+      'quantity',
+      'count',
+      'qty',
+      'itemQuantity',
+      'item_quantity',
+      'orderedQty',
+      'ordered_qty',
+      'orderedQuantity',
+      'ordered_quantity',
+      'productQuantity',
+      'product_quantity',
+      'productQty',
+      'product_qty',
+      'selectedQuantity',
+      'selected_quantity',
+      'cartQuantity',
+      'cart_quantity',
+      'itemCount',
+      'item_count',
+      'orderQuantity',
+      'order_quantity',
+    ]) {
+      final parsed = _intFrom(source[key]);
+      if (parsed != null) return parsed;
+    }
+    return _nestedQuantity(source['item']) ??
+        _nestedQuantity(source['product']);
+  }
+
+  static int? _nestedQuantity(Object? value) {
+    if (value is! Map) return null;
+    for (final key in [
+      'quantity',
+      'count',
+      'qty',
+      'itemQuantity',
+      'item_quantity',
+      'itemCount',
+      'item_count',
+      'totalQuantity',
+      'total_quantity',
+      'productQuantity',
+      'product_quantity',
+    ]) {
+      final parsed = _intFrom(value[key]);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  static int? _intFrom(Object? value) {
+    if (value is num && value.isFinite) return value.toInt();
+    final parsed = int.tryParse(value?.toString() ?? '');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 }

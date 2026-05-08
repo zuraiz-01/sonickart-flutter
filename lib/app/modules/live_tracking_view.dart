@@ -419,8 +419,7 @@ class _LiveStatusCard extends StatelessWidget {
       'out_for_delivery' => 'Out for delivery',
       'prepared' => 'Preparing order',
       'ready' => 'Ready for pickup',
-      _ => normalized.replaceAll('_', ' ').capitalizeFirst ??
-          'Tracking live',
+      _ => normalized.replaceAll('_', ' ').capitalizeFirst ?? 'Tracking live',
     };
   }
 }
@@ -668,12 +667,7 @@ class _BillDetailsCard extends StatelessWidget {
       0,
       (sum, item) => sum + item.totalPrice,
     );
-    final deliveryCharge = _number(
-      order.raw['deliveryCharge'] ??
-          order.raw['delivery_charge'] ??
-          order.raw['shippingCharge'] ??
-          order.raw['shipping_charge'],
-    );
+    final deliveryCharge = _deliveryCharge(order, itemsTotal);
     final grandTotal = order.totalPrice > 0
         ? order.totalPrice
         : itemsTotal + deliveryCharge;
@@ -710,6 +704,41 @@ class _BillDetailsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static double _deliveryCharge(OrderModel order, double itemsTotal) {
+    final explicit = _readNumber(order.raw, const [
+      'deliveryFee',
+      'delivery_fee',
+      'deliveryCharge',
+      'delivery_charge',
+      'productDeliveryCharge',
+      'product_delivery_charge',
+      'shippingCharge',
+      'shipping_charge',
+      'shippingFee',
+      'shipping_fee',
+      'deliveryCost',
+      'delivery_cost',
+    ]);
+    if (explicit > 0) return explicit;
+    final inferred = order.totalPrice - itemsTotal;
+    return inferred > 0 ? inferred : 0;
+  }
+
+  static double _readNumber(Map<String, dynamic> raw, List<String> keys) {
+    for (final key in keys) {
+      final parsed = _number(raw[key]);
+      if (parsed > 0) return parsed;
+      for (final wrapper in const ['summary', 'totals', 'bill', 'pricing']) {
+        final nested = raw[wrapper];
+        if (nested is Map) {
+          final nestedParsed = _number(nested[key]);
+          if (nestedParsed > 0) return nestedParsed;
+        }
+      }
+    }
+    return 0;
   }
 
   static double _number(Object? value) {

@@ -34,6 +34,7 @@ class OrderController extends GetxController {
   static const _defaultProductRadiusKm = 5.0;
   static const _defaultFreeDeliveryThreshold = 200.0;
   static const _defaultProductDeliveryCharge = 30.0;
+  static const _maxOrderListHydrations = 8;
 
   final GetStorage _storage;
   final LocationLookupService _locationLookupService = LocationLookupService();
@@ -56,6 +57,7 @@ class OrderController extends GetxController {
   final selectedCheckoutAddress = Rxn<AddressModel>();
   final activeProductOrder = Rxn<OrderModel>();
   final isSyncingActiveOrder = false.obs;
+  final isLoadingOrders = false.obs;
   final isHandlingUnavailableCart = false.obs;
   final isValidatingCartAvailability = false.obs;
   final selectingCheckoutAddressId = RxnString();
@@ -488,27 +490,36 @@ class OrderController extends GetxController {
   }
 
   Future<void> loadOrders() async {
-    final fromApi = await _tryFetchOrders();
-    if (fromApi.isNotEmpty) {
-      orders.assignAll(fromApi);
-      latestOrder.value = fromApi.first;
-      activeProductOrder.value = _latestActiveProductOrder(fromApi);
-      await _persistOrders();
-      unawaited(_enrichOrdersMissingItemDetails(fromApi));
-      return;
-    }
+    if (isLoadingOrders.value) return;
+    isLoadingOrders.value = true;
+    try {
+      final fromApi = await _tryFetchOrders();
+      if (fromApi.isNotEmpty) {
+        final hydrated = await _hydrateOrdersForList(fromApi);
+        orders.assignAll(hydrated);
+        latestOrder.value = hydrated.first;
+        activeProductOrder.value = _latestActiveProductOrder(hydrated);
+        await _persistOrders();
+        return;
+      }
 
-    final rawOrders =
-        _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
-    final restored =
-        rawOrders
-            .whereType<Map>()
-            .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item)))
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    orders.assignAll(restored);
-    latestOrder.value = restored.firstOrNull;
-    activeProductOrder.value = _latestActiveProductOrder(restored);
+      final rawOrders =
+          _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
+      final restored =
+          rawOrders
+              .whereType<Map>()
+              .map(
+                (item) => OrderModel.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      orders.assignAll(restored);
+      latestOrder.value = restored.firstOrNull;
+      activeProductOrder.value = _latestActiveProductOrder(restored);
+      unawaited(_enrichOrdersMissingItemDetails(restored));
+    } finally {
+      isLoadingOrders.value = false;
+    }
   }
 
   Future<void> syncActiveProductOrder() async {
@@ -524,10 +535,10 @@ class OrderController extends GetxController {
         return;
       }
 
-      orders.assignAll(fromApi);
-      latestOrder.value = fromApi.firstOrNull;
-      unawaited(_enrichOrdersMissingItemDetails(fromApi));
-      var active = _latestActiveProductOrder(fromApi);
+      final hydrated = await _hydrateOrdersForList(fromApi);
+      orders.assignAll(hydrated);
+      latestOrder.value = hydrated.firstOrNull;
+      var active = _latestActiveProductOrder(hydrated);
       if (active != null && active.resolvedItemCount == 0) {
         for (final id in _orderIdentifiers(active)) {
           final detailed = await _tryFetchOrderById(id);
@@ -1409,6 +1420,64 @@ class OrderController extends GetxController {
       debugPrint('OrderController._tryFetchOrderById failed: $error');
       return null;
     }
+  }
+
+  Future<List<OrderModel>> _hydrateOrdersForList(
+    List<OrderModel> source,
+  ) async {
+    final hydrated = [...source];
+    var attempts = 0;
+
+    for (var index = 0; index < hydrated.length; index += 1) {
+      final order = hydrated[index];
+      if (!_needsItemDetailRefresh(order)) continue;
+      if (attempts >= _maxOrderListHydrations) break;
+
+      attempts += 1;
+      for (final id in _orderIdentifiers(order)) {
+        final detailed = await _tryFetchOrderById(id);
+        if (detailed == null) continue;
+        hydrated[index] = _mergeOrderForList(order, detailed);
+        if (!_needsItemDetailRefresh(hydrated[index])) break;
+      }
+    }
+
+    hydrated.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return hydrated;
+  }
+
+  OrderModel _mergeOrderForList(OrderModel base, OrderModel detailed) {
+    return OrderModel(
+      id: detailed.id.isNotEmpty ? detailed.id : base.id,
+      items: detailed.items.isNotEmpty ? detailed.items : base.items,
+      customerName: detailed.customerName.isNotEmpty
+          ? detailed.customerName
+          : base.customerName,
+      customerPhone: detailed.customerPhone.isNotEmpty
+          ? detailed.customerPhone
+          : base.customerPhone,
+      deliveryAddress: detailed.deliveryAddress.isNotEmpty
+          ? detailed.deliveryAddress
+          : base.deliveryAddress,
+      paymentMode: detailed.paymentMode.isNotEmpty
+          ? detailed.paymentMode
+          : base.paymentMode,
+      totalPrice: detailed.totalPrice > 0
+          ? detailed.totalPrice
+          : base.totalPrice,
+      status: detailed.status.isNotEmpty ? detailed.status : base.status,
+      createdAt:
+          (detailed.raw['createdAt'] ?? detailed.raw['created_at']) != null
+          ? detailed.createdAt
+          : base.createdAt,
+      raw: {
+        ...base.raw,
+        ...detailed.raw,
+        'items': detailed.items.isNotEmpty
+            ? detailed.items.map((item) => item.toJson()).toList()
+            : base.items.map((item) => item.toJson()).toList(),
+      },
+    );
   }
 
   Future<void> _enrichOrdersMissingItemDetails(List<OrderModel> source) async {

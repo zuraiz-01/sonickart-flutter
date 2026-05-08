@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
@@ -6,8 +8,24 @@ import '../data/models/order_model.dart';
 import '../theme/app_colors.dart';
 import 'order_controller.dart';
 
-class CustomerOrdersView extends GetView<OrderController> {
+class CustomerOrdersView extends StatefulWidget {
   const CustomerOrdersView({super.key});
+
+  @override
+  State<CustomerOrdersView> createState() => _CustomerOrdersViewState();
+}
+
+class _CustomerOrdersViewState extends State<CustomerOrdersView> {
+  late final OrderController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = Get.find<OrderController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(controller.loadOrders());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +33,12 @@ class CustomerOrdersView extends GetView<OrderController> {
       backgroundColor: Color(0xFFF5F8FF),
       appBar: AppBar(title: Text('My Orders'), centerTitle: true),
       body: Obx(() {
+        if (controller.orders.isEmpty && controller.isLoadingOrders.value) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
         if (controller.orders.isEmpty) {
           return Center(
             child: Padding(
@@ -68,17 +92,21 @@ class CustomerOrdersView extends GetView<OrderController> {
           );
         }
 
-        return ListView.separated(
-          padding: EdgeInsets.all(16.rpx),
-          itemCount: controller.orders.length,
-          separatorBuilder: (context, index) => SizedBox(height: 12.hpx),
-          itemBuilder: (context, index) {
-            final order = controller.orders[index];
-            return _OrderCard(
-              order: order,
-              onTap: () => controller.openOrder(order),
-            );
-          },
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: controller.loadOrders,
+          child: ListView.separated(
+            padding: EdgeInsets.all(16.rpx),
+            itemCount: controller.orders.length,
+            separatorBuilder: (context, index) => SizedBox(height: 12.hpx),
+            itemBuilder: (context, index) {
+              final order = controller.orders[index];
+              return _OrderCard(
+                order: order,
+                onTap: () => controller.openOrder(order),
+              );
+            },
+          ),
         );
       }),
     );

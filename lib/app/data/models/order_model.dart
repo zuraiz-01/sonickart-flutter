@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'cart_item_model.dart';
 
 class OrderModel {
@@ -61,14 +63,30 @@ class OrderModel {
           raw['item_count'] ??
           raw['orderItemsCount'] ??
           raw['order_items_count'] ??
+          raw['orderItemCount'] ??
+          raw['order_item_count'] ??
+          raw['totalItemCount'] ??
+          raw['total_item_count'] ??
+          raw['itemsTotal'] ??
+          raw['items_total'] ??
           raw['totalQuantity'] ??
           raw['total_quantity'] ??
           raw['quantity'] ??
           raw['qty'] ??
           raw['cartCount'] ??
           raw['cart_count'] ??
+          raw['noOfItems'] ??
+          raw['no_of_items'] ??
+          raw['numberOfItems'] ??
+          raw['number_of_items'] ??
           raw['productsCount'] ??
           raw['products_count'] ??
+          raw['productCount'] ??
+          raw['product_count'] ??
+          raw['totalProducts'] ??
+          raw['total_products'] ??
+          raw['orderedItemsCount'] ??
+          raw['ordered_items_count'] ??
           (raw['summary'] is Map
               ? ((raw['summary'] as Map)['totalItems'] ??
                     (raw['summary'] as Map)['total_items'] ??
@@ -182,7 +200,15 @@ class OrderModel {
   }
 
   static List _extractItems(Object? source) {
-    if (source is String) return const [];
+    if (source is String) {
+      final trimmed = source.trim();
+      if (trimmed.isEmpty) return const [];
+      try {
+        return _extractItems(jsonDecode(trimmed));
+      } catch (_) {
+        return const [];
+      }
+    }
     if (source is List) return source;
     if (source is! Map) return const [];
     final map = Map<String, dynamic>.from(source);
@@ -207,6 +233,8 @@ class OrderModel {
       'ordered_items',
       'lineItems',
       'line_items',
+      'orderDetails',
+      'order_details',
       'details',
       'itemDetails',
       'item_details',
@@ -216,11 +244,49 @@ class OrderModel {
       final found = _extractItems(map[key]);
       if (found.isNotEmpty) return found;
     }
-    for (final key in ['data', 'result', 'payload', 'summary', 'meta']) {
+    for (final key in [
+      'order',
+      'data',
+      'result',
+      'results',
+      'payload',
+      'summary',
+      'meta',
+      'records',
+      'list',
+      'rows',
+      'docs',
+    ]) {
       final found = _extractItems(map[key]);
       if (found.isNotEmpty) return found;
     }
+    final objectValues = map.values
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where(_looksLikeOrderItem)
+        .toList();
+    if (objectValues.isNotEmpty) return objectValues;
     return const [];
+  }
+
+  static bool _looksLikeOrderItem(Map<String, dynamic> item) {
+    const keys = [
+      'product',
+      'item',
+      'productId',
+      'product_id',
+      'itemId',
+      'item_id',
+      'name',
+      'productName',
+      'product_name',
+      'itemName',
+      'item_name',
+      'quantity',
+      'count',
+      'qty',
+    ];
+    return keys.any(item.containsKey);
   }
 
   static Map<String, dynamic> _firstMap(List<Object?> values) {
