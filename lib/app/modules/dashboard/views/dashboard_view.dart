@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -9,7 +10,9 @@ import '../../../data/models/order_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
+import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/service_area_gate_overlay.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../cart/widgets/cart_summary_bar.dart';
@@ -29,6 +32,8 @@ class DashboardView extends GetView<DashboardController> {
     final profileController = Get.find<ProfileController>();
     final orderController = Get.find<OrderController>();
     final cartController = Get.find<CartController>();
+    final serviceGateController = Get.find<ServiceAreaGateController>();
+    unawaited(serviceGateController.ensureChecked());
     final tabs = [
       _HomeTab(
         user: auth.currentUser,
@@ -79,6 +84,7 @@ class DashboardView extends GetView<DashboardController> {
             }),
             if (controller.currentIndex.value != 2)
               Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
+            ServiceAreaGateOverlay(controller: serviceGateController),
           ],
         ),
         bottomNavigationBar: _BottomNav(

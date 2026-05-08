@@ -653,6 +653,49 @@ class ProfileController extends GetxController {
     await _persistAddresses();
   }
 
+  Future<void> applyServiceAreaLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String placeId = '',
+  }) async {
+    final normalizedAddress = address.trim();
+    if (normalizedAddress.isEmpty ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      statusMessage.value = 'Please select a valid delivery location.';
+      return;
+    }
+
+    final user = currentUser;
+    final temporaryAddress = AddressModel(
+      id: 'service-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : 'Customer',
+      contactNumber: user?.phone ?? '',
+      address: normalizedAddress,
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId.trim(),
+      isSelected: true,
+    );
+
+    selectedAddressId.value = temporaryAddress.id;
+    await _persistSelectedAddress(temporaryAddress);
+    liveLocationAddress.value = normalizedAddress;
+    await _updateUserLocation(temporaryAddress);
+    final vendorId = await _tryResolveVendor(temporaryAddress);
+    if (vendorId == null) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
+    unawaited(_refreshCatalogAfterAddressChange());
+  }
+
   Future<void> deleteAddress(AddressModel address) async {
     if (!_ensureAddressSession()) return;
     debugPrint('ProfileController.deleteAddress: deleting ${address.id}');

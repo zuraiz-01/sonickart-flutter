@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -32,37 +32,6 @@ class ServiceAreaGateService {
 
   Future<ServiceAreaGateResult> evaluate() async {
     try {
-      final areas = await _fetchServiceAreas();
-      debugPrint(
-        'ServiceAreaGateService.evaluate: fetched ${areas.length} service areas',
-      );
-      if (areas.isNotEmpty) {
-        debugPrint(
-          'ServiceAreaGateService.evaluate: areas=${areas.map(_debugAreaSummary).join(' | ')}',
-        );
-      }
-      if (areas.isEmpty) {
-        return _blockedWithCurrentLocation(
-          message: _serviceAreasUnavailableMessage,
-        );
-      }
-
-      final activeCoordinateAreas = areas
-          .where((area) => area.isActive && area.hasCoordinateRule)
-          .toList();
-      final workingAreas = activeCoordinateAreas
-          .where((area) => area.status == 'working')
-          .toList();
-      debugPrint(
-        'ServiceAreaGateService.evaluate: activeCoordinateAreas=${activeCoordinateAreas.length}, workingAreas=${workingAreas.length}',
-      );
-
-      if (workingAreas.isEmpty) {
-        return _blockedWithCurrentLocation(
-          message: _serviceAreasUnavailableMessage,
-        );
-      }
-
       final positionResult = await _resolvePosition();
       if (positionResult.position == null) {
         return ServiceAreaGateResult.blocked(
@@ -77,33 +46,13 @@ class ServiceAreaGateService {
       debugPrint(
         'ServiceAreaGateService.evaluate: checking position ${_coordinateLabel(position.latitude, position.longitude)}',
       );
-      final notWorkingMatch = _firstMatchingArea(
-        activeCoordinateAreas.where((area) => area.status == 'not_working'),
-        position,
-      );
-      if (notWorkingMatch != null) {
-        return ServiceAreaGateResult.blocked(
-          reason: ServiceAreaBlockReason.notWorkingArea,
-          locationLabel: await _locationLabel(position),
-          matchedArea: notWorkingMatch,
-          message: notWorkingMatch.message.isNotEmpty
-              ? notWorkingMatch.message
-              : 'Service is not available in this area yet.',
-        );
-      }
-
-      final workingMatch = _firstMatchingArea(workingAreas, position);
-      if (workingMatch != null) {
-        return ServiceAreaGateResult.allowed(
-          locationLabel: await _locationLabel(position),
-          matchedArea: workingMatch,
-        );
-      }
-
-      return ServiceAreaGateResult.blocked(
-        reason: ServiceAreaBlockReason.outsideWorkingArea,
-        locationLabel: await _locationLabel(position),
-        message: _genericBlockedMessage,
+      return _evaluateCoordinate(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        locationLabel: await _locationLabel(
+          position.latitude,
+          position.longitude,
+        ),
       );
     } catch (error) {
       debugPrint('ServiceAreaGateService.evaluate failed: $error');
@@ -111,6 +60,111 @@ class ServiceAreaGateService {
         message: _serviceAreasUnavailableMessage,
       );
     }
+  }
+
+  Future<ServiceAreaGateResult> evaluateManualLocation({
+    required double latitude,
+    required double longitude,
+    required String locationLabel,
+  }) async {
+    if (!_isValidCoordinate(latitude, longitude)) {
+      return ServiceAreaGateResult.blocked(
+        reason: ServiceAreaBlockReason.locationUnavailable,
+        locationLabel: locationLabel.trim().isEmpty
+            ? 'Selected location unavailable'
+            : locationLabel.trim(),
+        message: 'Please select a valid delivery location.',
+      );
+    }
+    return _evaluateCoordinate(
+      latitude: latitude,
+      longitude: longitude,
+      locationLabel: locationLabel,
+    );
+  }
+
+  Future<ServiceAreaGateResult> _evaluateCoordinate({
+    required double latitude,
+    required double longitude,
+    required String locationLabel,
+  }) async {
+    final safeLabel = locationLabel.trim().isNotEmpty
+        ? locationLabel.trim()
+        : _coordinateLabel(latitude, longitude);
+    final areas = await _fetchServiceAreas();
+    debugPrint(
+      'ServiceAreaGateService.evaluate: fetched ${areas.length} service areas',
+    );
+    if (areas.isNotEmpty) {
+      debugPrint(
+        'ServiceAreaGateService.evaluate: areas=${areas.map(_debugAreaSummary).join(' | ')}',
+      );
+    }
+    if (areas.isEmpty) {
+      return ServiceAreaGateResult.blocked(
+        reason: ServiceAreaBlockReason.outsideWorkingArea,
+        locationLabel: safeLabel,
+        message: _serviceAreasUnavailableMessage,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    final activeCoordinateAreas = areas
+        .where((area) => area.isActive && area.hasCoordinateRule)
+        .toList();
+    final workingAreas = activeCoordinateAreas
+        .where((area) => area.status == 'working')
+        .toList();
+    debugPrint(
+      'ServiceAreaGateService.evaluate: activeCoordinateAreas=${activeCoordinateAreas.length}, workingAreas=${workingAreas.length}',
+    );
+
+    if (workingAreas.isEmpty) {
+      return ServiceAreaGateResult.blocked(
+        reason: ServiceAreaBlockReason.outsideWorkingArea,
+        locationLabel: safeLabel,
+        message: _serviceAreasUnavailableMessage,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    final notWorkingMatch = _firstMatchingArea(
+      activeCoordinateAreas.where((area) => area.status == 'not_working'),
+      latitude,
+      longitude,
+    );
+    if (notWorkingMatch != null) {
+      return ServiceAreaGateResult.blocked(
+        reason: ServiceAreaBlockReason.notWorkingArea,
+        locationLabel: safeLabel,
+        matchedArea: notWorkingMatch,
+        message: notWorkingMatch.message.isNotEmpty
+            ? notWorkingMatch.message
+            : 'Service is not available in this area yet.',
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    final workingMatch = _firstMatchingArea(workingAreas, latitude, longitude);
+    if (workingMatch != null) {
+      return ServiceAreaGateResult.allowed(
+        locationLabel: safeLabel,
+        matchedArea: workingMatch,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    return ServiceAreaGateResult.blocked(
+      reason: ServiceAreaBlockReason.outsideWorkingArea,
+      locationLabel: safeLabel,
+      message: _genericBlockedMessage,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   Future<ServiceAreaGateResult> _blockedWithCurrentLocation({
@@ -128,7 +182,7 @@ class ServiceAreaGateService {
       final positionResult = await _resolvePosition();
       final position = positionResult.position;
       if (position == null) return positionResult.label;
-      return _locationLabel(position);
+      return _locationLabel(position.latitude, position.longitude);
     } catch (error) {
       debugPrint('ServiceAreaGateService._currentLocationLabel failed: $error');
       return 'Live location unavailable';
@@ -253,11 +307,11 @@ class ServiceAreaGateService {
     }
   }
 
-  Future<String> _locationLabel(Position position) async {
+  Future<String> _locationLabel(double latitude, double longitude) async {
     try {
       final address = await _locationLookupService.reverseGeocodeToAddress(
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: latitude,
+        longitude: longitude,
       );
       if (address != null && address.trim().isNotEmpty) {
         return address.trim();
@@ -265,17 +319,18 @@ class ServiceAreaGateService {
     } catch (error) {
       debugPrint('ServiceAreaGateService._locationLabel failed: $error');
     }
-    return _coordinateLabel(position.latitude, position.longitude);
+    return _coordinateLabel(latitude, longitude);
   }
 
   ServiceAreaRule? _firstMatchingArea(
     Iterable<ServiceAreaRule> areas,
-    Position position,
+    double latitude,
+    double longitude,
   ) {
     for (final area in areas) {
       final distanceKm = _distanceKm(
-        position.latitude,
-        position.longitude,
+        latitude,
+        longitude,
         area.latitude!,
         area.longitude!,
       );
@@ -314,6 +369,15 @@ class ServiceAreaGateService {
 
   static String _coordinateLabel(double latitude, double longitude) =>
       '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+
+  bool _isValidCoordinate(double latitude, double longitude) {
+    return latitude.isFinite &&
+        longitude.isFinite &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
+  }
 
   static String _debugAreaSummary(ServiceAreaRule area) {
     return '${area.id}{status:${area.status}, active:${area.isActive}, lat:${area.latitude}, lng:${area.longitude}, radiusKm:${area.radiusKm}}';
@@ -444,6 +508,8 @@ class ServiceAreaGateResult {
     this.locationLabel = '',
     this.message = '',
     this.matchedArea,
+    this.latitude,
+    this.longitude,
   });
 
   final bool isAllowed;
@@ -451,16 +517,22 @@ class ServiceAreaGateResult {
   final String locationLabel;
   final String message;
   final ServiceAreaRule? matchedArea;
+  final double? latitude;
+  final double? longitude;
 
   factory ServiceAreaGateResult.allowed({
     String locationLabel = '',
     ServiceAreaRule? matchedArea,
+    double? latitude,
+    double? longitude,
   }) {
     return ServiceAreaGateResult(
       isAllowed: true,
       reason: ServiceAreaBlockReason.none,
       locationLabel: locationLabel,
       matchedArea: matchedArea,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 
@@ -469,6 +541,8 @@ class ServiceAreaGateResult {
     required String locationLabel,
     required String message,
     ServiceAreaRule? matchedArea,
+    double? latitude,
+    double? longitude,
   }) {
     return ServiceAreaGateResult(
       isAllowed: false,
@@ -476,6 +550,8 @@ class ServiceAreaGateResult {
       locationLabel: locationLabel,
       message: message,
       matchedArea: matchedArea,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }

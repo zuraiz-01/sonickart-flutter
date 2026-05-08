@@ -1493,7 +1493,7 @@ class OrderController extends GetxController {
   }
 
   bool _needsItemDetailRefresh(OrderModel order) {
-    if (order.items.isEmpty) return order.resolvedItemCount > 0;
+    if (order.items.isEmpty) return true;
     return order.items.every((item) => item.product.name.trim().isEmpty);
   }
 

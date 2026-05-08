@@ -130,6 +130,7 @@ class _OrderCard extends StatelessWidget {
         : order.resolvedItemCount;
     final statusMeta = _OrderStatusMeta.fromOrder(order);
     final inactive = order.isInactive;
+    final previewLines = _previewLines(order);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24.rpx),
@@ -215,34 +216,36 @@ class _OrderCard extends StatelessWidget {
                 ),
               ],
             ),
-            SizedBox(height: 14.hpx),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 14.wpx,
-                vertical: 12.hpx,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(18.rpx),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _previewLines(order).map((line) {
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      line,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
+            if (previewLines.isNotEmpty) ...[
+              SizedBox(height: 14.hpx),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 14.wpx,
+                  vertical: 12.hpx,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(18.rpx),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: previewLines.map((line) {
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
+            ],
             SizedBox(height: 16.hpx),
             Row(
               children: [
@@ -294,15 +297,19 @@ class _OrderCard extends StatelessWidget {
 
   List<String> _previewLines(OrderModel order) {
     if (order.items.isEmpty) {
-      return const ['Items will appear when order details sync.'];
+      return const [];
     }
-    return order.items.take(3).map((item) {
-      final quantity = item.quantity > 0 ? item.quantity : 1;
-      final name = item.product.name.trim().isEmpty
-          ? 'Item'
-          : item.product.name;
-      return '$quantity x $name';
-    }).toList();
+    final lines = order.items
+        .map((item) {
+          final name = item.product.name.trim();
+          if (name.isEmpty) return '';
+          final quantity = item.quantity > 0 ? item.quantity : 1;
+          return '$quantity x $name';
+        })
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.length <= 2) return lines;
+    return [lines[0], lines[1], '+${lines.length - 2} more items'];
   }
 }
 

@@ -5,6 +5,8 @@ import '../../../core/network/api_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/order_socket_service.dart';
 import '../../../core/services/package_socket_service.dart';
+import '../../../core/services/service_area_gate_controller.dart';
+import '../../../core/services/service_area_gate_service.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../order_controller.dart';
@@ -17,6 +19,12 @@ class DashboardBinding extends Bindings {
   void dependencies() {
     if (!Get.isRegistered<ApiService>()) {
       Get.put(ApiService(), permanent: true);
+    }
+    if (!Get.isRegistered<ServiceAreaGateService>()) {
+      Get.put(
+        ServiceAreaGateService(apiService: Get.find<ApiService>()),
+        permanent: true,
+      );
     }
     if (!Get.isRegistered<CatalogRepository>()) {
       Get.put(CatalogRepository(Get.find()), permanent: true);
@@ -35,6 +43,12 @@ class DashboardBinding extends Bindings {
     }
     if (!Get.isRegistered<ProfileController>()) {
       Get.put(ProfileController(GetStorage()), permanent: true);
+    }
+    if (!Get.isRegistered<ServiceAreaGateController>()) {
+      Get.put(
+        ServiceAreaGateController(serviceAreaGateService: Get.find()),
+        permanent: true,
+      );
     }
     if (!Get.isRegistered<OrderSocketService>()) {
       Get.put(OrderSocketService(), permanent: true).init();
