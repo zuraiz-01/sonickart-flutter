@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../../core/utils/phone_dialer.dart';
 import '../../theme/app_colors.dart';
 import '../dashboard/controllers/dashboard_controller.dart' as dashboard;
 import 'controllers/profile_controller.dart';
@@ -13,6 +14,7 @@ class ProfileView extends GetView<ProfileController> {
   Widget build(BuildContext context) {
     return Obx(() {
       final user = controller.currentUser;
+      final phone = user?.phone ?? '';
       return Stack(
         children: [
           Container(
@@ -162,16 +164,22 @@ class ProfileView extends GetView<ProfileController> {
                           fontSize: 15.spx,
                         ),
                       ),
-                      SizedBox(height: 4.hpx),
-                      Text(
-                        user?.phone ?? '',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14.spx,
-                            ),
-                      ),
+                      if (phone.isNotEmpty) ...[
+                        SizedBox(height: 4.hpx),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => PhoneDialer.open(phone),
+                          child: Text(
+                            phone,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14.spx,
+                                ),
+                          ),
+                        ),
+                      ],
                       if ((user?.email ?? '').isNotEmpty) ...[
                         SizedBox(height: 4.hpx),
                         Text(

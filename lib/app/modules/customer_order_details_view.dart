@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../core/utils/phone_dialer.dart';
 import '../data/models/cart_item_model.dart';
 import '../data/models/order_model.dart';
 import '../theme/app_colors.dart';
@@ -789,13 +790,17 @@ class _IconInfoCard extends StatelessWidget {
                 ),
                 if (linkText.trim().isNotEmpty) ...[
                   SizedBox(height: 2.hpx),
-                  Text(
-                    linkText.trim(),
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      decoration: TextDecoration.underline,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.rpx,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => PhoneDialer.open(linkText),
+                    child: Text(
+                      linkText.trim(),
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.rpx,
+                      ),
                     ),
                   ),
                 ],

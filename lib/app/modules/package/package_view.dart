@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
 
 import '../../core/services/location_lookup_service.dart';
+import '../../core/utils/phone_dialer.dart';
 import '../../data/models/package_order_model.dart';
 import '../../theme/app_colors.dart';
 import 'controllers/package_controller.dart';
@@ -1736,6 +1737,7 @@ class _PackageOrderListCard extends StatelessWidget {
                     icon: Icons.phone_rounded,
                     color: AppColors.secondaryBlue,
                     text: 'Delivery Partner: $partnerPhone',
+                    onTap: () => PhoneDialer.open(partnerPhone),
                   ),
                 ],
                 SizedBox(height: 8.hpx),
@@ -1830,15 +1832,17 @@ class _PackageLocationLine extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.text,
+    this.onTap,
   });
 
   final IconData icon;
   final Color color;
   final String text;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final line = Row(
       children: [
         Icon(icon, size: 12.rpx, color: color),
         SizedBox(width: 5.wpx),
@@ -1856,6 +1860,14 @@ class _PackageLocationLine extends StatelessWidget {
           ),
         ),
       ],
+    );
+
+    if (onTap == null) return line;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: line,
     );
   }
 }

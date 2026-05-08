@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/widgets/app_snackbar.dart';
 import '../../core/services/package_socket_service.dart';
+import '../../core/utils/phone_dialer.dart';
 import '../../data/models/package_order_model.dart';
 import '../../theme/app_colors.dart';
 import 'controllers/package_controller.dart';
@@ -368,7 +367,7 @@ class _PackagePartnerCard extends StatelessWidget {
           if (phone.isNotEmpty) ...[
             SizedBox(height: 10.hpx),
             InkWell(
-              onTap: () => _callPartner(phone),
+              onTap: () => PhoneDialer.open(phone),
               borderRadius: BorderRadius.circular(8.rpx),
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 4.hpx),
@@ -1119,25 +1118,4 @@ String _firstString(List<Object?> values) {
     if (text.isNotEmpty && text != '{}') return text;
   }
   return '';
-}
-
-Future<void> _callPartner(String phone) async {
-  final dialable = _dialablePhone(phone);
-  if (dialable.isEmpty) {
-    AppSnackBar.show('Call failed', 'Phone number is not available.');
-    return;
-  }
-  final uri = Uri(scheme: 'tel', path: dialable);
-  if (!await launchUrl(uri)) {
-    AppSnackBar.show('Call failed', 'Unable to open phone dialer.');
-  }
-}
-
-String _dialablePhone(String value) {
-  final sanitized = value.trim().replaceAll(RegExp(r'[^\d+]'), '');
-  if (sanitized.isEmpty) return '';
-  if (sanitized.startsWith('+')) {
-    return '+${sanitized.substring(1).replaceAll('+', '')}';
-  }
-  return sanitized.replaceAll('+', '');
 }

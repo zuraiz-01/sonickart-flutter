@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../../core/utils/phone_dialer.dart';
 import '../../theme/app_colors.dart';
 import 'controllers/profile_controller.dart';
 
@@ -303,12 +304,17 @@ class AddressBookView extends GetView<ProfileController> {
                         ),
                       ),
                       SizedBox(height: 7.hpx),
-                      Text(
-                        address.contactNumber,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 15.spx,
-                          fontWeight: FontWeight.w600,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => PhoneDialer.open(address.contactNumber),
+                        child: Text(
+                          address.contactNumber,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 15.spx,
+                                fontWeight: FontWeight.w600,
+                              ),
                         ),
                       ),
                       SizedBox(height: 3.hpx),
