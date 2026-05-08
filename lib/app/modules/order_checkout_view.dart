@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
@@ -15,16 +17,24 @@ class OrderCheckoutView extends GetView<OrderController> {
   @override
   Widget build(BuildContext context) {
     final cartController = Get.find<CartController>();
+    unawaited(controller.preloadCheckoutContext());
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
+      backgroundColor: const Color(0xFFF6F8FC),
       appBar: AppBar(
         title: Text(
           'Checkout',
-          style: TextStyle(fontSize: 18.spx, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 14.spx,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFFF5F8FF),
-        surfaceTintColor: const Color(0xFFF5F8FF),
+        backgroundColor: AppColors.white,
+        surfaceTintColor: AppColors.white,
+        elevation: 0,
+        toolbarHeight: 40.hpx,
+        iconTheme: IconThemeData(color: AppColors.primary, size: 17.spx),
       ),
       body: Obx(() {
         final items = cartController.items
@@ -36,8 +46,9 @@ class OrderCheckoutView extends GetView<OrderController> {
         final shouldLeaveCheckout =
             !cartController.isSyncingCart.value &&
             !controller.isPlacingOrder.value &&
+            !controller.isValidatingCartAvailability.value &&
             !controller.isHandlingUnavailableCart.value &&
-            (items.isEmpty || totals.grandTotal <= 0);
+            items.isEmpty;
         if (shouldLeaveCheckout) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (Get.currentRoute == AppRoutes.checkout) {
@@ -63,30 +74,35 @@ class OrderCheckoutView extends GetView<OrderController> {
         return Stack(
           children: [
             ListView(
-              padding: EdgeInsets.fromLTRB(16.wpx, 12.hpx, 16.wpx, 120.hpx),
+              padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 92.hpx),
               children: [
                 if (freeLeft > 0) ...[
                   _FreeDeliveryHint(amountLeft: freeLeft),
-                  SizedBox(height: 12.hpx),
+                  SizedBox(height: 10.hpx),
                 ],
                 _AddressCard(controller: controller),
-                SizedBox(height: 14.hpx),
+                SizedBox(height: 10.hpx),
                 if (items.isNotEmpty) ...[
                   _OrderListCard(items: items, cart: cartController),
-                  SizedBox(height: 14.hpx),
+                  SizedBox(height: 10.hpx),
                 ],
                 _CouponRow(controller: controller, totals: totals),
-                SizedBox(height: 14.hpx),
+                SizedBox(height: 10.hpx),
                 _BillDetails(totals: totals),
               ],
             ),
             Positioned(
               left: 16.wpx,
               right: 16.wpx,
-              bottom: 16.hpx,
+              bottom: 10.hpx,
               child: _CheckoutFooter(
-                loading: controller.isPlacingOrder.value,
-                disabled: items.isEmpty || totals.grandTotal <= 0,
+                loading:
+                    controller.isPlacingOrder.value ||
+                    controller.isValidatingCartAvailability.value,
+                disabled:
+                    items.isEmpty ||
+                    totals.grandTotal <= 0 ||
+                    controller.isHandlingUnavailableCart.value,
                 onPressed: () => _showAddressConfirmation(context),
               ),
             ),
@@ -98,43 +114,181 @@ class OrderCheckoutView extends GetView<OrderController> {
 
   void _showAddressConfirmation(BuildContext context) {
     Get.dialog(
-      AlertDialog(
-        title: const Text('Continue with selected address?'),
-        content: _ConfirmationAddressCard(
-          recipient: controller.deliveryRecipient,
-          address: controller.deliveryAddressPreview,
+      Dialog(
+        backgroundColor: AppColors.white,
+        insetPadding: EdgeInsets.symmetric(horizontal: 24.wpx),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18.rpx),
         ),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              Get.back();
-              _showPaymentOptions(context);
-            },
-            child: const Text('Confirm'),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 50.rpx,
+                height: 50.rpx,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF1FF),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.location_on_rounded,
+                  color: AppColors.primary,
+                  size: 25.spx,
+                ),
+              ),
+              SizedBox(height: 12.hpx),
+              Text(
+                'Confirm Delivery Address',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18.spx,
+                ),
+              ),
+              SizedBox(height: 8.hpx),
+              _ConfirmationAddressCard(
+                recipient: controller.deliveryRecipient,
+                address: controller.deliveryAddressPreview,
+              ),
+              SizedBox(height: 18.hpx),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: Get.back,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.22),
+                        ),
+                        minimumSize: Size(0, 44.hpx),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9.rpx),
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 14.spx,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      child: const Text('Change'),
+                    ),
+                  ),
+                  SizedBox(width: 10.wpx),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        Get.back();
+                        _showPaymentOptions(context);
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        minimumSize: Size(0, 44.hpx),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9.rpx),
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 14.spx,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      child: const Text('Confirm'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+      barrierColor: AppColors.black.withValues(alpha: 0.45),
     );
   }
 
   void _showPaymentOptions(BuildContext context) {
     Get.dialog(
-      AlertDialog(
-        title: const Text('Choose payment method'),
-        content: const Text('How would you like to pay for this order?'),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              controller.selectPaymentMode('COD');
-              Get.back();
-              controller.placeOrder();
-            },
-            child: const Text('Cash on Delivery'),
+      Dialog(
+        backgroundColor: AppColors.white,
+        insetPadding: EdgeInsets.symmetric(horizontal: 28.wpx),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18.rpx),
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Choose Payment\nMethod',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18.spx,
+                  height: 1.25,
+                ),
+              ),
+              SizedBox(height: 18.hpx),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: Get.back,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.22),
+                        ),
+                        minimumSize: Size(0, 44.hpx),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9.rpx),
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 14.spx,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  SizedBox(width: 10.wpx),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        controller.selectPaymentMode('COD');
+                        Get.back();
+                        controller.placeOrder();
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        minimumSize: Size(0, 44.hpx),
+                        padding: EdgeInsets.symmetric(horizontal: 8.wpx),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9.rpx),
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 13.spx,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      child: const Text(
+                        'Cash On Delivery',
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+      barrierColor: AppColors.black.withValues(alpha: 0.45),
     );
   }
 }
@@ -150,78 +304,50 @@ class _ConfirmationAddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Your order will be delivered to:',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w700,
-            fontSize: 13.spx,
-          ),
-        ),
-        SizedBox(height: 10.hpx),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(12.rpx),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFF),
-            borderRadius: BorderRadius.circular(14.rpx),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: AppColors.primary,
-                size: 22.spx,
-              ),
-              SizedBox(width: 10.wpx),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      recipient,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15.spx,
-                      ),
-                    ),
-                    SizedBox(height: 4.hpx),
-                    Text(
-                      'Address',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11.spx,
-                      ),
-                    ),
-                    SizedBox(height: 3.hpx),
-                    Text(
-                      address,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.spx,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(12.rpx),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8FC),
+        borderRadius: BorderRadius.circular(12.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.home_outlined, color: AppColors.primary, size: 19.spx),
+          SizedBox(width: 9.wpx),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recipient,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.spx,
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: 4.hpx),
+                Text(
+                  address,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.primary.withValues(alpha: 0.78),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14.spx,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -234,17 +360,17 @@ class _FreeDeliveryHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(14.rpx),
+      padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 10.hpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18.rpx),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
+        borderRadius: BorderRadius.circular(9.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
         boxShadow: _softShadow,
       ),
       child: Row(
         children: [
           _CircleIcon(icon: Icons.local_shipping_outlined),
-          SizedBox(width: 12.wpx),
+          SizedBox(width: 10.wpx),
           Expanded(
             child: Text(
               'Add ₹${amountLeft.toStringAsFixed(2)} more for free delivery',
@@ -268,78 +394,89 @@ class _AddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _showAddressSheet(context),
-      borderRadius: BorderRadius.circular(18.rpx),
-      child: Container(
-        padding: EdgeInsets.all(14.rpx),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(18.rpx),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-          boxShadow: _softShadow,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CircleIcon(icon: Icons.location_on_outlined),
-            SizedBox(width: 12.wpx),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Deliver to',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.spx,
-                      height: 1.35,
-                    ),
-                  ),
-                  SizedBox(height: 4.hpx),
-                  Text(
-                    controller.deliveryRecipient,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 17.spx,
-                      height: 1.35,
-                    ),
-                  ),
-                  SizedBox(height: 4.hpx),
-                  Text(
-                    controller.deliveryAddressPreview,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14.spx,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
+    return Obx(() {
+      final recipient = controller.deliveryRecipient;
+      final address = controller.deliveryAddressPreview;
+      return InkWell(
+        onTap: () => _showAddressSheet(context),
+        borderRadius: BorderRadius.circular(9.rpx),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(12.wpx, 10.hpx, 10.wpx, 10.hpx),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(9.rpx),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.12),
             ),
-            Icon(Icons.chevron_right, color: AppColors.primary),
-          ],
+            boxShadow: _softShadow,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CircleIcon(icon: Icons.location_on_outlined),
+              SizedBox(width: 10.wpx),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Deliver to',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.spx,
+                        height: 1.35,
+                      ),
+                    ),
+                    SizedBox(height: 4.hpx),
+                    Text(
+                      recipient,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14.spx,
+                        height: 1.35,
+                      ),
+                    ),
+                    SizedBox(height: 4.hpx),
+                    Text(
+                      address,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.primary.withValues(alpha: 0.95),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.spx,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.primary, size: 18.spx),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   void _showAddressSheet(BuildContext context) {
     final profile = Get.isRegistered<ProfileController>()
         ? Get.find<ProfileController>()
         : null;
+    if (profile != null &&
+        profile.addresses.isEmpty &&
+        !profile.isLoadingAddresses.value) {
+      unawaited(profile.loadAddresses());
+    }
     Get.bottomSheet(
       SafeArea(
         child: Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.86,
           ),
           padding: EdgeInsets.fromLTRB(16.wpx, 12.hpx, 16.wpx, 16.hpx),
           decoration: BoxDecoration(
@@ -348,9 +485,18 @@ class _AddressCard extends StatelessWidget {
           ),
           child: Obx(() {
             final addresses = profile?.addresses.toList(growable: false) ?? [];
+            final isLoading = profile?.isLoadingAddresses.value == true;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (controller.isValidatingCartAvailability.value) ...[
+                  LinearProgressIndicator(
+                    minHeight: 3.hpx,
+                    color: AppColors.primary,
+                    backgroundColor: AppColors.surface,
+                  ),
+                  SizedBox(height: 10.hpx),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -370,17 +516,43 @@ class _AddressCard extends StatelessWidget {
                   ],
                 ),
                 SizedBox(height: 8.hpx),
-                if (addresses.isEmpty)
+                if (isLoading)
                   Expanded(
                     child: Center(
-                      child: Text(
-                        'No saved addresses yet. Add one from Address Book.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14.spx,
+                      child: SizedBox(
+                        width: 28.wpx,
+                        height: 28.wpx,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2.5,
                         ),
+                      ),
+                    ),
+                  )
+                else if (addresses.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'No saved addresses yet. Add one from Address Book.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.spx,
+                            ),
+                          ),
+                          SizedBox(height: 14.hpx),
+                          FilledButton.icon(
+                            onPressed: () {
+                              Get.back<void>();
+                              Get.toNamed(AppRoutes.addressBook);
+                            },
+                            icon: const Icon(Icons.add_location_alt_outlined),
+                            label: const Text('Add Address'),
+                          ),
+                        ],
                       ),
                     ),
                   )
@@ -394,11 +566,16 @@ class _AddressCard extends StatelessWidget {
                         final selected =
                             controller.selectedCheckoutAddress.value?.id ==
                             address.id;
+                        final isSelecting =
+                            controller.selectingCheckoutAddressId.value ==
+                            address.id;
                         return InkWell(
-                          onTap: () async {
-                            Get.back();
-                            await controller.selectAddress(address);
-                          },
+                          onTap: isSelecting
+                              ? null
+                              : () async {
+                                  Get.back();
+                                  await controller.selectAddress(address);
+                                },
                           borderRadius: BorderRadius.circular(14.rpx),
                           child: Container(
                             padding: EdgeInsets.all(14.rpx),
@@ -417,7 +594,9 @@ class _AddressCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Icon(
-                                  selected
+                                  isSelecting
+                                      ? Icons.hourglass_top_rounded
+                                      : selected
                                       ? Icons.radio_button_checked
                                       : Icons.radio_button_off,
                                   color: AppColors.primary,
@@ -449,6 +628,14 @@ class _AddressCard extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                                if (isSelecting)
+                                  SizedBox(
+                                    width: 18.rpx,
+                                    height: 18.rpx,
+                                    child: const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -456,6 +643,20 @@ class _AddressCard extends StatelessWidget {
                       },
                     ),
                   ),
+                if (addresses.isNotEmpty) ...[
+                  SizedBox(height: 12.hpx),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Get.back<void>();
+                        Get.toNamed(AppRoutes.addressBook);
+                      },
+                      icon: const Icon(Icons.manage_accounts_outlined),
+                      label: const Text('Manage Addresses'),
+                    ),
+                  ),
+                ],
               ],
             );
           }),
@@ -477,7 +678,8 @@ class _OrderListCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(22.rpx),
+        borderRadius: BorderRadius.circular(9.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
         boxShadow: _softShadow,
       ),
       clipBehavior: Clip.antiAlias,
@@ -500,15 +702,15 @@ class _OrderItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = item.product.resolvedImageUrl;
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 14.wpx, vertical: 14.hpx),
+      padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 10.hpx),
       child: Row(
         children: [
           Container(
-            width: 70.wpx,
-            height: 70.wpx,
+            width: 52.wpx,
+            height: 52.wpx,
             decoration: BoxDecoration(
               color: const Color(0xFFF3F7FF),
-              borderRadius: BorderRadius.circular(18.rpx),
+              borderRadius: BorderRadius.circular(8.rpx),
               border: Border.all(
                 color: AppColors.primary.withValues(alpha: 0.10),
               ),
@@ -522,7 +724,7 @@ class _OrderItemTile extends StatelessWidget {
                   )
                 : _ProductFallback(item: item),
           ),
-          SizedBox(width: 14.wpx),
+          SizedBox(width: 10.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,10 +736,10 @@ class _OrderItemTile extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 16.spx,
+                    fontSize: 15.spx,
                   ),
                 ),
-                SizedBox(height: 4.hpx),
+                SizedBox(height: 3.hpx),
                 Text(
                   '₹${item.unitPrice.toStringAsFixed(2)}',
                   style: TextStyle(
@@ -549,9 +751,9 @@ class _OrderItemTile extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(width: 10.wpx),
+          SizedBox(width: 8.wpx),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 6.hpx),
+            padding: EdgeInsets.symmetric(horizontal: 5.wpx, vertical: 4.hpx),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFF),
               borderRadius: BorderRadius.circular(999),
@@ -615,14 +817,14 @@ class _QtyButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16.rpx),
       child: Container(
-        width: 32.wpx,
-        height: 32.wpx,
+        width: 25.wpx,
+        height: 25.wpx,
         decoration: BoxDecoration(
           color: AppColors.white,
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.primary),
         ),
-        child: Icon(icon, color: AppColors.primary, size: 18.spx),
+        child: Icon(icon, color: AppColors.primary, size: 14.spx),
       ),
     );
   }
@@ -637,19 +839,31 @@ class _CouponRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => _showCouponSheet(context),
-      borderRadius: BorderRadius.circular(18.rpx),
+      onTap: () {
+        controller.couponFeedback.value = null;
+        unawaited(controller.loadCouponsForCart());
+        _showCouponSheet(context);
+      },
+      borderRadius: BorderRadius.circular(9.rpx),
       child: Container(
-        padding: EdgeInsets.all(16.rpx),
+        padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 12.hpx),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(18.rpx),
+          borderRadius: BorderRadius.circular(9.rpx),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
           boxShadow: _softShadow,
         ),
         child: Row(
           children: [
-            _CircleIcon(icon: Icons.confirmation_number_outlined),
-            SizedBox(width: 12.wpx),
+            Image.asset(
+              'assets/icons/coupon.png',
+              width: 24.rpx,
+              height: 24.rpx,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) =>
+                  const Icon(Icons.confirmation_number_outlined),
+            ),
+            SizedBox(width: 10.wpx),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,17 +873,17 @@ class _CouponRow extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
-                      fontSize: 17.spx,
+                      fontSize: 15.spx,
                     ),
                   ),
                   if (totals.appliedCoupon != null) ...[
                     SizedBox(height: 4.hpx),
                     Text(
-                      '${totals.appliedCoupon!.code} applied | Save ₹${totals.couponDiscount.toStringAsFixed(2)}',
+                      '${totals.appliedCoupon!.code} applied | Save \u20B9${totals.couponDiscount.toStringAsFixed(2)}',
                       style: TextStyle(
                         color: AppColors.success,
                         fontWeight: FontWeight.w700,
-                        fontSize: 13.spx,
+                        fontSize: 14.spx,
                       ),
                     ),
                   ],
@@ -678,10 +892,16 @@ class _CouponRow extends StatelessWidget {
             ),
             if (totals.appliedCoupon != null)
               TextButton(
-                onPressed: controller.removeAppliedCoupon,
+                onPressed: () {
+                  controller.removeAppliedCoupon();
+                },
                 child: const Text('Remove'),
               ),
-            Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+              size: 17.spx,
+            ),
           ],
         ),
       ),
@@ -689,17 +909,20 @@ class _CouponRow extends StatelessWidget {
   }
 
   void _showCouponSheet(BuildContext context) {
-    controller.openCouponSheet();
-    Get.bottomSheet(
-      SafeArea(
-        child: Container(
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.86,
           ),
-          padding: EdgeInsets.fromLTRB(16.wpx, 12.hpx, 16.wpx, 16.hpx),
+          padding: EdgeInsets.fromLTRB(14.wpx, 14.hpx, 14.wpx, 16.hpx),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24.rpx)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18.rpx)),
           ),
           child: Obx(() {
             final cart = Get.find<CartController>();
@@ -715,51 +938,101 @@ class _CouponRow extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w900,
-                          fontSize: 18.spx,
+                          fontSize: 15.spx,
                         ),
                       ),
                     ),
                     IconButton(
-                      onPressed: Get.back,
-                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: AppColors.primary,
+                        size: 18.spx,
+                      ),
                     ),
                   ],
                 ),
+                SizedBox(height: 4.hpx),
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: controller.couponCodeController,
                         textCapitalization: TextCapitalization.characters,
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 15.spx,
+                          fontWeight: FontWeight.w700,
+                        ),
                         decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.local_activity_outlined),
+                          prefixIcon: Icon(
+                            Icons.confirmation_number_outlined,
+                            color: AppColors.primary,
+                            size: 16.spx,
+                          ),
                           hintText: 'Enter coupon code',
+                          hintStyle: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 15.spx,
+                            fontWeight: FontWeight.w500,
+                          ),
                           filled: true,
-                          fillColor: const Color(0xFFF8FAFF),
+                          fillColor: AppColors.white,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12.wpx,
+                            vertical: 13.hpx,
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14.rpx),
-                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(8.rpx),
+                            borderSide: BorderSide(color: AppColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.rpx),
+                            borderSide: BorderSide(color: AppColors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.rpx),
+                            borderSide: BorderSide(color: AppColors.primary),
                           ),
                         ),
                       ),
                     ),
-                    SizedBox(width: 10.wpx),
-                    FilledButton(
-                      onPressed: controller.isApplyingCoupon.value
-                          ? null
-                          : () async {
-                              final applied = await controller.applyCoupon();
-                              if (applied) Get.back();
-                            },
-                      child: controller.isApplyingCoupon.value
-                          ? SizedBox(
-                              width: 16.wpx,
-                              height: 16.wpx,
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text('Apply'),
+                    SizedBox(width: 8.wpx),
+                    SizedBox(
+                      height: 44.hpx,
+                      width: 76.wpx,
+                      child: FilledButton(
+                        onPressed: controller.isApplyingCoupon.value
+                            ? null
+                            : () async {
+                                final applied = await controller.applyCoupon();
+                                if (applied && sheetContext.mounted) {
+                                  Navigator.of(sheetContext).pop();
+                                }
+                              },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.rpx),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 15.spx,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        child: controller.isApplyingCoupon.value
+                            ? SizedBox(
+                                width: 16.wpx,
+                                height: 16.wpx,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.white,
+                                ),
+                              )
+                            : const Text('Apply'),
+                      ),
                     ),
                   ],
                 ),
@@ -777,10 +1050,10 @@ class _CouponRow extends StatelessWidget {
                 SizedBox(height: 12.hpx),
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.all(14.rpx),
+                  padding: EdgeInsets.all(12.rpx),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFF),
-                    borderRadius: BorderRadius.circular(16.rpx),
+                    color: const Color(0xFFEAF1FF),
+                    borderRadius: BorderRadius.circular(8.rpx),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,16 +1063,16 @@ class _CouponRow extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 13.spx,
+                          fontSize: 14.spx,
                         ),
                       ),
-                      SizedBox(height: 4.hpx),
+                      SizedBox(height: 3.hpx),
                       Text(
                         '₹${totals.grandTotal.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w900,
-                          fontSize: 19.spx,
+                          fontSize: 15.spx,
                         ),
                       ),
                       if (totals.appliedCoupon != null &&
@@ -810,7 +1083,7 @@ class _CouponRow extends StatelessWidget {
                           style: TextStyle(
                             color: AppColors.success,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13.spx,
+                            fontSize: 14.spx,
                           ),
                         ),
                       ],
@@ -823,7 +1096,7 @@ class _CouponRow extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 17.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
                 SizedBox(height: 8.hpx),
@@ -837,18 +1110,18 @@ class _CouponRow extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w700,
-                              fontSize: 14.spx,
+                              fontSize: 15.spx,
                             ),
                           ),
                         )
                       : ListView.separated(
                           itemCount: controller.availableCoupons.length,
                           separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
-                          itemBuilder: (context, index) {
+                          itemBuilder: (itemContext, index) {
                             final coupon = controller.availableCoupons[index];
                             final applied =
-                                controller.selectedCoupon.value?.id ==
-                                coupon.id;
+                                controller.selectedCoupon.value?.code ==
+                                coupon.code;
                             final eligibility = controller
                                 .couponEligibilityMessage(coupon, cart.items);
                             return _CouponCard(
@@ -861,7 +1134,9 @@ class _CouponRow extends StatelessWidget {
                                   return;
                                 }
                                 final ok = await controller.applyCoupon(coupon);
-                                if (ok) Get.back();
+                                if (ok && sheetContext.mounted) {
+                                  Navigator.of(sheetContext).pop();
+                                }
                               },
                             );
                           },
@@ -870,9 +1145,8 @@ class _CouponRow extends StatelessWidget {
               ],
             );
           }),
-        ),
-      ),
-      isScrollControlled: true,
+        );
+      },
     );
   }
 }
@@ -897,11 +1171,18 @@ class _CouponCard extends StatelessWidget {
         ? '${coupon.discountValue.toStringAsFixed(0)}% OFF'
         : 'SAVE ₹${coupon.discountValue.toStringAsFixed(0)}';
     return Container(
-      padding: EdgeInsets.all(14.rpx),
+      padding: EdgeInsets.all(12.rpx),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(16.rpx),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -915,10 +1196,10 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 16.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
-                SizedBox(height: 4.hpx),
+                SizedBox(height: 3.hpx),
                 Text(
                   coupon.title,
                   style: TextStyle(
@@ -934,7 +1215,7 @@ class _CouponCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
-                      fontSize: 13.spx,
+                      fontSize: 14.spx,
                     ),
                   ),
                 ],
@@ -945,7 +1226,7 @@ class _CouponCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
-                      fontSize: 12.spx,
+                      fontSize: 15.spx,
                     ),
                   ),
                 ],
@@ -954,21 +1235,23 @@ class _CouponCard extends StatelessWidget {
                   Text(
                     'Min order: ₹${coupon.minimumOrderAmount.toStringAsFixed(coupon.minimumOrderAmount == coupon.minimumOrderAmount.roundToDouble() ? 0 : 2)}',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.spx,
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15.spx,
                     ),
                   ),
                 ],
-                SizedBox(height: 6.hpx),
-                Text(
-                  eligibilityMessage == null ? 'Eligible' : eligibilityMessage!,
-                  style: TextStyle(
-                    color: eligible ? AppColors.success : AppColors.error,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.spx,
+                if (!eligible) ...[
+                  SizedBox(height: 6.hpx),
+                  Text(
+                    eligibilityMessage!,
+                    style: TextStyle(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15.spx,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -981,19 +1264,19 @@ class _CouponCard extends StatelessWidget {
                   vertical: 6.hpx,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: const Color(0xFFEAF1FF),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   value,
                   style: TextStyle(
-                    color: AppColors.white,
+                    color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 11.spx,
+                    fontSize: 15.spx,
                   ),
                 ),
               ),
-              SizedBox(height: 10.hpx),
+              SizedBox(height: 8.hpx),
               Container(
                 padding: EdgeInsets.symmetric(
                   horizontal: 8.wpx,
@@ -1010,13 +1293,38 @@ class _CouponCard extends StatelessWidget {
                   style: TextStyle(
                     color: eligible ? AppColors.success : AppColors.error,
                     fontWeight: FontWeight.w800,
-                    fontSize: 11.spx,
+                    fontSize: 15.spx,
                   ),
                 ),
               ),
-              SizedBox(height: 10.hpx),
+              SizedBox(height: 8.hpx),
               OutlinedButton(
                 onPressed: onApply,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: applied
+                      ? AppColors.white
+                      : eligible
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                  backgroundColor: applied
+                      ? AppColors.primary
+                      : AppColors.white,
+                  side: BorderSide(
+                    color: eligible
+                        ? AppColors.primary
+                        : AppColors.primary.withValues(alpha: 0.18),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 9.wpx),
+                  minimumSize: Size(0, 30.hpx),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999.rpx),
+                  ),
+                  textStyle: TextStyle(
+                    fontSize: 15.spx,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 child: Text(
                   applied
                       ? 'Applied'
@@ -1041,45 +1349,46 @@ class _BillDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 18.hpx),
+      padding: EdgeInsets.symmetric(vertical: 12.hpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18.rpx),
+        borderRadius: BorderRadius.circular(9.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
         boxShadow: _softShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.wpx),
+            padding: EdgeInsets.symmetric(horizontal: 12.wpx),
             child: Text(
               'Bill Details',
               style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w900,
-                fontSize: 18.spx,
+                fontSize: 15.spx,
               ),
             ),
           ),
-          SizedBox(height: 14.hpx),
+          SizedBox(height: 12.hpx),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14.wpx),
+            padding: EdgeInsets.symmetric(horizontal: 12.wpx),
             child: Column(
               children: [
                 _BillRow(
                   icon: Icons.article_outlined,
-                  label: 'Items total (incl. GST)',
+                  label: 'Items Total (Incl. GST)',
                   value: totals.totalBeforeDiscount,
                 ),
-                SizedBox(height: 12.hpx),
+                SizedBox(height: 10.hpx),
                 _BillRow(
                   icon: Icons.pedal_bike_outlined,
-                  label: 'Delivery charge',
+                  label: 'Delivery Charge',
                   value: totals.deliveryCharge,
                 ),
                 if (totals.appliedCoupon != null &&
                     totals.couponDiscount > 0) ...[
-                  SizedBox(height: 12.hpx),
+                  SizedBox(height: 10.hpx),
                   _BillRow(
                     icon: Icons.sell_outlined,
                     label: 'Coupon (${totals.appliedCoupon!.code})',
@@ -1090,9 +1399,9 @@ class _BillDetails extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 28.hpx, color: AppColors.border),
+          Divider(height: 22.hpx, color: AppColors.border),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.wpx),
+            padding: EdgeInsets.symmetric(horizontal: 12.wpx),
             child: Row(
               children: [
                 Expanded(
@@ -1101,7 +1410,7 @@ class _BillDetails extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w900,
-                      fontSize: 18.spx,
+                      fontSize: 15.spx,
                     ),
                   ),
                 ),
@@ -1110,7 +1419,7 @@ class _BillDetails extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 18.spx,
+                    fontSize: 15.spx,
                   ),
                 ),
               ],
@@ -1142,15 +1451,15 @@ class _BillRow extends StatelessWidget {
         : '₹${value.toStringAsFixed(2)}';
     return Row(
       children: [
-        Icon(icon, color: AppColors.accent, size: 18.spx),
-        SizedBox(width: 8.wpx),
+        Icon(icon, color: AppColors.accent, size: 14.spx),
+        SizedBox(width: 7.wpx),
         Expanded(
           child: Text(
             label,
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w700,
-              fontSize: 13.spx,
+              fontSize: 14.spx,
             ),
           ),
         ),
@@ -1159,7 +1468,7 @@ class _BillRow extends StatelessWidget {
           style: TextStyle(
             color: isDiscount ? AppColors.success : AppColors.primary,
             fontWeight: FontWeight.w800,
-            fontSize: 14.spx,
+            fontSize: 15.spx,
           ),
         ),
       ],
@@ -1180,48 +1489,43 @@ class _CheckoutFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(24.rpx),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    return SizedBox(
+      height: 44.hpx,
+      child: FilledButton(
+        onPressed: disabled || loading ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
+          padding: EdgeInsets.symmetric(horizontal: 16.wpx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(7.rpx),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(10.rpx),
-        child: FilledButton(
-          onPressed: disabled || loading ? null : onPressed,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.white,
-            disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
-            padding: EdgeInsets.symmetric(vertical: 16.hpx),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18.rpx),
-            ),
-          ),
-          child: loading
-              ? SizedBox(
-                  width: 20.wpx,
-                  height: 20.wpx,
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2.3,
-                    color: AppColors.white,
-                  ),
-                )
-              : Text(
-                  'PLACE ORDER',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 17.spx,
-                  ),
-                ),
         ),
+        child: loading
+            ? SizedBox(
+                width: 18.wpx,
+                height: 18.wpx,
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppColors.white,
+                ),
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'PLACE ORDER',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14.spx,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 18.spx),
+                ],
+              ),
       ),
     );
   }
@@ -1235,21 +1539,21 @@ class _CircleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 38.wpx,
-      height: 38.wpx,
+      width: 30.wpx,
+      height: 30.wpx,
       decoration: const BoxDecoration(
         color: Color(0xFFEEF4FF),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: AppColors.primary, size: 19.spx),
+      child: Icon(icon, color: AppColors.primary, size: 15.spx),
     );
   }
 }
 
 final _softShadow = [
   BoxShadow(
-    color: AppColors.black.withValues(alpha: 0.05),
-    blurRadius: 10,
-    offset: const Offset(0, 4),
+    color: AppColors.black.withValues(alpha: 0.07),
+    blurRadius: 7,
+    offset: const Offset(0, 3),
   ),
 ];

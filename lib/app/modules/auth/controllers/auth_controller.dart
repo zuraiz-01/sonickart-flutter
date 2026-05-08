@@ -38,8 +38,12 @@ class AuthController extends GetxController {
   final pendingPhone = ''.obs;
   final phoneInput = ''.obs;
   final otpInput = ''.obs;
+  final otpSentAlertTick = 0.obs;
+  final otpSentAlertTitle = ''.obs;
+  final otpSentAlertMessage = ''.obs;
 
   Timer? _resendTimerTicker;
+  Timer? _otpRequestWatchdog;
   String? _verificationId;
   int? _resendToken;
   bool _loginInProgress = false;
@@ -122,6 +126,7 @@ class AuthController extends GetxController {
     _verificationId = null;
     _resendToken = null;
     _resendTimerTicker?.cancel();
+    _otpRequestWatchdog?.cancel();
   }
 
   Future<void> sendOtp() async {
@@ -134,7 +139,14 @@ class AuthController extends GetxController {
       return;
     }
 
-    if (!(loginFormKey.currentState?.validate() ?? false)) return;
+    if (!(loginFormKey.currentState?.validate() ?? false)) {
+      AppSnackBar.show(
+        'Invalid Number',
+        'Valid 10 digit mobile number enter karo.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
     if (isSendingOtp.value || isVerifyingOtp.value) return;
     if (!_ensureFirebaseReady()) return;
 
@@ -288,16 +300,19 @@ class AuthController extends GetxController {
       }
       pendingPhone.value = phone;
       isSendingOtp.value = true;
+      _startOtpRequestWatchdog();
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         await _firebaseAuth.setSettings(forceRecaptchaFlow: false);
       }
       await _startPhoneNumberVerification(
         phone: phone,
         forceResend: forceResend,
+        allowRecaptchaFallback: true,
       );
     } on FirebaseAuthException catch (error) {
       _logFirebaseAuthError('_requestFirebaseOtp', error);
       isSendingOtp.value = false;
+      _otpRequestWatchdog?.cancel();
       AppSnackBar.show(
         _firebaseErrorTitle(error),
         _firebaseErrorMessage(error),
@@ -305,6 +320,7 @@ class AuthController extends GetxController {
       );
     } catch (error) {
       isSendingOtp.value = false;
+      _otpRequestWatchdog?.cancel();
       AppSnackBar.show(
         'OTP Failed',
         'Firebase OTP start nahi ho saka. Dobara try karo.',
@@ -316,6 +332,7 @@ class AuthController extends GetxController {
   Future<void> _startPhoneNumberVerification({
     required String phone,
     required bool forceResend,
+    required bool allowRecaptchaFallback,
   }) {
     return _firebaseAuth.verifyPhoneNumber(
       phoneNumber: phone,
@@ -323,6 +340,7 @@ class AuthController extends GetxController {
       forceResendingToken: forceResend ? _resendToken : null,
       verificationCompleted: (credential) async {
         try {
+          _otpRequestWatchdog?.cancel();
           isSendingOtp.value = false;
           isVerifyingOtp.value = true;
           final result = await _firebaseAuth.signInWithCredential(credential);
@@ -351,19 +369,33 @@ class AuthController extends GetxController {
       },
       verificationFailed: (error) {
         _logFirebaseAuthError('verificationFailed', error);
+        if (_shouldRetryWithRecaptcha(error, allowRecaptchaFallback)) {
+          debugPrint(
+            'FirebaseAuth[verificationFailed]: retrying with reCAPTCHA fallback',
+          );
+          unawaited(
+            _retryPhoneNumberVerificationWithRecaptcha(
+              phone: phone,
+              forceResend: forceResend,
+            ),
+          );
+          return;
+        }
         unawaited(_handleVerificationFailure(error: error));
       },
       codeSent: (verificationId, forceResendingToken) {
         _verificationId = verificationId;
+        _otpRequestWatchdog?.cancel();
         _resendToken = forceResendingToken;
         pendingPhone.value = phone;
         isOtpSent.value = true;
-        if (!forceResend) {
-          agreementChecked.value = false;
-        }
         otpController.clear();
         isSendingOtp.value = false;
         _startResendTimer();
+        otpSentAlertTitle.value = forceResend ? 'OTP Resent' : 'OTP Sent';
+        otpSentAlertMessage.value =
+            'A verification code has been sent to $phone.';
+        otpSentAlertTick.value++;
         AppSnackBar.show(
           forceResend ? 'OTP Resent' : 'OTP Sent',
           'A verification code has been sent to $phone.',
@@ -372,6 +404,7 @@ class AuthController extends GetxController {
       },
       codeAutoRetrievalTimeout: (verificationId) {
         _verificationId = verificationId;
+        _otpRequestWatchdog?.cancel();
         isSendingOtp.value = false;
       },
     );
@@ -382,11 +415,51 @@ class AuthController extends GetxController {
   }) async {
     isSendingOtp.value = false;
     isVerifyingOtp.value = false;
+    _otpRequestWatchdog?.cancel();
     AppSnackBar.show(
       _firebaseErrorTitle(error),
       _firebaseErrorMessage(error),
       snackPosition: SnackPosition.BOTTOM,
     );
+  }
+
+  bool _shouldRetryWithRecaptcha(
+    FirebaseAuthException error,
+    bool allowRecaptchaFallback,
+  ) {
+    return allowRecaptchaFallback &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        error.code == 'missing-client-identifier';
+  }
+
+  Future<void> _retryPhoneNumberVerificationWithRecaptcha({
+    required String phone,
+    required bool forceResend,
+  }) async {
+    try {
+      await _firebaseAuth.setSettings(forceRecaptchaFlow: true);
+      debugPrint('FirebaseAuth[recaptchaFallback]: starting fallback flow');
+      await _startPhoneNumberVerification(
+        phone: phone,
+        forceResend: forceResend,
+        allowRecaptchaFallback: false,
+      );
+    } on FirebaseAuthException catch (error) {
+      _logFirebaseAuthError('recaptchaFallback', error);
+      _otpRequestWatchdog?.cancel();
+      await _handleVerificationFailure(error: error);
+    } catch (error) {
+      debugPrint('AuthController.recaptchaFallback failed: $error');
+      isSendingOtp.value = false;
+      isVerifyingOtp.value = false;
+      _otpRequestWatchdog?.cancel();
+      AppSnackBar.show(
+        'OTP Failed',
+        'Firebase OTP start nahi ho saka. Dobara try karo.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   Future<void> _completeBackendLogin(User user) async {
@@ -570,9 +643,25 @@ class AuthController extends GetxController {
     });
   }
 
+  void _startOtpRequestWatchdog() {
+    _otpRequestWatchdog?.cancel();
+    _otpRequestWatchdog = Timer(const Duration(seconds: 30), () {
+      if (!isSendingOtp.value || isOtpSent.value) return;
+
+      isSendingOtp.value = false;
+      AppSnackBar.show(
+        'OTP Not Sent',
+        'Firebase app verification complete nahi hui. SHA-1/SHA-256 Firebase Console me add karke fresh google-services.json lagao, phir app reinstall karo.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 8),
+      );
+    });
+  }
+
   @override
   void onClose() {
     _resendTimerTicker?.cancel();
+    _otpRequestWatchdog?.cancel();
     phoneController.dispose();
     otpController.dispose();
     super.onClose();

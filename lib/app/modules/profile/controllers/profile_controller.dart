@@ -302,27 +302,23 @@ class ProfileController extends GetxController {
       ),
       'rewards' => (
         'Rewards',
-        'You have ${rewardPoints.value} reward points. Points are updated after eligible delivered orders.',
+        'Earn points on every order. Feature coming soon!',
       ),
       'refunds' => (
         'Refunds',
-        refundCount.value == 0
-            ? 'No active refunds found for this account.'
-            : '${refundCount.value} refund request${refundCount.value == 1 ? '' : 's'} linked with your account.',
+        'View and manage your refund requests. Feature coming soon!',
       ),
       'giftcards' => (
         'Gift Cards',
-        giftCardCount.value == 0
-            ? 'No active gift cards found for this account.'
-            : '${giftCardCount.value} gift card${giftCardCount.value == 1 ? '' : 's'} available.',
+        'Purchase and send gift cards to your loved ones. Feature coming soon!',
       ),
       'notifications' => (
         'Notifications',
-        'Order and delivery notifications are enabled when your device permissions allow them.',
+        'Notification preferences will be available shortly.',
       ),
       'suggest' => (
         'Suggest Products',
-        'Send product requests to support@sonickartnow.com with product name and preferred brand.',
+        "Have a product suggestion? We'd love to hear from you! Feature coming soon!",
       ),
       'about' => (
         'About',
@@ -511,11 +507,7 @@ class ProfileController extends GetxController {
     final phone = addressPhoneController.text.trim();
     var addressLine = addressLineController.text.trim();
     if (fullName.isEmpty || phone.length < 10 || addressLine.isEmpty) {
-      AppSnackBar.show(
-        'Address Incomplete',
-        'Name, valid phone aur address zaroor enter karo.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value = 'Name, valid phone aur address zaroor enter karo.';
       return;
     }
 
@@ -576,7 +568,7 @@ class ProfileController extends GetxController {
           debugPrint('ProfileController.saveAddress: updated ${existing.id}');
           _notifyAction(
             'Address Updated',
-            'Delivery address was updated.',
+            'Delivery Address was updated.',
             category: 'address',
           );
         }
@@ -597,32 +589,18 @@ class ProfileController extends GetxController {
       if (error.statusCode == 401) {
         _markAddressSessionExpired();
       }
-      AppSnackBar.show(
-        'Address Save Failed',
-        error.message.isNotEmpty
-            ? error.message
-            : 'Address save nahi ho saka. Dobara try karo.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value = error.message.isNotEmpty
+          ? error.message
+          : 'Address save nahi ho saka. Dobara try karo.';
     } on http.ClientException {
-      AppSnackBar.show(
-        'Network Error',
-        'Internet issue ki wajah se address save nahi ho saka.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Internet issue ki wajah se address save nahi ho saka.';
     } on TimeoutException {
-      AppSnackBar.show(
-        'Timeout',
-        'Address save request timeout ho gayi. Dobara try karo.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Address save request timeout ho gayi. Dobara try karo.';
     } catch (error) {
       debugPrint('ProfileController.saveAddress failed: $error');
-      AppSnackBar.show(
-        'Address Save Failed',
-        'Address save nahi ho saka. Dobara try karo.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value = 'Address save nahi ho saka. Dobara try karo.';
     }
   }
 
@@ -631,29 +609,44 @@ class ProfileController extends GetxController {
     debugPrint('ProfileController.useAddress: selecting ${address.id}');
 
     if (!_hasValidCoordinates(address)) {
-      AppSnackBar.show(
-        'Invalid address location',
-        'Selected address does not have valid map coordinates. Please update this address and try again.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Selected address does not have valid map coordinates. Please update this address and try again.';
       return;
     }
 
-    final updated = addresses
-        .map((item) => item.copyWith(isSelected: item.id == address.id))
-        .toList();
+    final updated = addresses.map((item) {
+      if (item.id != address.id) {
+        return item.copyWith(isSelected: false);
+      }
+      return address.copyWith(
+        fullName: address.fullName.trim().isNotEmpty
+            ? address.fullName.trim()
+            : item.fullName,
+        contactNumber: address.contactNumber.trim().isNotEmpty
+            ? address.contactNumber.trim()
+            : item.contactNumber,
+        address: address.address.trim().isNotEmpty
+            ? address.address.trim()
+            : item.address,
+        latitude: address.latitude ?? item.latitude,
+        longitude: address.longitude ?? item.longitude,
+        placeId: address.placeId.trim().isNotEmpty
+            ? address.placeId
+            : item.placeId,
+        vendorId: address.vendorId.trim().isNotEmpty
+            ? address.vendorId
+            : item.vendorId,
+        isSelected: true,
+      );
+    }).toList();
     addresses.assignAll(updated);
     final selected = updated.firstWhereOrNull((item) => item.id == address.id);
     if (selected != null) {
-      final vendorId = await _applySelectedAddressContext(selected);
-      statusMessage.value = vendorId == null
-          ? 'No stores found near selected address.'
-          : vendorId.contains(',')
-          ? 'Found ${vendorId.split(',').length} stores near selected address.'
-          : 'Shopping from vendor $vendorId.';
+      await _applySelectedAddressContext(selected);
+      statusMessage.value = null;
       _notifyAction(
         'Address Selected',
-        'Delivery address changed to ${selected.address}.',
+        'Delivery Address changed to ${selected.address}.',
         category: 'address',
       );
     }
@@ -683,19 +676,12 @@ class ProfileController extends GetxController {
       if (error.statusCode == 401) {
         _markAddressSessionExpired();
       }
-      AppSnackBar.show(
-        'Delete Failed',
-        error.message.isNotEmpty
-            ? error.message
-            : 'Address delete nahi ho saka. Dobara try karo.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value = error.message.isNotEmpty
+          ? error.message
+          : 'Address delete nahi ho saka. Dobara try karo.';
     } on http.ClientException {
-      AppSnackBar.show(
-        'Network Error',
-        'Internet issue ki wajah se address delete nahi ho saka.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Internet issue ki wajah se address delete nahi ho saka.';
     }
   }
 
@@ -966,11 +952,6 @@ class ProfileController extends GetxController {
       return true;
     }
     _markAddressSessionExpired();
-    AppSnackBar.show(
-      'Login Required',
-      'Address sync ke liye dobara login karo.',
-      snackPosition: SnackPosition.BOTTOM,
-    );
     return false;
   }
 
@@ -984,11 +965,8 @@ class ProfileController extends GetxController {
   Future<bool> _ensureLocationPermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      AppSnackBar.show(
-        'Location Off',
-        'Please turn on device location to auto-fill your address.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Please turn on device location to auto-fill your address.';
       return false;
     }
 
@@ -999,11 +977,8 @@ class ProfileController extends GetxController {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      AppSnackBar.show(
-        'Permission Required',
-        'Location permission is needed to detect your current address.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      statusMessage.value =
+          'Location permission is needed to detect your current address.';
       return false;
     }
 
@@ -1014,7 +989,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API service available nahi hai.',
+        message: 'API Service Available Nahi Hai.',
         response: const {},
       );
     }
@@ -1040,7 +1015,7 @@ class ProfileController extends GetxController {
     if (parsed.id.isEmpty) {
       throw ApiException(
         statusCode: 500,
-        message: 'Saved address response invalid tha.',
+        message: 'Saved Address Response Invalid Tha.',
         response: response,
       );
     }
@@ -1051,7 +1026,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API service available nahi hai.',
+        message: 'API Service Available Nahi Hai.',
         response: const {},
       );
     }
@@ -1189,7 +1164,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API service available nahi hai.',
+        message: 'API Service Available Nahi Hai.',
         response: const {},
       );
     }
@@ -1260,7 +1235,9 @@ class ProfileController extends GetxController {
   }
 
   void _notifyAction(String title, String message, {required String category}) {
-    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+    if (category != 'address') {
+      AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
+    }
     if (!Get.isRegistered<NotificationService>()) return;
     unawaited(
       Get.find<NotificationService>().record(

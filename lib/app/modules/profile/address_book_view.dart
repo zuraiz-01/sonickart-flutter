@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -14,15 +14,21 @@ class AddressBookView extends GetView<ProfileController> {
       () => Scaffold(
         backgroundColor: AppColors.white,
         appBar: AppBar(
+          backgroundColor: AppColors.white,
+          surfaceTintColor: AppColors.white,
+          elevation: 0,
           title: Text(
             'Address Book',
-            style: TextStyle(fontSize: 18.spx, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 15.spx,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          centerTitle: false,
-          titleSpacing: 18.wpx,
+          centerTitle: true,
           actions: [
             Padding(
-              padding: EdgeInsets.only(left: 18.wpx, right: 20.wpx),
+              padding: EdgeInsets.only(right: 12.wpx),
               child: FilledButton.icon(
                 onPressed: controller.requiresAddressRelogin.value
                     ? controller.logout
@@ -38,7 +44,7 @@ class AddressBookView extends GetView<ProfileController> {
                   controller.requiresAddressRelogin.value
                       ? Icons.login_rounded
                       : Icons.add_circle_outline_rounded,
-                  size: 16,
+                  size: 13.spx,
                 ),
                 label: Text(
                   controller.requiresAddressRelogin.value
@@ -46,9 +52,19 @@ class AddressBookView extends GetView<ProfileController> {
                       : 'Add Address',
                 ),
                 style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.white,
+                  minimumSize: Size(0, 32.hpx),
                   padding: EdgeInsets.symmetric(
-                    horizontal: 14.wpx,
-                    vertical: 10.hpx,
+                    horizontal: 11.wpx,
+                    vertical: 7.hpx,
+                  ),
+                  textStyle: TextStyle(
+                    fontSize: 14.spx,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999.rpx),
                   ),
                 ),
               ),
@@ -56,7 +72,7 @@ class AddressBookView extends GetView<ProfileController> {
           ],
         ),
         body: ListView(
-          padding: EdgeInsets.fromLTRB(16.wpx, 22.hpx, 16.wpx, 28.hpx),
+          padding: EdgeInsets.fromLTRB(12.wpx, 18.hpx, 12.wpx, 24.hpx),
           children: [
             if (controller.isLoadingAddresses.value)
               _AddressStateCard(
@@ -216,20 +232,20 @@ class AddressBookView extends GetView<ProfileController> {
             ...controller.addresses.map((address) {
               final active = address.isSelected;
               return Padding(
-                padding: EdgeInsets.only(bottom: 18.hpx),
+                padding: EdgeInsets.only(bottom: 12.hpx),
                 child: Container(
-                  padding: EdgeInsets.all(16.rpx),
+                  padding: EdgeInsets.fromLTRB(13.wpx, 13.hpx, 13.wpx, 12.hpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(16.rpx),
+                    borderRadius: BorderRadius.circular(12.rpx),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.1),
+                      color: AppColors.primary.withValues(alpha: 0.18),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
+                        color: Color(0x0F092774),
+                        blurRadius: 5,
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
@@ -241,8 +257,9 @@ class AddressBookView extends GetView<ProfileController> {
                           Icon(
                             Icons.location_on_outlined,
                             color: AppColors.primary,
+                            size: 18.spx,
                           ),
-                          SizedBox(width: 10.wpx),
+                          SizedBox(width: 8.wpx),
                           Expanded(
                             child: Text(
                               address.fullName,
@@ -250,6 +267,7 @@ class AddressBookView extends GetView<ProfileController> {
                                   ?.copyWith(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.w800,
+                                    fontSize: 15.spx,
                                   ),
                             ),
                           ),
@@ -257,7 +275,7 @@ class AddressBookView extends GetView<ProfileController> {
                             Container(
                               padding: EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 4,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: Color(0xFFEAF1FF),
@@ -268,111 +286,83 @@ class AddressBookView extends GetView<ProfileController> {
                                 style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 11.spx,
+                                  fontSize: 15.spx,
                                 ),
                               ),
                             ),
                         ],
                       ),
-                      SizedBox(height: 8.hpx),
+                      SizedBox(height: 7.hpx),
                       Text(
                         address.address,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.primary,
-                          height: 1.45,
+                          fontSize: 15.spx,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
                         ),
                       ),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 7.hpx),
                       Text(
                         address.contactNumber,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
+                          fontSize: 15.spx,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      SizedBox(height: 24.hpx),
+                      SizedBox(height: 3.hpx),
+                      Text(
+                        'Lat: ${address.latitude?.toStringAsFixed(6) ?? '-'}, Lng: ${address.longitude?.toStringAsFixed(6) ?? '-'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary.withValues(
+                            alpha: 0.75,
+                          ),
+                          fontSize: 14.spx,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 12.hpx),
                       Row(
                         children: [
                           Expanded(
-                            child: FilledButton.icon(
+                            flex: 5,
+                            child: _AddressActionButton(
                               onPressed: () => controller.useAddress(address),
-                              icon: Icon(
-                                active
-                                    ? Icons.check_circle_rounded
-                                    : Icons.check_circle_outline_rounded,
-                                size: 18,
-                              ),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: active
-                                    ? AppColors.primaryDark
-                                    : AppColors.primary,
-                                foregroundColor: AppColors.white,
-                                minimumSize: Size(0, 44.hpx),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 12.wpx,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12.rpx),
-                                ),
-                              ),
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  active ? 'Selected' : 'Use this address',
-                                  maxLines: 1,
-                                  style: TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
+                              icon: active
+                                  ? Icons.check_circle_rounded
+                                  : Icons.check_circle_outline_rounded,
+                              label: active ? 'Selected' : 'Use this address',
+                              filled: true,
                             ),
                           ),
-                          SizedBox(width: 10.wpx),
-                          Tooltip(
-                            message: 'Edit address',
-                            child: SizedBox(
-                              width: 44.wpx,
-                              height: 44.hpx,
-                              child: FilledButton(
+                          SizedBox(width: 8.wpx),
+                          Expanded(
+                            flex: 3,
+                            child: Tooltip(
+                              message: 'Edit Address',
+                              child: _AddressActionButton(
                                 onPressed: () {
                                   controller.startEditAddress(address);
                                   _showAddressSheet(context);
                                 },
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: AppColors.white,
-                                  padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(22.rpx),
-                                  ),
-                                ),
-                                child: Icon(Icons.edit_outlined, size: 18),
+                                icon: Icons.edit_outlined,
+                                label: 'Edit',
+                                filled: true,
                               ),
                             ),
                           ),
                           SizedBox(width: 8.wpx),
-                          Tooltip(
-                            message: 'Delete address',
-                            child: SizedBox(
-                              width: 44.wpx,
-                              height: 44.hpx,
-                              child: OutlinedButton(
+                          Expanded(
+                            flex: 3,
+                            child: Tooltip(
+                              message: 'Delete Address',
+                              child: _AddressActionButton(
                                 onPressed: () {
                                   controller.deleteAddress(address);
                                 },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.primary,
-                                  side: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.55,
-                                    ),
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(22.rpx),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.delete_outline_rounded,
-                                  size: 18,
-                                ),
+                                icon: Icons.delete_outline_rounded,
+                                label: 'Delete',
                               ),
                             ),
                           ),
@@ -551,7 +541,7 @@ class AddressBookView extends GetView<ProfileController> {
                         controller: controller.addressNameController,
                         textCapitalization: TextCapitalization.words,
                         decoration: InputDecoration(
-                          hintText: 'Enter customer name',
+                          hintText: 'Enter Customer Name',
                         ),
                       ),
                       SizedBox(height: 20.hpx),
@@ -561,7 +551,7 @@ class AddressBookView extends GetView<ProfileController> {
                         controller: controller.addressPhoneController,
                         keyboardType: TextInputType.phone,
                         decoration: InputDecoration(
-                          hintText: 'Enter mobile number',
+                          hintText: 'Enter Mobile Number',
                         ),
                       ),
                       SizedBox(height: 20.hpx),
@@ -574,7 +564,7 @@ class AddressBookView extends GetView<ProfileController> {
                         textCapitalization: TextCapitalization.sentences,
                         onChanged: controller.onAddressInputChanged,
                         decoration: InputDecoration(
-                          hintText: 'House / flat / area / landmark',
+                          hintText: 'House / Flat / Area / Landmark',
                           alignLabelWithHint: true,
                         ),
                       ),
@@ -724,6 +714,52 @@ class _AddressStateCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16.rpx),
       ),
       child: child,
+    );
+  }
+}
+
+class _AddressActionButton extends StatelessWidget {
+  const _AddressActionButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+    this.filled = false,
+  });
+
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = filled ? AppColors.primary : AppColors.white;
+    final foreground = filled ? AppColors.white : AppColors.primary;
+
+    return SizedBox(
+      height: 34.hpx,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 13.spx),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(fontSize: 14.spx, fontWeight: FontWeight.w800),
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          side: BorderSide(color: AppColors.primary, width: 1),
+          padding: EdgeInsets.symmetric(horizontal: 8.wpx),
+          iconColor: foreground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(7.rpx),
+          ),
+        ),
+      ),
     );
   }
 }

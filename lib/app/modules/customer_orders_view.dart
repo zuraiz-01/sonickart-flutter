@@ -331,7 +331,7 @@ class _OrderStatusMeta {
         status == 'arriving' ||
         status == 'out_for_delivery') {
       return _OrderStatusMeta(
-        label: 'On the way',
+        label: 'On The Way',
         icon: Icons.delivery_dining_rounded,
         backgroundColor: const Color(0xFFEAF1FF),
         color: AppColors.primary,

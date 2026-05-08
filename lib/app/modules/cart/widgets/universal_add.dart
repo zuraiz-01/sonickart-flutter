@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -54,7 +54,7 @@ class UniversalAdd extends StatelessWidget {
                       'ADD',
                       style: TextStyle(
                         color: AppColors.primary,
-                        fontSize: 12.spx,
+                        fontSize: 14.spx,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -86,7 +86,7 @@ class UniversalAdd extends StatelessWidget {
                               maxLines: 1,
                               style: TextStyle(
                                 color: AppColors.white,
-                                fontSize: 13.spx,
+                                fontSize: 15.spx,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -110,81 +110,128 @@ class UniversalAdd extends StatelessWidget {
     BuildContext context,
     CartController cart,
   ) async {
+    final productName = product.name.trim().isEmpty
+        ? 'this item'
+        : product.name.trim().toUpperCase();
     await Get.bottomSheet<void>(
       SafeArea(
-        child: Container(
-          padding: EdgeInsets.fromLTRB(20.wpx, 18.hpx, 20.wpx, 20.hpx),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22.rpx)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Choose An Option',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                ),
+        minimum: EdgeInsets.fromLTRB(22.wpx, 0, 22.wpx, 50.hpx),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(maxWidth: 430.wpx),
+            padding: EdgeInsets.fromLTRB(20.wpx, 24.hpx, 20.wpx, 20.hpx),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(13.rpx),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.75),
+                width: 1.3,
               ),
-              SizedBox(height: 8.hpx),
-              Text(
-                'How would you like to proceed with ${product.name.trim().isEmpty ? 'this item' : product.name.trim()}?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.20),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
                 ),
-              ),
-              SizedBox(height: 18.hpx),
-              FilledButton(
-                onPressed: () async {
-                  Get.back<void>();
-                  await cart.addItem(product);
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.rpx),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Choose An Option',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16.spx,
+                    letterSpacing: 0,
                   ),
                 ),
-                child: Text(
-                  'Add to Cart',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-              SizedBox(height: 10.hpx),
-              OutlinedButton(
-                onPressed: () async {
-                  Get.back<void>();
-                  await cart.addItem(product);
-                  Get.toNamed(AppRoutes.checkout);
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: BorderSide(color: AppColors.primary),
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.rpx),
+                SizedBox(height: 8.hpx),
+                Text(
+                  'How would you like to proceed with\n$productName ?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15.spx,
+                    height: 1.25,
                   ),
                 ),
-                child: Text(
-                  'Buy Now',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                SizedBox(height: 22.hpx),
+                FilledButton(
+                  onPressed: () async {
+                    Get.back<void>();
+                    await cart.addItem(product);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.white,
+                    minimumSize: Size(double.infinity, 52.hpx),
+                    padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9.rpx),
+                    ),
+                  ),
+                  child: Text(
+                    'Add to cart',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.spx,
+                    ),
+                  ),
                 ),
-              ),
-              TextButton(onPressed: Get.back, child: Text('Cancel')),
-            ],
+                SizedBox(height: 12.hpx),
+                OutlinedButton(
+                  onPressed: () async {
+                    Get.back<void>();
+                    await cart.addItem(product);
+                    Get.toNamed(AppRoutes.checkout);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary, width: 1.3),
+                    minimumSize: Size(double.infinity, 50.hpx),
+                    padding: EdgeInsets.symmetric(vertical: 13.hpx),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9.rpx),
+                    ),
+                  ),
+                  child: Text(
+                    'Buy now',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.spx,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12.hpx),
+                TextButton(
+                  onPressed: Get.back,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    minimumSize: Size(double.infinity, 42.hpx),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15.spx,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      barrierColor: AppColors.primary.withValues(alpha: 0.35),
     );
   }
 }

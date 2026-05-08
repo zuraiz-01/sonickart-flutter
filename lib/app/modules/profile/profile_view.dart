@@ -3,6 +3,7 @@ import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
 import '../../theme/app_colors.dart';
+import '../dashboard/controllers/dashboard_controller.dart' as dashboard;
 import 'controllers/profile_controller.dart';
 
 class ProfileView extends GetView<ProfileController> {
@@ -15,24 +16,57 @@ class ProfileView extends GetView<ProfileController> {
       return Stack(
         children: [
           Container(
-            color: Color(0xFFF5F8FF),
+            color: Color(0xFFF6F8FC),
             child: ListView(
-              padding: EdgeInsets.fromLTRB(16.wpx, 14.hpx, 16.wpx, 24.hpx),
+              padding: EdgeInsets.fromLTRB(12.wpx, 12.hpx, 12.wpx, 18.hpx),
               children: [
-                SizedBox(height: 20.hpx),
+                SizedBox(
+                  height: 28.hpx,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => _handleBack(context),
+                        icon: Icon(
+                          Icons.chevron_left_rounded,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
+                        constraints: BoxConstraints.tightFor(
+                          width: 28.wpx,
+                          height: 28.hpx,
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      Expanded(
+                        child: Text(
+                          'Profile',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14.spx,
+                              ),
+                        ),
+                      ),
+                      SizedBox(width: 28.wpx),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 8.hpx),
                 Container(
-                  padding: EdgeInsets.fromLTRB(18.wpx, 16.hpx, 18.wpx, 18.hpx),
+                  padding: EdgeInsets.fromLTRB(14.wpx, 12.hpx, 14.wpx, 14.hpx),
                   decoration: BoxDecoration(
                     color: AppColors.white,
-                    borderRadius: BorderRadius.circular(22.rpx),
+                    borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.06),
+                      color: AppColors.primary.withValues(alpha: 0.14),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 14,
-                        offset: Offset(0, 6),
+                        color: Color(0x12092774),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
                       ),
                     ],
                   ),
@@ -42,98 +76,114 @@ class ProfileView extends GetView<ProfileController> {
                         children: [
                           Container(
                             padding: EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
+                              horizontal: 8.wpx,
+                              vertical: 4.hpx,
                             ),
                             decoration: BoxDecoration(
-                              color: Color(0xFFEAF1FF),
+                              color: Color(0xFFF3F6FF),
                               borderRadius: BorderRadius.circular(999.rpx),
                             ),
                             child: Text(
                               'MY PROFILE',
                               style: TextStyle(
                                 color: AppColors.primary,
-                                fontSize: 10.spx,
+                                fontSize: 14.spx,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
+                                letterSpacing: 0,
                               ),
                             ),
                           ),
                           Spacer(),
                           OutlinedButton.icon(
                             onPressed: controller.openEditProfile,
-                            icon: Icon(Icons.edit_outlined, size: 16),
+                            icon: Icon(Icons.edit_outlined, size: 11),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.primary,
-                              backgroundColor: Color(0xFFF7F9FF),
+                              backgroundColor: AppColors.white,
                               side: BorderSide(
-                                color: AppColors.primary.withValues(alpha: 0.1),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.18,
+                                ),
+                              ),
+                              minimumSize: Size(0, 28.hpx),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 10.wpx,
+                                vertical: 0,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999.rpx),
+                                borderRadius: BorderRadius.circular(4.rpx),
                               ),
                             ),
                             label: Text(
                               'Edit',
-                              style: TextStyle(fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15.spx,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 12.hpx),
+                      SizedBox(height: 10.hpx),
                       Container(
-                        width: 100.wpx,
-                        height: 100.hpx,
+                        width: 82.wpx,
+                        height: 82.hpx,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(50.rpx),
+                          borderRadius: BorderRadius.circular(41.rpx),
                         ),
                         child: Text(
                           controller.initials,
-                          style: Theme.of(context).textTheme.headlineMedium
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w800,
                               ),
                         ),
                       ),
-                      SizedBox(height: 14.hpx),
+                      SizedBox(height: 12.hpx),
                       Text(
                         'Your Account',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
+                          letterSpacing: 0,
+                          fontSize: 15.spx,
                         ),
                       ),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 4.hpx),
                       Text(
                         user?.name ?? user?.phone ?? 'Guest User',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15.spx,
+                        ),
                       ),
-                      SizedBox(height: 6.hpx),
+                      SizedBox(height: 4.hpx),
                       Text(
                         user?.phone ?? '',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.spx,
+                            ),
                       ),
                       if ((user?.email ?? '').isNotEmpty) ...[
                         SizedBox(height: 4.hpx),
                         Text(
                           user!.email,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 15.spx,
+                              ),
                         ),
                       ],
-                      SizedBox(height: 18.hpx),
+                      SizedBox(height: 14.hpx),
                       Row(
                         children: [
                           Expanded(
@@ -156,19 +206,20 @@ class ProfileView extends GetView<ProfileController> {
                     ],
                   ),
                 ),
+                SizedBox(height: 10.hpx),
                 Container(
-                  padding: EdgeInsets.all(20.rpx),
+                  padding: EdgeInsets.all(12.rpx),
                   decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(18.rpx),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(8.rpx),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.08),
+                      color: AppColors.primaryDark.withValues(alpha: 0.12),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 14,
-                        offset: Offset(0, 6),
+                        color: Color(0x1F092774),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
                     ],
                   ),
@@ -177,37 +228,45 @@ class ProfileView extends GetView<ProfileController> {
                       Row(
                         children: [
                           Container(
-                            width: 44.wpx,
-                            height: 44.hpx,
+                            width: 32.wpx,
+                            height: 32.hpx,
                             decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(12.rpx),
+                              color: AppColors.primaryDark,
+                              borderRadius: BorderRadius.circular(5.rpx),
+                              border: Border.all(
+                                color: AppColors.accent.withValues(alpha: 0.55),
+                              ),
                             ),
                             child: Icon(
                               Icons.account_balance_wallet_outlined,
                               color: AppColors.accent,
+                              size: 18,
                             ),
                           ),
-                          SizedBox(width: 12.wpx),
+                          SizedBox(width: 9.wpx),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'SonicKart Wallet & Gift Card',
-                                  style: Theme.of(context).textTheme.titleMedium
+                                  style: Theme.of(context).textTheme.labelLarge
                                       ?.copyWith(
-                                        color: AppColors.primary,
+                                        color: AppColors.white,
                                         fontWeight: FontWeight.w800,
+                                        fontSize: 15.spx,
                                       ),
                                 ),
-                                SizedBox(height: 4.hpx),
+                                SizedBox(height: 3.hpx),
                                 Text(
                                   'Manage payments and offers at one place',
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.white.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14.spx,
                                       ),
                                 ),
                               ],
@@ -215,7 +274,7 @@ class ProfileView extends GetView<ProfileController> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 16.hpx),
+                      SizedBox(height: 12.hpx),
                       Row(
                         children: [
                           Expanded(
@@ -224,20 +283,24 @@ class ProfileView extends GetView<ProfileController> {
                               children: [
                                 Text(
                                   'Available Balance',
-                                  style: Theme.of(context).textTheme.bodySmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: AppColors.white.withValues(
+                                          alpha: 0.78,
+                                        ),
                                         fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.5,
+                                        letterSpacing: 0,
+                                        fontSize: 15.spx,
                                       ),
                                 ),
-                                SizedBox(height: 4.hpx),
+                                SizedBox(height: 3.hpx),
                                 Text(
                                   '₹${controller.walletBalance.value.toStringAsFixed(0)}',
-                                  style: Theme.of(context).textTheme.titleMedium
+                                  style: Theme.of(context).textTheme.labelLarge
                                       ?.copyWith(
-                                        color: AppColors.primary,
+                                        color: AppColors.accent,
                                         fontWeight: FontWeight.w800,
+                                        fontSize: 14.spx,
                                       ),
                                 ),
                               ],
@@ -246,22 +309,22 @@ class ProfileView extends GetView<ProfileController> {
                           FilledButton(
                             onPressed: () => controller.openInfoModal('wallet'),
                             style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: AppColors.white,
+                              backgroundColor: AppColors.white,
+                              foregroundColor: AppColors.primary,
                               padding: EdgeInsets.symmetric(
-                                horizontal: 24.wpx,
-                                vertical: 12.hpx,
+                                horizontal: 14.wpx,
+                                vertical: 8.hpx,
                               ),
-                              minimumSize: Size(0, 44.hpx),
+                              minimumSize: Size(0, 30.hpx),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.rpx),
+                                borderRadius: BorderRadius.circular(4.rpx),
                               ),
                             ),
                             child: Text(
                               'Add Balance',
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12.spx,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15.spx,
                               ),
                             ),
                           ),
@@ -270,26 +333,26 @@ class ProfileView extends GetView<ProfileController> {
                     ],
                   ),
                 ),
-                SizedBox(height: 20.hpx),
+                SizedBox(height: 10.hpx),
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(18.rpx),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.06),
+                      color: AppColors.black.withValues(alpha: 0.05),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x14000000),
+                        color: AppColors.black.withValues(alpha: 0.06),
                         blurRadius: 12,
-                        offset: Offset(0, 5),
+                        offset: Offset(0, 6),
                       ),
                     ],
                   ),
                   child: Column(
                     children: [
                       _MenuAction(
-                        icon: Icons.currency_exchange_outlined,
+                        icon: Icons.keyboard_return_rounded,
                         label: 'Refunds',
                         onTap: () => controller.handleMenuAction('refunds'),
                       ),
@@ -314,12 +377,6 @@ class ProfileView extends GetView<ProfileController> {
                         onTap: () => controller.handleMenuAction('suggest'),
                       ),
                       _MenuAction(
-                        icon: Icons.notifications_none_rounded,
-                        label: 'Notifications',
-                        onTap: () =>
-                            controller.handleMenuAction('notifications'),
-                      ),
-                      _MenuAction(
                         icon: Icons.info_outline_rounded,
                         label: 'About',
                         onTap: () => controller.handleMenuAction('about'),
@@ -328,7 +385,7 @@ class ProfileView extends GetView<ProfileController> {
                     ],
                   ),
                 ),
-                SizedBox(height: 20.hpx),
+                SizedBox(height: 14.hpx),
                 OutlinedButton.icon(
                   onPressed: controller.logout,
                   icon: Icon(Icons.logout_rounded, color: AppColors.accent),
@@ -338,12 +395,15 @@ class ProfileView extends GetView<ProfileController> {
                     side: BorderSide(color: AppColors.primary),
                     padding: EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.rpx),
+                      borderRadius: BorderRadius.circular(6.rpx),
                     ),
                   ),
                   label: Text(
                     'Logout',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15.spx,
+                    ),
                   ),
                 ),
                 if ((controller.statusMessage.value ?? '').isNotEmpty) ...[
@@ -372,6 +432,15 @@ class ProfileView extends GetView<ProfileController> {
       );
     });
   }
+
+  void _handleBack(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Get.back<void>();
+      return;
+    }
+
+    dashboard.openDashboardTab(0);
+  }
 }
 
 class _QuickActionCard extends StatelessWidget {
@@ -389,23 +458,24 @@ class _QuickActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16.rpx),
+      borderRadius: BorderRadius.circular(6.rpx),
       child: Container(
-        padding: EdgeInsets.symmetric(vertical: 16.hpx, horizontal: 10.wpx),
+        padding: EdgeInsets.symmetric(vertical: 12.hpx, horizontal: 8.wpx),
         decoration: BoxDecoration(
-          color: Color(0xFFF3F7FF),
-          borderRadius: BorderRadius.circular(16.rpx),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+          color: Color(0xFFF7F9FF),
+          borderRadius: BorderRadius.circular(6.rpx),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.accent, size: 22),
-            SizedBox(height: 8.hpx),
+            Icon(icon, color: AppColors.accent, size: 17),
+            SizedBox(height: 6.hpx),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w800,
+                fontSize: 14.spx,
               ),
             ),
           ],
@@ -438,20 +508,23 @@ class _MenuAction extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 15.wpx, vertical: 15.hpx),
             child: Row(
               children: [
-                Icon(icon, color: AppColors.accent, size: 20),
+                Icon(icon, color: AppColors.accent, size: 20.rpx),
                 SizedBox(width: 15.wpx),
                 Expanded(
                   child: Text(
                     label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.spx,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
                   color: AppColors.textSecondary,
+                  size: 20.rpx,
                 ),
               ],
             ),
@@ -460,8 +533,8 @@ class _MenuAction extends StatelessWidget {
         if (showDivider)
           Container(
             height: 1,
-            margin: EdgeInsets.only(left: 15),
-            color: AppColors.primary.withValues(alpha: 0.06),
+            margin: EdgeInsets.only(left: 15.wpx),
+            color: AppColors.black.withValues(alpha: 0.05),
           ),
       ],
     );
@@ -560,6 +633,21 @@ class _InfoDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 80.rpx,
+              height: 80.rpx,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                _modalIcon(key),
+                color: AppColors.accent,
+                size: 48.rpx,
+              ),
+            ),
+            SizedBox(height: 20.hpx),
             Text(
               content.$1,
               textAlign: TextAlign.center,
@@ -590,6 +678,18 @@ class _InfoDialog extends StatelessWidget {
         ),
       );
     });
+  }
+
+  IconData _modalIcon(String key) {
+    return switch (key) {
+      'refunds' => Icons.keyboard_return_rounded,
+      'giftcards' => Icons.card_giftcard_outlined,
+      'rewards' => Icons.star_outline_rounded,
+      'suggest' => Icons.lightbulb_outline_rounded,
+      'notifications' => Icons.notifications_outlined,
+      'wallet' => Icons.account_balance_wallet_outlined,
+      _ => Icons.info_outline_rounded,
+    };
   }
 }
 

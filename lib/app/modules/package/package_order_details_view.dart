@@ -61,7 +61,7 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         title: const Text('Package Order'),
         centerTitle: true,
@@ -110,47 +110,10 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
                     _PackageLiveMapCard(order: order),
                     SizedBox(height: 16.hpx),
                     _PackageBillCard(order: order),
-                    if (!_isTerminal(order.status)) ...[
-                      SizedBox(height: 16.hpx),
-                      FilledButton.icon(
-                        onPressed: () => _confirmCancel(order),
-                        icon: const Icon(Icons.cancel_outlined),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
-                          foregroundColor: AppColors.primary,
-                          padding: EdgeInsets.symmetric(vertical: 14.hpx),
-                        ),
-                        label: const Text(
-                          'Cancel Package',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               );
       }),
-    );
-  }
-
-  void _confirmCancel(PackageOrderModel order) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Cancel package?'),
-        content: const Text(
-          'Are you sure you want to cancel this package order?',
-        ),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('No')),
-          FilledButton(
-            onPressed: () {
-              Get.back();
-              controller.cancelPackageOrder(order);
-            },
-            child: const Text('Yes, Cancel'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -163,6 +126,8 @@ class _PackageSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = _normalizedStatus(order.status);
+    final createdAt = order.createdAt.toLocal().toString().substring(0, 16);
+
     return _CardShell(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,7 +139,7 @@ class _PackageSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Packing your package order',
+                      _displayStatusHeading(status),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w800,
@@ -190,23 +155,35 @@ class _PackageSummaryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 12.wpx,
-                  vertical: 8.hpx,
-                ),
-                decoration: BoxDecoration(
-                  color: _statusColor(status),
-                  borderRadius: BorderRadius.circular(999.rpx),
-                ),
-                child: Text(
-                  status.replaceAll('_', ' '),
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+              // Container(
+              //   padding: EdgeInsets.symmetric(
+              //     horizontal: 10.wpx,
+              //     vertical: 6.hpx,
+              //   ),
+              //   decoration: BoxDecoration(
+              //     color: _statusColor(status),
+              //     borderRadius: BorderRadius.circular(999.rpx),
+              //   ),
+              //   child: Row(
+              //     mainAxisSize: MainAxisSize.min,
+              //     children: [
+              //       Icon(
+              //         Icons.schedule_rounded,
+              //         size: 14.rpx,
+              //         color: AppColors.white,
+              //       ),
+              //       SizedBox(width: 6.wpx),
+              //       Text(
+              //         status.replaceAll('_', ' '),
+              //         style: TextStyle(
+              //           color: AppColors.white,
+              //           fontWeight: FontWeight.w800,
+              //           fontSize: 12.spx,
+              //         ),
+              //       ),
+              //     ],
+              //   ),
+              // ),
             ],
           ),
           SizedBox(height: 16.hpx),
@@ -218,16 +195,11 @@ class _PackageSummaryCard extends StatelessWidget {
                     ? 'Package'
                     : order.packageType,
               ),
-              SizedBox(width: 10.wpx),
-              _MetaChip(
-                icon: Icons.swap_horiz_rounded,
-                label: order.packageOrderType == 'receive'
-                    ? 'Receive Package'
-                    : 'Send Package',
-              ),
+              SizedBox(width: 12.wpx),
+              _MetaChip(icon: Icons.calendar_month_outlined, label: createdAt),
             ],
           ),
-          SizedBox(height: 16.hpx),
+          SizedBox(height: 14.hpx),
           _LocationRow(
             icon: Icons.location_on_rounded,
             color: AppColors.success,
@@ -236,15 +208,88 @@ class _PackageSummaryCard extends StatelessWidget {
           ),
           SizedBox(height: 12.hpx),
           _LocationRow(
-            icon: Icons.flag_rounded,
+            icon: Icons.location_on_outlined,
             color: AppColors.error,
             label: 'Drop',
             value: order.dropAddress.isNotEmpty ? order.dropAddress : 'N/A',
           ),
-          SizedBox(height: 12.hpx),
-          _DetailRow(
-            label: 'Booked At',
-            value: order.createdAt.toLocal().toString().substring(0, 16),
+          SizedBox(height: 14.hpx),
+          Row(
+            children: [
+              if (order.distanceKm > 0) ...[
+                Expanded(
+                  child: _QuickStatTile(
+                    label: 'Distance',
+                    value: '${order.distanceKm.toStringAsFixed(1)} km',
+                  ),
+                ),
+                SizedBox(width: 12.wpx),
+              ],
+              Expanded(
+                child: _QuickStatTile(
+                  label: 'Delivery Charge',
+                  value: '₹${order.deliveryCharge.toStringAsFixed(2)}',
+                ),
+              ),
+              SizedBox(width: 12.wpx),
+              Expanded(
+                child: _QuickStatTile(
+                  label: 'Total',
+                  value: '₹${order.totalPrice.toStringAsFixed(2)}',
+                  strong: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickStatTile extends StatelessWidget {
+  const _QuickStatTile({
+    required this.label,
+    required this.value,
+    this.strong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(10.rpx),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF4FF),
+        borderRadius: BorderRadius.circular(10.rpx),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11.spx,
+            ),
+          ),
+          SizedBox(height: 4.hpx),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: strong ? AppColors.primary : AppColors.textPrimary,
+              fontWeight: strong ? FontWeight.w900 : FontWeight.w800,
+              fontSize: 13.spx,
+            ),
           ),
         ],
       ),
@@ -306,7 +351,7 @@ class _PackagePartnerCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      _hasPickedUp(status) ? 'Package picked up' : 'On the way',
+                      _hasPickedUp(status) ? 'Package Picked Up' : 'On The Way',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -650,37 +695,6 @@ class _LocationRow extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: 4.hpx),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _InfoLine extends StatelessWidget {
   const _InfoLine({
     required this.icon,
@@ -923,7 +937,7 @@ class _PackageTrackingMapData {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueAzure,
           ),
-          infoWindow: const InfoWindow(title: 'Delivery partner'),
+          infoWindow: const InfoWindow(title: 'Delivery Partner'),
         ),
     };
   }
@@ -1064,40 +1078,26 @@ bool _hasPickedUp(String status) {
   }.contains(status);
 }
 
-bool _isTerminal(String status) {
-  final normalized = _normalizedStatus(status);
-  return normalized == 'delivered' ||
-      normalized == 'completed' ||
-      normalized == 'cancelled';
-}
-
-Color _statusColor(String status) {
-  switch (status) {
-    case 'pending':
-      return AppColors.accent;
-    case 'assigned':
-    case 'confirmed':
-    case 'accepted':
-      return AppColors.secondaryBlue;
-    case 'picked':
-    case 'picked_up':
-    case 'out_for_delivery':
-    case 'delivered':
-      return AppColors.success;
-    case 'cancelled':
-      return AppColors.error;
-    default:
-      return AppColors.textSecondary;
-  }
-}
-
 String _trackingLabel(String status) {
-  if (_hasPickedUp(status)) return 'Delivery partner is heading to drop';
+  if (_hasPickedUp(status)) return 'Delivery Partner Is Heading To Drop';
   if (const {'assigned', 'confirmed', 'accepted'}.contains(status)) {
-    return 'Delivery partner is heading to pickup';
+    return 'Delivery Partner Is Heading To Pickup';
   }
-  if (status == 'delivered') return 'Package delivered';
-  return 'Waiting for delivery partner';
+  if (status == 'delivered') return 'Package Delivered';
+  return 'Waiting For Delivery Partner';
+}
+
+String _displayStatusHeading(String status) {
+  if (status == 'pending') return 'Packing Your Package Order';
+  final text = status.replaceAll(RegExp(r'[-_]+'), ' ').trim();
+  if (text.isEmpty) return 'Package Order';
+  return text
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(
+        (word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+      )
+      .join(' ');
 }
 
 Map<String, dynamic> _mapFrom(Object? value) {

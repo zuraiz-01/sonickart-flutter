@@ -43,23 +43,26 @@ class DashboardView extends GetView<DashboardController> {
 
     return Obx(
       () => Scaffold(
-        backgroundColor: Color(0xFFF3F7FF),
+        backgroundColor: controller.currentIndex.value == 2
+            ? const Color(0xFFF5F8FF)
+            : const Color(0xFFF3F7FF),
         body: Stack(
           children: [
-            Container(
-              height: 220.hpx,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF36435C),
-                    Color(0xE636435C),
-                    Color(0x0036435C),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+            if (controller.currentIndex.value != 2)
+              Container(
+                height: 220.hpx,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF36435C),
+                      Color(0xE636435C),
+                      Color(0x0036435C),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
                 ),
               ),
-            ),
             SafeArea(child: tabs[controller.currentIndex.value]),
             Obx(() {
               final activeOrder = orderController.activeProductOrder.value;
@@ -74,7 +77,8 @@ class DashboardView extends GetView<DashboardController> {
                 child: _ActiveOrderCard(order: activeOrder),
               );
             }),
-            Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
+            if (controller.currentIndex.value != 2)
+              Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
           ],
         ),
         bottomNavigationBar: _BottomNav(
@@ -108,7 +112,7 @@ class _HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: EdgeInsets.fromLTRB(12.wpx, 8.hpx, 12.wpx, 16.hpx),
+      padding: EdgeInsets.fromLTRB(8.wpx, 6.hpx, 8.wpx, 16.hpx),
       children: [
         Obx(
           () => _HeaderCard(
@@ -116,22 +120,22 @@ class _HomeTab extends StatelessWidget {
             address: profileController.dashboardAddressLabel,
           ),
         ),
-        SizedBox(height: 12.hpx),
+        SizedBox(height: 10.hpx),
         _SearchBar(controller: controller),
-        SizedBox(height: 16.hpx),
-        _PromoSection(controller: controller),
         SizedBox(height: 12.hpx),
+        _PromoSection(controller: controller),
+        SizedBox(height: 10.hpx),
         _SectionTitle('Featured Products'),
-        SizedBox(height: 8.hpx),
+        SizedBox(height: 7.hpx),
         Obx(
           () => _ProductGrid(
             products: controller.featuredProducts,
             loading: controller.isCatalogLoading.value,
           ),
         ),
-        SizedBox(height: 14.hpx),
+        SizedBox(height: 12.hpx),
         _SectionTitle('Categories'),
-        SizedBox(height: 6.hpx),
+        SizedBox(height: 7.hpx),
         Obx(
           () => _CategoryGrid(
             categories: controller.categories,
@@ -156,10 +160,10 @@ class _HeaderCard extends StatelessWidget {
     final notifications = Get.find<NotificationService>();
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(14.rpx),
+      padding: EdgeInsets.fromLTRB(10.wpx, 10.hpx, 10.wpx, 10.hpx),
       decoration: BoxDecoration(
         color: Color(0xFFF3F7FF),
-        borderRadius: BorderRadius.circular(18.rpx),
+        borderRadius: BorderRadius.circular(11.rpx),
         border: Border.all(color: Color(0xFFF3F7FF)),
         boxShadow: [
           BoxShadow(
@@ -185,13 +189,13 @@ class _HeaderCard extends StatelessWidget {
                       textAlign: TextAlign.left,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.primary,
-                        fontSize: 16.spx,
+                        fontSize: 14.spx,
                         fontWeight: FontWeight.w800,
                         height: 1.15,
                         letterSpacing: 0.2,
                       ),
                     ),
-                    SizedBox(height: 4.hpx),
+                    SizedBox(height: 2.hpx),
                     Text(
                       'Everything you need, delivered fast \u26A1',
                       maxLines: 1,
@@ -199,7 +203,7 @@ class _HeaderCard extends StatelessWidget {
                       textAlign: TextAlign.left,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.primary,
-                        fontSize: 13.spx,
+                        fontSize: 15.spx,
                         fontWeight: FontWeight.w800,
                         height: 1.42,
                       ),
@@ -207,41 +211,41 @@ class _HeaderCard extends StatelessWidget {
                   ],
                 ),
               ),
-              SizedBox(width: 10.wpx),
+              SizedBox(width: 8.wpx),
               _NotificationBell(controller: notifications),
             ],
           ),
-          SizedBox(height: 12.hpx),
+          SizedBox(height: 8.hpx),
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () => Get.toNamed(AppRoutes.addressBook),
-              borderRadius: BorderRadius.circular(12.rpx),
+              borderRadius: BorderRadius.circular(8.rpx),
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: 10.wpx,
-                  vertical: 9.hpx,
+                  horizontal: 8.wpx,
+                  vertical: 7.hpx,
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12.rpx),
+                  borderRadius: BorderRadius.circular(8.rpx),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 24.wpx,
-                      height: 24.hpx,
+                      width: 20.wpx,
+                      height: 20.hpx,
                       decoration: BoxDecoration(
                         color: AppColors.white,
                         borderRadius: BorderRadius.circular(12.rpx),
                       ),
                       child: Icon(
                         Icons.location_on,
-                        size: 14.spx,
+                        size: 11.spx,
                         color: AppColors.primary,
                       ),
                     ),
-                    SizedBox(width: 6.wpx),
+                    SizedBox(width: 5.wpx),
                     Expanded(
                       child: Text(
                         address,
@@ -250,7 +254,7 @@ class _HeaderCard extends StatelessWidget {
                         textAlign: TextAlign.left,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.primary,
-                          fontSize: 13.5.spx,
+                          fontSize: 14.spx,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -258,7 +262,7 @@ class _HeaderCard extends StatelessWidget {
                     Icon(
                       Icons.keyboard_arrow_down_rounded,
                       color: AppColors.primary,
-                      size: 16.spx,
+                      size: 13.spx,
                     ),
                   ],
                 ),
@@ -346,7 +350,7 @@ class _NotificationBell extends StatelessWidget {
                         count > 9 ? '9+' : '$count',
                         style: TextStyle(
                           color: AppColors.white,
-                          fontSize: 8.spx,
+                          fontSize: 14.spx,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -369,14 +373,14 @@ class _SearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => Get.toNamed(AppRoutes.search),
-      borderRadius: BorderRadius.circular(18.rpx),
+      borderRadius: BorderRadius.circular(10.rpx),
       child: Container(
-        height: 52.hpx,
-        padding: EdgeInsets.symmetric(horizontal: 14),
+        height: 42.hpx,
+        padding: EdgeInsets.symmetric(horizontal: 11.wpx),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(18.rpx),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+          borderRadius: BorderRadius.circular(10.rpx),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
           boxShadow: [
             BoxShadow(
               color: Color(0x12000000),
@@ -387,19 +391,33 @@ class _SearchBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.search, color: AppColors.primary),
-            SizedBox(width: 10.wpx),
+            Icon(Icons.search, color: AppColors.primary, size: 17.spx),
+            SizedBox(width: 8.wpx),
             Expanded(
               child: Obx(
-                () => AnimatedSwitcher(
-                  duration: Duration(milliseconds: 250),
-                  child: Text(
-                    controller.searchHints[controller
-                        .currentSearchHintIndex
-                        .value],
-                    key: ValueKey(controller.currentSearchHintIndex.value),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                () => Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedSwitcher(
+                    duration: Duration(milliseconds: 250),
+                    layoutBuilder: (currentChild, previousChildren) {
+                      return Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...previousChildren, ?currentChild],
+                      );
+                    },
+                    child: Text(
+                      controller.searchHints[controller
+                          .currentSearchHintIndex
+                          .value],
+                      key: ValueKey(controller.currentSearchHintIndex.value),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 14.spx,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -420,40 +438,41 @@ class _PromoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
-          height: 160.hpx,
-          child: Obx(() {
-            final imagePath =
-                controller.promoCards[controller.currentPromoIndex.value];
-            return AnimatedSwitcher(
-              duration: Duration(milliseconds: 350),
-              child: ClipRRect(
-                key: ValueKey(controller.currentPromoIndex.value),
-                borderRadius: BorderRadius.circular(16.rpx),
-                child: Container(
-                  decoration: BoxDecoration(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final sliderHeight = max(110.hpx, constraints.maxWidth * 0.46);
+
+            return SizedBox(
+              height: sliderHeight,
+              child: Obx(() {
+                final imagePath =
+                    controller.promoCards[controller.currentPromoIndex.value];
+                return AnimatedSwitcher(
+                  duration: Duration(milliseconds: 350),
+                  child: ClipRRect(
+                    key: ValueKey(controller.currentPromoIndex.value),
                     borderRadius: BorderRadius.circular(16.rpx),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x12000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
+                    child: Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(16.rpx),
                       ),
-                    ],
+                      clipBehavior: Clip.antiAlias,
+                      child: Image.asset(
+                        imagePath,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        alignment: Alignment.center,
+                      ),
+                    ),
                   ),
-                  child: Image.asset(
-                    imagePath,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
-                ),
-              ),
+                );
+              }),
             );
-          }),
+          },
         ),
         SizedBox(height: 8.hpx),
         Obx(
@@ -463,8 +482,8 @@ class _PromoSection extends StatelessWidget {
               final active = i == controller.currentPromoIndex.value;
               return AnimatedContainer(
                 duration: Duration(milliseconds: 250),
-                margin: EdgeInsets.symmetric(horizontal: 3),
-                width: active ? 16 : 6,
+                margin: EdgeInsets.symmetric(horizontal: 3.wpx),
+                width: active ? 16.wpx : 6.wpx,
                 height: 6.hpx,
                 decoration: BoxDecoration(
                   color: active
@@ -489,7 +508,8 @@ class _SectionTitle extends StatelessWidget {
     title,
     style: Theme.of(context).textTheme.titleMedium?.copyWith(
       color: AppColors.primary,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w900,
+      fontSize: 15.spx,
     ),
   );
 }
@@ -518,10 +538,10 @@ class _ProductGrid extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = (constraints.maxWidth - 24.wpx) / 4;
+        final width = (constraints.maxWidth - 18.wpx) / 4;
         return Wrap(
-          spacing: 8.wpx,
-          runSpacing: 10,
+          spacing: 6.wpx,
+          runSpacing: 8.hpx,
           children: products.take(8).map((product) {
             return SizedBox(
               width: width,
@@ -555,11 +575,11 @@ class _FeaturedProductCard extends StatelessWidget {
       ),
       borderRadius: BorderRadius.circular(10.rpx),
       child: Container(
-        height: 126.hpx,
-        padding: EdgeInsets.symmetric(horizontal: 6.wpx, vertical: 6.hpx),
+        height: 110.hpx,
+        padding: EdgeInsets.symmetric(horizontal: 5.wpx, vertical: 5.hpx),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(10.rpx),
+          borderRadius: BorderRadius.circular(8.rpx),
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
           boxShadow: [
             BoxShadow(
@@ -571,8 +591,8 @@ class _FeaturedProductCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            _DashboardImageBox(product: product, height: 56.hpx),
-            SizedBox(height: 6.hpx),
+            _DashboardImageBox(product: product, height: 48.hpx),
+            SizedBox(height: 5.hpx),
             Expanded(
               child: Text(
                 product.name.isEmpty ? 'Product' : product.name,
@@ -581,9 +601,9 @@ class _FeaturedProductCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.primary,
-                  fontSize: 10.spx,
+                  fontSize: 14.spx,
                   height: 1.15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -601,7 +621,7 @@ class _FeaturedProductCard extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textSecondary,
-                        fontSize: 9.spx,
+                        fontSize: 7.8.spx,
                         height: 1.05,
                       ),
                     ),
@@ -614,7 +634,7 @@ class _FeaturedProductCard extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 10.spx,
+                      fontSize: 14.spx,
                       height: 1.05,
                       fontWeight: FontWeight.w800,
                     ),
@@ -710,7 +730,7 @@ class _CategoryGridState extends State<_CategoryGrid> {
                   child: Text(
                     _showAllRows ? 'View less' : 'View more',
                     style: TextStyle(
-                      fontSize: 13.spx,
+                      fontSize: 15.spx,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -807,7 +827,7 @@ class _HomeCategoryCard extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.primary,
                   fontSize: 11.spx,
-                  height: 1.18,
+                  height: 1.2,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -884,7 +904,7 @@ class _CategoryImageBox extends StatelessWidget {
     return Text(
       category.emoji.isEmpty ? _initial(category.name) : category.emoji,
       style: TextStyle(
-        fontSize: 28.spx,
+        fontSize: 24.spx,
         color: AppColors.primary,
         fontWeight: FontWeight.w800,
       ),
@@ -953,7 +973,7 @@ class _ActiveOrderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: AppColors.primary,
-                      fontSize: 12.spx,
+                      fontSize: 14.spx,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -964,7 +984,7 @@ class _ActiveOrderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.primary,
-                      fontSize: 11.spx,
+                      fontSize: 15.spx,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -975,7 +995,7 @@ class _ActiveOrderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
-                      fontSize: 11.spx,
+                      fontSize: 15.spx,
                     ),
                   ),
                 ],
@@ -988,7 +1008,7 @@ class _ActiveOrderCard extends StatelessWidget {
                   'Track',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.primary,
-                    fontSize: 11.spx,
+                    fontSize: 15.spx,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1106,80 +1126,86 @@ class _BottomNav extends StatelessWidget {
                 ],
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: List.generate(tabs.length, (i) {
                   final active = i == index;
                   return Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onTap(i),
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          top: active ? 0 : 6,
-                          bottom: 4,
-                        ),
+                      child: SizedBox(
+                        height: 62.hpx,
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            if (active)
-                              IgnorePointer(
-                                child: Transform.translate(
-                                  offset: Offset(0, -20),
-                                  child: Container(
-                                    margin: EdgeInsets.only(bottom: 2),
-                                    width: 46.wpx,
-                                    height: 46.hpx,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(
-                                        23.rpx,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0x29000000),
-                                          blurRadius: 10,
-                                          offset: Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Center(
-                                      child: Container(
-                                        width: 34.wpx,
-                                        height: 34.hpx,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            17,
+                            SizedBox(
+                              height: 44.hpx,
+                              child: Center(
+                                child: active
+                                    ? IgnorePointer(
+                                        child: Transform.translate(
+                                          offset: Offset(0, -14.hpx),
+                                          child: Container(
+                                            width: 46.wpx,
+                                            height: 46.hpx,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(23.rpx),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Color(0x29000000),
+                                                  blurRadius: 10,
+                                                  offset: Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: Container(
+                                                width: 34.wpx,
+                                                height: 34.hpx,
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(17),
+                                                ),
+                                                child: Icon(
+                                                  tabs[i].$3,
+                                                  size: 18.spx,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        child: Icon(
-                                          tabs[i].$3,
-                                          size: 18,
-                                          color: AppColors.primary,
-                                        ),
+                                      )
+                                    : Icon(
+                                        tabs[i].$2,
+                                        size: 19.spx,
+                                        color: AppColors.textSecondary,
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            else
-                              Icon(
-                                tabs[i].$2,
-                                size: 19,
-                                color: AppColors.textSecondary,
                               ),
-                            Text(
-                              tabs[i].$1,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: active
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                    fontSize: 10.spx,
-                                    fontWeight: active
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                  ),
+                            ),
+                            SizedBox(
+                              height: 18.hpx,
+                              child: Center(
+                                child: Text(
+                                  tabs[i].$1,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: active
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                        fontSize: 10.spx,
+                                        fontWeight: active
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                ),
+                              ),
                             ),
                           ],
                         ),

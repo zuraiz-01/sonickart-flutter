@@ -35,7 +35,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
       debugPrint(
         '[PRODUCT][ERROR] ProductDetailView opened without product arguments',
       );
-      return Scaffold(body: Center(child: Text('Product not found')));
+      return Scaffold(body: Center(child: Text('Product Not Found')));
     }
     debugPrint(
       '[PRODUCT][OPEN] id=${product.id} name="${product.name}" price=${product.price} mrp=${product.mrp}',
@@ -52,11 +52,26 @@ class _ProductDetailViewState extends State<ProductDetailView> {
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
-        title: Text(product.name.isEmpty ? 'Product Detail' : product.name),
+        title: Text(
+          product.name.isEmpty ? 'Product Detail' : product.name.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 14.spx,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+        ),
         centerTitle: true,
+        backgroundColor: AppColors.white,
+        surfaceTintColor: AppColors.white,
+        elevation: 0,
+        toolbarHeight: 40.hpx,
+        iconTheme: IconThemeData(color: AppColors.primary, size: 17.spx),
       ),
       body: ListView(
-        padding: EdgeInsets.all(16.rpx),
+        padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 18.hpx),
         children: [
           _ProductImageCarousel(
             product: product,
@@ -64,47 +79,57 @@ class _ProductDetailViewState extends State<ProductDetailView> {
             activeSlide: _activeSlide,
             onSlideChanged: (value) => setState(() => _activeSlide = value),
           ),
-          SizedBox(height: 20.hpx),
+          SizedBox(height: 14.hpx),
           Text(
-            product.name,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            product.name.toUpperCase(),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.w900,
+              fontSize: 15.spx,
+              letterSpacing: 0,
             ),
           ),
-          SizedBox(height: 12.hpx),
+          SizedBox(height: 10.hpx),
           Text(
             'Description',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.w800,
+              fontSize: 14.spx,
             ),
           ),
-          SizedBox(height: 8.hpx),
+          SizedBox(height: 6.hpx),
           Text(
             product.description.isEmpty
                 ? 'No description available for this product.'
                 : product.description,
-            style: TextStyle(color: AppColors.textSecondary, height: 1.45),
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14.spx,
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+            ),
           ),
-          SizedBox(height: 18.hpx),
+          SizedBox(height: 12.hpx),
           Row(
             children: [
               Text(
-                '?${product.displayPrice}',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                '\u20B9${product.displayPrice}',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w900,
+                  fontSize: 18.spx,
                 ),
               ),
-              SizedBox(width: 12.wpx),
+              SizedBox(width: 9.wpx),
               if (product.displayMrp.isNotEmpty)
                 Text(
-                  '?${product.displayMrp}',
+                  '\u20B9${product.displayMrp}',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     decoration: TextDecoration.lineThrough,
                     fontWeight: FontWeight.w700,
+                    fontSize: 15.spx,
                   ),
                 ),
             ],
@@ -115,13 +140,14 @@ class _ProductDetailViewState extends State<ProductDetailView> {
             style: TextStyle(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
+              fontSize: 14.spx,
             ),
           ),
         ],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(16.rpx),
+          padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 10.hpx),
           child: Obx(() {
             final quantity = cart.items
                 .where((item) => item.product.id == product.id)
@@ -154,12 +180,12 @@ class _ProductImageCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 280.hpx,
+      height: 265.hpx,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16.rpx),
-        border: Border.all(color: AppColors.surface),
+        borderRadius: BorderRadius.circular(8.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
       ),
       child: imageUrls.isEmpty
           ? Center(child: _FallbackProductArt(product: product, size: 120))
@@ -233,27 +259,36 @@ class _DetailCartActions extends StatelessWidget {
             child: OutlinedButton(
               onPressed: () => _addToCart(showFeedback: true),
               style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                side: BorderSide(color: AppColors.primary),
+                foregroundColor: AppColors.primary,
+                minimumSize: Size(double.infinity, 45.hpx),
+                padding: EdgeInsets.symmetric(vertical: 12.hpx),
+                side: BorderSide(color: AppColors.primary, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5.rpx),
+                ),
               ),
               child: Text(
                 'Add to Cart',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.spx),
               ),
             ),
           ),
-          SizedBox(width: 12.wpx),
+          SizedBox(width: 10.wpx),
           Expanded(
             child: FilledButton(
               onPressed: _buyNow,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: EdgeInsets.symmetric(vertical: 14),
+                minimumSize: Size(double.infinity, 45.hpx),
+                padding: EdgeInsets.symmetric(vertical: 12.hpx),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5.rpx),
+                ),
               ),
               child: Text(
                 'Buy Now',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.spx),
               ),
             ),
           ),
@@ -265,10 +300,10 @@ class _DetailCartActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 10.wpx, vertical: 8.hpx),
+          padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 6.hpx),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16.rpx),
+            borderRadius: BorderRadius.circular(8.rpx),
             border: Border.all(
               color: AppColors.primary.withValues(alpha: 0.08),
             ),
@@ -295,6 +330,7 @@ class _DetailCartActions extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
+                    fontSize: 15.spx,
                   ),
                 ),
               ),
@@ -313,27 +349,42 @@ class _DetailCartActions extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: () => openDashboardTab(2),
                 style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: AppColors.primary),
+                  foregroundColor: AppColors.primary,
+                  minimumSize: Size(double.infinity, 45.hpx),
+                  padding: EdgeInsets.symmetric(vertical: 12.hpx),
+                  side: BorderSide(color: AppColors.primary, width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5.rpx),
+                  ),
                 ),
                 child: Text(
                   'View Cart',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15.spx,
+                  ),
                 ),
               ),
             ),
-            SizedBox(width: 12.wpx),
+            SizedBox(width: 10.wpx),
             Expanded(
               child: FilledButton(
                 onPressed: () => Get.toNamed(AppRoutes.checkout),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
-                  padding: EdgeInsets.symmetric(vertical: 14),
+                  minimumSize: Size(double.infinity, 45.hpx),
+                  padding: EdgeInsets.symmetric(vertical: 12.hpx),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5.rpx),
+                  ),
                 ),
                 child: Text(
                   'Checkout',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15.spx,
+                  ),
                 ),
               ),
             ),

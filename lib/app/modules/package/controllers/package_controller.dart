@@ -542,7 +542,7 @@ class PackageController extends GetxController {
         selectedOrder.value;
     final merged = existing == null
         ? raw
-        : <String, dynamic>{...existing.toJson(), ...existing.raw, ...raw};
+        : <String, dynamic>{...existing.raw, ...existing.toJson(), ...raw};
     final parsed = PackageOrderModel.fromJson(merged);
     if (parsed.id.isEmpty) return false;
 
@@ -969,13 +969,42 @@ class PackageController extends GetxController {
       (item) =>
           _orderIdentifiers(item).map(_normalizeId).any(incomingIds.contains),
     );
+    final nextOrder = index >= 0
+        ? _protectTerminalStatus(orders[index], order)
+        : order;
     if (index >= 0) {
-      orders[index] = order;
+      orders[index] = nextOrder;
     } else {
-      orders.insert(0, order);
+      orders.insert(0, nextOrder);
     }
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     await _persistOrders();
+  }
+
+  PackageOrderModel _protectTerminalStatus(
+    PackageOrderModel existing,
+    PackageOrderModel incoming,
+  ) {
+    final existingStatus = _normalizeStatus(existing.status);
+    final incomingStatus = _normalizeStatus(incoming.status);
+    final existingIsDone =
+        existingStatus == 'delivered' || existingStatus == 'completed';
+    final incomingIsCancel =
+        incomingStatus == 'cancel' ||
+        incomingStatus == 'canceled' ||
+        incomingStatus == 'cancelled';
+
+    if (!existingIsDone || !incomingIsCancel) return incoming;
+
+    debugPrint(
+      'PackageController._protectTerminalStatus: keeping ${existing.status} over ${incoming.status} for ${existing.id}',
+    );
+    return PackageOrderModel.fromJson({
+      ...incoming.raw,
+      ...incoming.toJson(),
+      'status': existing.status,
+      'deliveryStatus': existing.status,
+    });
   }
 
   Future<PackageOrderModel?> _tryCreatePackageOrder(
@@ -1260,8 +1289,19 @@ class PackageController extends GetxController {
     return value.trim().replaceFirst(RegExp(r'^PKG', caseSensitive: false), '');
   }
 
+  String _normalizeStatus(String status) {
+    final normalized = status.trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
+    if (normalized == 'cancel' || normalized == 'canceled') {
+      return 'cancelled';
+    }
+    return normalized;
+  }
+
   bool _isTerminalStatus(String status) {
-    final normalized = status.trim().toLowerCase();
+    final normalized = _normalizeStatus(status);
     return normalized == 'delivered' ||
         normalized == 'completed' ||
         normalized == 'cancelled';

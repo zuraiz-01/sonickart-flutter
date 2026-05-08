@@ -303,7 +303,7 @@ class _CategoriesBottomNav extends StatelessWidget {
                 ],
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: List.generate(tabs.length, (i) {
                   final active = i == 1;
                   return Expanded(
@@ -333,73 +333,79 @@ class _CategoriesBottomNav extends StatelessWidget {
                           snackPosition: SnackPosition.BOTTOM,
                         );
                       },
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          top: active ? 0 : 6,
-                          bottom: 4,
-                        ),
+                      child: SizedBox(
+                        height: 62.hpx,
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            if (active)
-                              IgnorePointer(
-                                child: Transform.translate(
-                                  offset: Offset(0, -20),
-                                  child: Container(
-                                    margin: EdgeInsets.only(bottom: 2),
-                                    width: 46.wpx,
-                                    height: 46.hpx,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(
-                                        23.rpx,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0x29000000),
-                                          blurRadius: 10,
-                                          offset: Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Center(
-                                      child: Container(
-                                        width: 34.wpx,
-                                        height: 34.hpx,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            17,
+                            SizedBox(
+                              height: 44.hpx,
+                              child: Center(
+                                child: active
+                                    ? IgnorePointer(
+                                        child: Transform.translate(
+                                          offset: Offset(0, -14.hpx),
+                                          child: Container(
+                                            width: 46.wpx,
+                                            height: 46.hpx,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(23.rpx),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Color(0x29000000),
+                                                  blurRadius: 10,
+                                                  offset: Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: Container(
+                                                width: 34.wpx,
+                                                height: 34.hpx,
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(17),
+                                                ),
+                                                child: Icon(
+                                                  tabs[i].$3,
+                                                  size: 18.spx,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        child: Icon(
-                                          tabs[i].$3,
-                                          size: 18,
-                                          color: AppColors.primary,
-                                        ),
+                                      )
+                                    : Icon(
+                                        tabs[i].$2,
+                                        size: 19.spx,
+                                        color: AppColors.textSecondary,
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            else
-                              Icon(
-                                tabs[i].$2,
-                                size: 19,
-                                color: AppColors.textSecondary,
                               ),
-                            Text(
-                              tabs[i].$1,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: active
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                    fontSize: 10.spx,
-                                    fontWeight: active
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                  ),
+                            ),
+                            SizedBox(
+                              height: 18.hpx,
+                              child: Center(
+                                child: Text(
+                                  tabs[i].$1,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: active
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                        fontSize: 10.spx,
+                                        fontWeight: active
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                ),
+                              ),
                             ),
                           ],
                         ),

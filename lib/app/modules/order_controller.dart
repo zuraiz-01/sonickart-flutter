@@ -17,7 +17,10 @@ import '../core/widgets/app_snackbar.dart';
 import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
 import '../data/models/order_model.dart';
+import '../data/models/product_model.dart';
+import '../data/repositories/catalog_repository.dart';
 import '../routes/app_routes.dart';
+import '../theme/app_colors.dart';
 import 'auth/controllers/auth_controller.dart';
 import 'cart/controllers/cart_controller.dart';
 import 'profile/controllers/profile_controller.dart';
@@ -26,6 +29,8 @@ class OrderController extends GetxController {
   OrderController(this._storage);
 
   static const _ordersStorageKey = 'customer_orders';
+  static const _selectedAddressStorageKey = 'selectedAddress';
+  static const _selectedVendorIdStorageKey = 'selectedVendorId';
   static const _defaultProductRadiusKm = 5.0;
   static const _defaultFreeDeliveryThreshold = 200.0;
   static const _defaultProductDeliveryCharge = 30.0;
@@ -52,6 +57,10 @@ class OrderController extends GetxController {
   final activeProductOrder = Rxn<OrderModel>();
   final isSyncingActiveOrder = false.obs;
   final isHandlingUnavailableCart = false.obs;
+  final isValidatingCartAvailability = false.obs;
+  final selectingCheckoutAddressId = RxnString();
+
+  bool _hasManualCheckoutAddress = false;
 
   bool get hasAddress => _deliveryAddressPreview.trim().isNotEmpty;
 
@@ -170,17 +179,27 @@ class OrderController extends GetxController {
       await profileController.loadAddresses();
     }
 
+    final currentSelection = selectedCheckoutAddress.value;
+    if (_hasManualCheckoutAddress &&
+        currentSelection?.address.trim().isNotEmpty == true) {
+      deliveryAddressController.text = currentSelection!.address.trim();
+      return;
+    }
+
     final activeAddress =
+        profileController?.activeAddress ??
         profileController?.addresses.firstWhereOrNull(
           (item) => item.isSelected,
         ) ??
         profileController?.addresses.firstOrNull;
     if (activeAddress != null) {
+      _hasManualCheckoutAddress = false;
       selectedCheckoutAddress.value = activeAddress;
       deliveryAddressController.text = activeAddress.address;
       return;
     }
 
+    _hasManualCheckoutAddress = false;
     if (deliveryAddressController.text.trim().startsWith('Deliver to ')) {
       deliveryAddressController.clear();
     }
@@ -261,16 +280,7 @@ class OrderController extends GetxController {
     isApplyingCoupon.value = true;
     couponFeedback.value = null;
     try {
-      CheckoutCoupon? resolved = coupon;
-      if (resolved == null) {
-        if (availableCoupons.isEmpty) {
-          await loadCouponsForCart();
-        }
-        final normalized = _normalizeCodeToken(code);
-        resolved = availableCoupons.firstWhereOrNull(
-          (item) => item.matchKeys.contains(normalized),
-        );
-      }
+      final resolved = coupon ?? await _getCouponByCode(code);
 
       if (resolved == null) {
         couponFeedback.value = 'Coupon not found.';
@@ -287,9 +297,43 @@ class OrderController extends GetxController {
       couponCodeController.text = resolved.code;
       couponFeedback.value = '${resolved.code} applied successfully.';
       return true;
+    } catch (error) {
+      debugPrint('OrderController.applyCoupon failed: $error');
+      couponFeedback.value = error is ApiException && error.message.isNotEmpty
+          ? error.message
+          : 'Failed to apply this coupon right now.';
+      return false;
     } finally {
       isApplyingCoupon.value = false;
     }
+  }
+
+  Future<CheckoutCoupon?> _getCouponByCode(String code) async {
+    final normalized = _normalizeCodeToken(code);
+    if (normalized.isEmpty) return null;
+
+    if (availableCoupons.isEmpty) {
+      await loadCouponsForCart();
+    }
+
+    final cached = availableCoupons.firstWhereOrNull(
+      (item) => item.matchKeys.contains(normalized),
+    );
+    if (cached != null) return cached;
+
+    final documents = await _fetchCouponDocuments();
+    final coupons = documents
+        .whereType<Map>()
+        .map(_parseCouponDocument)
+        .whereType<CheckoutCoupon>()
+        .toList();
+    final deduped = _dedupeCoupons(coupons);
+    if (deduped.isNotEmpty) {
+      availableCoupons.assignAll(deduped);
+    }
+    return deduped.firstWhereOrNull(
+      (item) => item.matchKeys.contains(normalized),
+    );
   }
 
   CheckoutCoupon? _parseCouponDocument(Map doc) {
@@ -328,47 +372,118 @@ class OrderController extends GetxController {
     if (!_matchesCouponCategory(coupon, items)) {
       return 'This coupon does not match items in your cart.';
     }
-    final totals = calculateCheckoutTotals(items);
-    if (totals.itemsTotal <= 0) return 'Add items before applying a coupon.';
-    if (totals.itemsTotal < coupon.minimumOrderAmount) {
+    final itemsTotal = _roundCurrency(
+      items.fold<double>(0, (sum, item) => sum + item.totalPrice),
+    );
+    if (itemsTotal <= 0) return 'Add items before applying a coupon.';
+    if (itemsTotal < coupon.minimumOrderAmount) {
       return 'Minimum order ₹${_formatAmount(coupon.minimumOrderAmount)} required.';
     }
     return null;
   }
 
   Future<void> selectAddress(AddressModel address) async {
-    final normalizedAddress = address.address.trim();
-    if (normalizedAddress.isEmpty) {
-      AppSnackBar.show(
-        'Invalid address',
-        'Selected address is missing details.',
-      );
-      return;
-    }
-    if (!_hasValidCoordinates(address.latitude, address.longitude)) {
-      AppSnackBar.show(
-        'Invalid address location',
-        'Selected address does not have valid map coordinates. Please update this address and try again.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
+    if (selectingCheckoutAddressId.value != null) return;
+    selectingCheckoutAddressId.value = address.id;
+    try {
+      final normalizedAddress = address.address.trim();
+      if (normalizedAddress.isEmpty) {
+        await _showAddressSelectionError(
+          'Invalid Address',
+          'Selected address is missing details.',
+        );
+        return;
+      }
 
-    selectedCheckoutAddress.value = address;
-    deliveryAddressController.text = normalizedAddress;
-    await _updateUserLocation(address);
-    _notifyAction(
-      'Address Selected',
-      'Delivery address selected for checkout.',
-      category: 'address',
-    );
-    final vendorResolution = await _resolveVendor(address);
-    final unavailable = _findUnavailableCartItems(
-      _cartController.items,
-      vendorResolution,
-    );
-    if (unavailable.isNotEmpty) {
-      await _handleUnavailableCartItems(unavailable);
+      isValidatingCartAvailability.value = true;
+      var selected = address.copyWith(
+        address: normalizedAddress,
+        isSelected: true,
+      );
+      selectedCheckoutAddress.value = selected;
+      selectedCheckoutAddress.refresh();
+      _hasManualCheckoutAddress = true;
+      deliveryAddressController.text = selected.address.trim();
+
+      if (!_hasValidCoordinates(selected.latitude, selected.longitude)) {
+        final geocode = await _locationLookupService.geocodeAddress(
+          normalizedAddress,
+        );
+        if (geocode != null) {
+          selected = selected.copyWith(
+            address: geocode.address.isNotEmpty
+                ? geocode.address
+                : normalizedAddress,
+            latitude: geocode.latitude,
+            longitude: geocode.longitude,
+            placeId: geocode.placeId,
+          );
+        }
+      }
+
+      if (!_hasValidCoordinates(selected.latitude, selected.longitude)) {
+        await _showAddressSelectionError(
+          'Invalid address location',
+          'Selected address does not have valid map coordinates. Please update this address and try again.',
+        );
+        return;
+      }
+
+      final user = _authController?.currentUser;
+      selected = selected.copyWith(
+        fullName: selected.fullName.trim().isNotEmpty
+            ? selected.fullName.trim()
+            : user?.name.isNotEmpty == true
+            ? user!.name
+            : 'Customer',
+        contactNumber: selected.contactNumber.trim().isNotEmpty
+            ? selected.contactNumber.trim()
+            : user?.phone ?? '',
+        address: selected.address.trim(),
+        isSelected: true,
+      );
+
+      selectedCheckoutAddress.value = selected;
+      selectedCheckoutAddress.refresh();
+      deliveryAddressController.text = selected.address.trim();
+      await _storage.write(_selectedAddressStorageKey, selected.toJson());
+      await _profileController?.useAddress(selected);
+      await _updateUserLocation(selected);
+
+      final vendorResolution = await _resolveVendor(selected);
+      debugPrint(
+        'OrderController.selectAddress: resolved vendors=${vendorResolution.debugSummary}',
+      );
+      await _persistSelectedVendorContext(vendorResolution);
+      final checkoutItems = _cartController.items
+          .where((item) => item.quantity > 0)
+          .toList(growable: false);
+      final unavailable = await _findUnavailableCartItems(
+        checkoutItems,
+        vendorResolution,
+      );
+      debugPrint(
+        'OrderController.selectAddress: checkoutItems=${checkoutItems.length}, unavailable=${unavailable.map((item) => item.product.id).join(',')}',
+      );
+      if (unavailable.isNotEmpty) {
+        await _handleUnavailableCartItems(unavailable);
+        return;
+      }
+
+      _notifyAction(
+        'Address Selected',
+        'Delivery Address selected for checkout.',
+        category: 'address',
+      );
+    } catch (error) {
+      debugPrint('OrderController.selectAddress failed: $error');
+      await _showAddressSelectionError(
+        'Failed to select address',
+        'Please try again.',
+      );
+    } finally {
+      isValidatingCartAvailability.value = false;
+      selectingCheckoutAddressId.value = null;
     }
   }
 
@@ -379,6 +494,7 @@ class OrderController extends GetxController {
       latestOrder.value = fromApi.first;
       activeProductOrder.value = _latestActiveProductOrder(fromApi);
       await _persistOrders();
+      unawaited(_enrichOrdersMissingItemDetails(fromApi));
       return;
     }
 
@@ -410,6 +526,7 @@ class OrderController extends GetxController {
 
       orders.assignAll(fromApi);
       latestOrder.value = fromApi.firstOrNull;
+      unawaited(_enrichOrdersMissingItemDetails(fromApi));
       var active = _latestActiveProductOrder(fromApi);
       if (active != null && active.resolvedItemCount == 0) {
         for (final id in _orderIdentifiers(active)) {
@@ -505,9 +622,9 @@ class OrderController extends GetxController {
         .toList(growable: false);
     final totals = calculateCheckoutTotals(checkoutItems);
     if (checkoutItems.isEmpty || totals.grandTotal <= 0) {
-      AppSnackBar.show('Cart Empty', 'Add items before checkout.');
       return;
     }
+    if (isValidatingCartAvailability.value) return;
     if (isPlacingOrder.value) return;
 
     isPlacingOrder.value = true;
@@ -515,7 +632,7 @@ class OrderController extends GetxController {
       if (await _hasIncompleteProductOrder()) {
         Get.dialog(
           AlertDialog(
-            title: const Text('Order in progress'),
+            title: const Text('Order In Progress'),
             content: const Text(
               'You already have an active order. Please wait until it is delivered or cancelled.',
             ),
@@ -527,9 +644,15 @@ class OrderController extends GetxController {
 
       final address = await _ensureAddressContext();
       final vendorResolution = await _resolveVendor(address);
-      final unavailable = _findUnavailableCartItems(
+      debugPrint(
+        'OrderController.placeOrder: resolved vendors=${vendorResolution.debugSummary}',
+      );
+      final unavailable = await _findUnavailableCartItems(
         checkoutItems,
         vendorResolution,
+      );
+      debugPrint(
+        'OrderController.placeOrder: checkoutItems=${checkoutItems.length}, unavailable=${unavailable.map((item) => item.product.id).join(',')}',
       );
       if (unavailable.isNotEmpty) {
         await _handleUnavailableCartItems(unavailable);
@@ -541,11 +664,6 @@ class OrderController extends GetxController {
         vendorResolution,
       );
       if (vendorContext.error != null) {
-        AppSnackBar.show(
-          'No vendor available',
-          vendorContext.error!,
-          snackPosition: SnackPosition.BOTTOM,
-        );
         return;
       }
 
@@ -618,7 +736,7 @@ class OrderController extends GetxController {
       if (createdOrder.id.isEmpty) {
         throw ApiException(
           statusCode: 0,
-          message: 'There was an error creating the order.',
+          message: 'There Was An Error Creating The Order.',
           response: response,
         );
       }
@@ -646,13 +764,7 @@ class OrderController extends GetxController {
       final message = error is ApiException
           ? error.message
           : error.toString().replaceFirst('Exception: ', '');
-      if (message != 'ADDRESS_REQUIRED' && message != 'LOCATION_REQUIRED') {
-        AppSnackBar.show(
-          'Order creation failed',
-          message.isEmpty ? 'Please try again.' : message,
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      debugPrint('OrderController.placeOrder failed: $message');
     } finally {
       isPlacingOrder.value = false;
     }
@@ -702,21 +814,11 @@ class OrderController extends GetxController {
       );
     } catch (error) {
       debugPrint('OrderController.cancelOrder failed: $error');
-      AppSnackBar.show(
-        'Error',
-        'Failed to cancel order. Please try again.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
       return;
     }
 
     final refreshed = await refreshOrderDetails(order);
     if (refreshed != null) {
-      AppSnackBar.show(
-        'Order Cancelled',
-        'Your order has been cancelled successfully.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
       return;
     }
 
@@ -743,11 +845,6 @@ class OrderController extends GetxController {
       activeProductOrder.value = null;
     }
     await _persistOrders();
-    AppSnackBar.show(
-      'Order Cancelled',
-      'Your order has been cancelled successfully.',
-      snackPosition: SnackPosition.BOTTOM,
-    );
   }
 
   Future<AddressModel> _ensureAddressContext() async {
@@ -758,11 +855,6 @@ class OrderController extends GetxController {
       final rawAddress = deliveryAddressController.text.trim();
       final user = _authController?.currentUser;
       if (rawAddress.isEmpty || rawAddress.startsWith('Deliver to ')) {
-        AppSnackBar.show(
-          'Add an address',
-          'Please add or select a delivery address before placing the order.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
         throw Exception('ADDRESS_REQUIRED');
       }
       address = AddressModel(
@@ -795,11 +887,6 @@ class OrderController extends GetxController {
     }
 
     if (!_hasValidCoordinates(latitude, longitude)) {
-      AppSnackBar.show(
-        'Location required',
-        'Please enable location services so we can deliver to the right place.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
       throw Exception('LOCATION_REQUIRED');
     }
 
@@ -876,7 +963,10 @@ class OrderController extends GetxController {
         endpoint: ApiConstants.resolveVendor,
         data: payload,
       );
-      return VendorResolution.fromJson(response);
+      return VendorResolution.fromJson(
+        response,
+        radiusKm: productRadiusKm.value,
+      );
     } catch (error) {
       debugPrint('OrderController._resolveVendor POST failed: $error');
     }
@@ -885,11 +975,43 @@ class OrderController extends GetxController {
         endpoint: ApiConstants.resolveVendor,
         query: payload,
       );
-      return VendorResolution.fromJson(response);
+      return VendorResolution.fromJson(
+        response,
+        radiusKm: productRadiusKm.value,
+      );
     } catch (error) {
       debugPrint('OrderController._resolveVendor GET failed: $error');
       return VendorResolution.unresolved();
     }
+  }
+
+  Future<void> _persistSelectedVendorContext(
+    VendorResolution resolution,
+  ) async {
+    final vendorIds = _unique(
+      resolution.options
+          .map((option) => option.vendorId)
+          .whereType<String>()
+          .where((id) => id.trim().isNotEmpty),
+    );
+    if (vendorIds.isNotEmpty) {
+      await _storage.write(_selectedVendorIdStorageKey, vendorIds.join(','));
+      return;
+    }
+    if (resolution.wasResolved) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
+  }
+
+  Future<void> _showAddressSelectionError(String title, String message) async {
+    if (Get.isDialogOpen == true) return;
+    await Get.dialog<void>(
+      AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [TextButton(onPressed: Get.back, child: const Text('OK'))],
+      ),
+    );
   }
 
   CheckoutVendorContext _resolveCheckoutVendorContext(
@@ -948,59 +1070,215 @@ class OrderController extends GetxController {
     );
   }
 
-  List<CartItemModel> _findUnavailableCartItems(
+  Future<List<CartItemModel>> _findUnavailableCartItems(
     List<CartItemModel> items,
     VendorResolution resolution,
-  ) {
+  ) async {
+    if (items.isEmpty) return const [];
     final options = resolution.options;
     if (options.isEmpty) {
-      return resolution.wasResolved
-          ? items.where((item) => item.quantity > 0).toList(growable: false)
-          : const [];
+      debugPrint(
+        'OrderController._findUnavailableCartItems: no resolved vendor options, marking all cart items unavailable',
+      );
+      return items.where((item) => item.quantity > 0).toList(growable: false);
     }
 
-    return items.where((item) {
-      final vendorId = item.product.vendorId;
-      final branchId = item.product.branchId;
-      if (vendorId.isEmpty && branchId.isEmpty) return false;
+    final unavailableByScope = items.where((item) {
+      final vendorIds = _productVendorIds(item.product);
+      final branchIds = _productBranchIds(item.product);
+      if (vendorIds.isEmpty && branchIds.isEmpty) return false;
       return !options.any(
         (option) =>
-            (vendorId.isNotEmpty && option.vendorId == vendorId) ||
-            (branchId.isNotEmpty && option.branchId == branchId),
+            (option.vendorId != null && vendorIds.contains(option.vendorId)) ||
+            (option.branchId != null && branchIds.contains(option.branchId)),
       );
     }).toList();
+
+    final unavailableIds = unavailableByScope
+        .map((item) => item.product.id)
+        .where((id) => id.trim().isNotEmpty)
+        .toSet();
+    final productChecked = await _findUnavailableCartItemsByProduct(
+      items.where((item) => !unavailableIds.contains(item.product.id)).toList(),
+      options,
+    );
+
+    return [
+      ...unavailableByScope,
+      ...productChecked.where(
+        (item) => !unavailableIds.contains(item.product.id),
+      ),
+    ];
+  }
+
+  Future<List<CartItemModel>> _findUnavailableCartItemsByProduct(
+    List<CartItemModel> items,
+    List<ResolvedVendorOption> options,
+  ) async {
+    if (!Get.isRegistered<CatalogRepository>()) {
+      if (!Get.isRegistered<ApiService>()) return const [];
+      Get.put(CatalogRepository(Get.find<ApiService>()), permanent: true);
+    }
+    final vendorIds = _unique(
+      options.map((option) => option.vendorId).whereType<String>(),
+    );
+    if (vendorIds.isEmpty || items.isEmpty) return const [];
+
+    final repository = Get.find<CatalogRepository>();
+    final availabilityByCategory = <String, Set<String>>{};
+    final unavailable = <CartItemModel>[];
+    final selected = selectedCheckoutAddress.value;
+
+    for (final item in items) {
+      final categoryId = _productCategoryId(item.product);
+      final productId = item.product.id.trim();
+      if (productId.isEmpty) continue;
+      if (categoryId.isEmpty) {
+        final found = await _productExistsInSelectedScope(item.product);
+        if (!found) unavailable.add(item);
+        continue;
+      }
+
+      final availableIds = availabilityByCategory.putIfAbsent(categoryId, () {
+        return <String>{};
+      });
+      if (availableIds.isEmpty) {
+        final products = await repository.fetchProductsByCategory(
+          categoryId,
+          vendorIds: vendorIds,
+          latitude: selected?.latitude,
+          longitude: selected?.longitude,
+        );
+        availableIds.addAll(products.map((product) => product.id.trim()));
+        debugPrint(
+          'OrderController._findUnavailableCartItemsByProduct: category=$categoryId vendors=${vendorIds.join(',')} available=${availableIds.length}',
+        );
+      }
+      if (!availableIds.contains(productId)) {
+        unavailable.add(item);
+      }
+    }
+
+    return unavailable;
+  }
+
+  Future<bool> _productExistsInSelectedScope(ProductModel product) async {
+    final name = product.name.trim();
+    final productId = product.id.trim();
+    if (name.isEmpty || productId.isEmpty) return false;
+    if (!Get.isRegistered<CatalogRepository>()) return false;
+    final matches = await Get.find<CatalogRepository>().searchProducts(name);
+    return matches.any((item) => item.id.trim() == productId);
+  }
+
+  List<String> _productVendorIds(ProductModel product) {
+    final rawVendor = product.raw['vendor'];
+    final vendor = rawVendor is Map
+        ? Map<String, dynamic>.from(rawVendor)
+        : const <String, dynamic>{};
+    return _unique([
+      product.vendorId,
+      product.raw['vendorId']?.toString() ?? '',
+      product.raw['vendor_id']?.toString() ?? '',
+      if (rawVendor is! Map) rawVendor?.toString() ?? '',
+      vendor['id']?.toString() ?? '',
+      vendor['_id']?.toString() ?? '',
+      vendor['vendorId']?.toString() ?? '',
+      vendor['vendor_id']?.toString() ?? '',
+    ]);
+  }
+
+  List<String> _productBranchIds(ProductModel product) {
+    final rawBranch = product.raw['branch'];
+    final branch = rawBranch is Map
+        ? Map<String, dynamic>.from(rawBranch)
+        : const <String, dynamic>{};
+    return _unique([
+      product.branchId,
+      product.raw['branchId']?.toString() ?? '',
+      product.raw['branch_id']?.toString() ?? '',
+      if (rawBranch is! Map) rawBranch?.toString() ?? '',
+      branch['id']?.toString() ?? '',
+      branch['_id']?.toString() ?? '',
+      branch['branchId']?.toString() ?? '',
+      branch['branch_id']?.toString() ?? '',
+    ]);
+  }
+
+  String _productCategoryId(ProductModel product) {
+    final category = product.raw['category'] is Map
+        ? Map<String, dynamic>.from(product.raw['category'] as Map)
+        : const <String, dynamic>{};
+    return _firstNonEmpty([
+          product.categoryId,
+          product.raw['categoryId'],
+          product.raw['category_id'],
+          product.raw['productCategory'],
+          product.raw['product_category'],
+          category['id'],
+          category['_id'],
+          category['categoryId'],
+          category['category_id'],
+        ]) ??
+        '';
   }
 
   Future<void> _handleUnavailableCartItems(List<CartItemModel> items) async {
     isHandlingUnavailableCart.value = true;
     try {
-      await _cartController.clearCart(notify: false);
+      final unavailableIds = items
+          .map((item) => item.product.id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+      if (unavailableIds.isEmpty ||
+          unavailableIds.length == _cartController.items.length) {
+        await _cartController.clearCart(notify: false);
+      } else {
+        await _cartController.removeItemsCompletely(unavailableIds);
+      }
       selectedCoupon.value = null;
       couponCodeController.clear();
       couponFeedback.value = null;
-      await Get.dialog<void>(
-        AlertDialog(
-          title: const Text('Item unavailable'),
-          content: Text(
-            items.length == 1
-                ? 'This item is not available at your selected address. Your cart has been cleared.'
-                : 'These items are not available at your selected address. Your cart has been cleared.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Get.back();
-                Get.offAllNamed(AppRoutes.dashboard);
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-        barrierDismissible: false,
+      await _showUnavailableCartDialog(
+        items.length == 1
+            ? "This item isn't available at your location and has been removed from your cart."
+            : "These items aren't available at your location and have been removed from your cart.",
       );
+      Get.offAllNamed(AppRoutes.dashboard, arguments: {'tabIndex': 0});
     } finally {
       isHandlingUnavailableCart.value = false;
     }
+  }
+
+  Future<void> _showUnavailableCartDialog(String message) async {
+    if (Get.isBottomSheetOpen == true) {
+      Get.back<void>();
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+    }
+
+    if (Get.isDialogOpen == true) {
+      Get.back<void>();
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (Get.overlayContext == null && Get.context == null) {
+      AppSnackBar.show(
+        'Item unavailable',
+        message,
+        snackPosition: SnackPosition.TOP,
+        duration: const Duration(seconds: 4),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      return;
+    }
+
+    await Get.dialog<void>(
+      _UnavailableCartDialog(message: message),
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+    );
   }
 
   Map<String, dynamic> _buildOrderPayload({
@@ -1124,15 +1402,30 @@ class OrderController extends GetxController {
     if (id.trim().isEmpty) return null;
     try {
       final response = await _api.get(endpoint: ApiConstants.orderById(id));
-      final raw = response['data'] is Map
-          ? Map<String, dynamic>.from(response['data'] as Map)
-          : response;
+      final raw = _extractOrderMap(response);
       final order = OrderModel.fromJson(raw);
       return order.id.isEmpty ? null : order;
     } catch (error) {
       debugPrint('OrderController._tryFetchOrderById failed: $error');
       return null;
     }
+  }
+
+  Future<void> _enrichOrdersMissingItemDetails(List<OrderModel> source) async {
+    for (final order in source.where(_needsItemDetailRefresh)) {
+      for (final id in _orderIdentifiers(order)) {
+        final detailed = await _tryFetchOrderById(id);
+        if (detailed != null && !_needsItemDetailRefresh(detailed)) {
+          await _upsertOrder(detailed);
+          break;
+        }
+      }
+    }
+  }
+
+  bool _needsItemDetailRefresh(OrderModel order) {
+    if (order.items.isEmpty) return order.resolvedItemCount > 0;
+    return order.items.every((item) => item.product.name.trim().isEmpty);
   }
 
   OrderModel? _latestActiveProductOrder(Iterable<OrderModel> source) {
@@ -1281,6 +1574,17 @@ class OrderController extends GetxController {
     return [];
   }
 
+  Map<String, dynamic> _extractOrderMap(Map<String, dynamic> response) {
+    for (final key in ['data', 'order', 'result', 'payload']) {
+      final value = response[key];
+      if (value is Map) return Map<String, dynamic>.from(value);
+      if (value is List && value.isNotEmpty && value.first is Map) {
+        return Map<String, dynamic>.from(value.first as Map);
+      }
+    }
+    return response;
+  }
+
   Future<void> _persistOrders() async {
     await _storage.write(
       _ordersStorageKey,
@@ -1416,6 +1720,14 @@ class OrderController extends GetxController {
     );
   }
 
+  String? _firstNonEmpty(Iterable<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
   List<String> _collectTokens(Object? value) {
     if (value == null) return const [];
     if (value is Iterable) return value.expand(_collectTokens).toList();
@@ -1538,13 +1850,102 @@ class OrderController extends GetxController {
   }
 
   void _notifyAction(String title, String message, {required String category}) {
-    AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
     if (!Get.isRegistered<NotificationService>()) return;
     unawaited(
       Get.find<NotificationService>().record(
         title: title,
         message: message,
         category: category,
+      ),
+    );
+  }
+}
+
+class _UnavailableCartDialog extends StatelessWidget {
+  const _UnavailableCartDialog({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary, width: 1.4),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close),
+                    color: AppColors.primary,
+                    iconSize: 15,
+                    onPressed: Get.back,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Item unavailable',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: Get.back,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+                child: const Text('OK'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1871,23 +2272,47 @@ class VendorResolution {
   final List<ResolvedVendorOption> options;
   final bool wasResolved;
 
+  String get debugSummary => options
+      .map(
+        (option) =>
+            'v=${option.vendorId ?? '-'} b=${option.branchId ?? '-'} d=${option.distanceKm?.toStringAsFixed(2) ?? '-'}',
+      )
+      .join(' | ');
+
   factory VendorResolution.empty() => VendorResolution(options: const []);
 
   factory VendorResolution.unresolved() =>
       VendorResolution(options: const [], wasResolved: false);
 
-  factory VendorResolution.fromJson(Map<String, dynamic> json) {
+  factory VendorResolution.fromJson(
+    Map<String, dynamic> json, {
+    double? radiusKm,
+  }) {
     final options = <ResolvedVendorOption>[];
     final vendors = _extractVendors(json);
     for (final vendor in vendors) {
       final option = ResolvedVendorOption.fromJson(vendor);
-      if (option.vendorId != null || option.branchId != null) {
+      if ((option.vendorId != null || option.branchId != null) &&
+          _isWithinRadius(vendor, radiusKm)) {
         options.add(option);
       }
     }
-    final direct = ResolvedVendorOption.fromJson(json);
-    if (direct.vendorId != null || direct.branchId != null) {
-      options.add(direct);
+    if (vendors.isEmpty && _isResponseWithinRadius(json, radiusKm)) {
+      for (final vendorId in _extractVendorIds(json)) {
+        options.add(
+          ResolvedVendorOption(
+            vendorId: vendorId,
+            distanceKm: _distanceKmFrom(json),
+          ),
+        );
+      }
+    }
+    for (final directSource in _extractDirectSources(json)) {
+      if (!_isResponseWithinRadius(directSource, radiusKm)) continue;
+      final direct = ResolvedVendorOption.fromJson(directSource);
+      if (direct.vendorId != null || direct.branchId != null) {
+        options.add(direct);
+      }
     }
     final seen = <String>{};
     return VendorResolution(
@@ -1900,12 +2325,50 @@ class VendorResolution {
     );
   }
 
+  static bool _isResponseWithinRadius(
+    Map<String, dynamic> source,
+    double? radiusKm,
+  ) {
+    if (!_isWithinRadius(source, radiusKm)) return false;
+    for (final candidate in [
+      source['nearestVendor'],
+      if (source['data'] is Map) (source['data'] as Map)['nearestVendor'],
+      if (source['result'] is Map) (source['result'] as Map)['nearestVendor'],
+    ]) {
+      if (candidate is! Map) continue;
+      final nested = Map<String, dynamic>.from(candidate);
+      if (_distanceKmFrom(nested) != null &&
+          !_isWithinRadius(nested, radiusKm)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _isWithinRadius(Map<String, dynamic> source, double? radiusKm) {
+    if (radiusKm == null || radiusKm <= 0) return true;
+    final distanceKm = _distanceKmFrom(source);
+    return distanceKm == null || distanceKm <= radiusKm;
+  }
+
   static List<Map<String, dynamic>> _extractVendors(Map<String, dynamic> json) {
     final candidates = [
       json['vendors'],
+      json['nearbyVendors'],
+      json['availableVendors'],
+      json['branches'],
+      json['stores'],
       json['data'],
       if (json['data'] is Map) (json['data'] as Map)['vendors'],
+      if (json['data'] is Map) (json['data'] as Map)['nearbyVendors'],
+      if (json['data'] is Map) (json['data'] as Map)['availableVendors'],
+      if (json['data'] is Map) (json['data'] as Map)['branches'],
+      if (json['data'] is Map) (json['data'] as Map)['stores'],
       if (json['result'] is Map) (json['result'] as Map)['vendors'],
+      if (json['result'] is Map) (json['result'] as Map)['nearbyVendors'],
+      if (json['result'] is Map) (json['result'] as Map)['availableVendors'],
+      if (json['result'] is Map) (json['result'] as Map)['branches'],
+      if (json['result'] is Map) (json['result'] as Map)['stores'],
     ];
     for (final candidate in candidates) {
       if (candidate is List) {
@@ -1917,14 +2380,105 @@ class VendorResolution {
     }
     return const [];
   }
+
+  static List<String> _extractVendorIds(Map<String, dynamic> json) {
+    final candidates = [
+      json['vendorIds'],
+      json['vendor_ids'],
+      if (json['data'] is Map) (json['data'] as Map)['vendorIds'],
+      if (json['data'] is Map) (json['data'] as Map)['vendor_ids'],
+      if (json['result'] is Map) (json['result'] as Map)['vendorIds'],
+      if (json['result'] is Map) (json['result'] as Map)['vendor_ids'],
+    ];
+    return candidates
+        .whereType<List>()
+        .expand((items) => items)
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> _extractDirectSources(
+    Map<String, dynamic> json,
+  ) {
+    final candidates = [
+      json,
+      json['nearestVendor'],
+      json['vendor'],
+      json['branch'],
+      json['store'],
+      if (json['data'] is Map) json['data'],
+      if (json['data'] is Map) (json['data'] as Map)['nearestVendor'],
+      if (json['data'] is Map) (json['data'] as Map)['vendor'],
+      if (json['data'] is Map) (json['data'] as Map)['branch'],
+      if (json['data'] is Map) (json['data'] as Map)['store'],
+      if (json['result'] is Map) json['result'],
+      if (json['result'] is Map) (json['result'] as Map)['nearestVendor'],
+      if (json['result'] is Map) (json['result'] as Map)['vendor'],
+      if (json['result'] is Map) (json['result'] as Map)['branch'],
+      if (json['result'] is Map) (json['result'] as Map)['store'],
+    ];
+    return candidates
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  static double? _distanceKmFrom(Map<String, dynamic> source) {
+    for (final key in const [
+      'distanceKm',
+      'distance_km',
+      'distanceKM',
+      'distance',
+      'distanceInKm',
+      'distance_in_km',
+    ]) {
+      final parsed = _numberFrom(source[key]);
+      if (parsed != null) return parsed;
+    }
+    for (final key in const [
+      'distanceMeters',
+      'distance_meters',
+      'distanceInMeters',
+      'distance_in_meters',
+    ]) {
+      final parsed = _numberFrom(source[key]);
+      if (parsed != null) return parsed / 1000;
+    }
+    return null;
+  }
+
+  static double? _numberFrom(Object? value) {
+    if (value is num && value.isFinite) return value.toDouble();
+    if (value is Map) {
+      for (final key in const ['km', 'text', 'value']) {
+        final parsed = _numberFrom(value[key]);
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return null;
+    final direct = double.tryParse(raw);
+    if (direct != null) return direct;
+    final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(raw);
+    return match == null ? null : double.tryParse(match.group(0)!);
+  }
 }
 
 class ResolvedVendorOption {
-  const ResolvedVendorOption({this.vendorId, this.branchId, this.label});
+  const ResolvedVendorOption({
+    this.vendorId,
+    this.branchId,
+    this.label,
+    this.distanceKm,
+  });
 
   final String? vendorId;
   final String? branchId;
   final String? label;
+  final double? distanceKm;
 
   factory ResolvedVendorOption.fromJson(Map<String, dynamic> json) {
     String? id(Object? value) {
@@ -1951,6 +2505,7 @@ class ResolvedVendorOption {
           id(branch['id']) ??
           id(branch['branchId']),
       label: id(json['branchName']) ?? id(json['name']),
+      distanceKm: VendorResolution._distanceKmFrom(json),
     );
   }
 }

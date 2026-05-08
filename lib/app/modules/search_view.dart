@@ -83,7 +83,7 @@ class _SearchViewState extends State<SearchView> {
                   autofocus: true,
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
-                    hintText: 'Search for products...',
+                    hintText: 'Search For Products...',
                     prefixIcon: Icon(Icons.search, color: AppColors.primary),
                     suffixIcon: Obx(
                       () => _query.value.isEmpty
@@ -111,7 +111,7 @@ class _SearchViewState extends State<SearchView> {
                   if (!_hasSearched.value) {
                     return _SearchState(
                       icon: Icons.search,
-                      title: 'Search for products',
+                      title: 'Search For Products',
                       subtitle:
                           'Enter a product name to search nearby catalog.',
                     );
@@ -119,7 +119,7 @@ class _SearchViewState extends State<SearchView> {
                   if (_results.isEmpty) {
                     return _SearchState(
                       icon: Icons.search_off,
-                      title: 'No products found',
+                      title: 'No Products Found',
                       subtitle:
                           'Try another keyword or select a delivery address first.',
                     );

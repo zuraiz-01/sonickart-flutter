@@ -1,4 +1,4 @@
-﻿import 'cart_item_model.dart';
+import 'cart_item_model.dart';
 
 class OrderModel {
   const OrderModel({
@@ -186,6 +186,10 @@ class OrderModel {
     if (source is List) return source;
     if (source is! Map) return const [];
     final map = Map<String, dynamic>.from(source);
+    if (map.isNotEmpty &&
+        map.keys.every((key) => RegExp(r'^\d+$').hasMatch(key))) {
+      return map.values.toList();
+    }
     for (final key in [
       'items',
       'item',

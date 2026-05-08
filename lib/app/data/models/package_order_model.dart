@@ -176,10 +176,7 @@
             json['amount'] ??
             deliveryCharge,
       ),
-      status:
-          (json['deliveryStatus'] ?? json['delivery_status'] ?? json['status'])
-              ?.toString() ??
-          'pending',
+      status: _status(json),
       createdAt:
           DateTime.tryParse(
             json['createdAt']?.toString() ??
@@ -220,5 +217,28 @@
 
   static double _number(Object? value) {
     return _numberOrNull(value) ?? 0;
+  }
+
+  static String _status(Map<String, dynamic> json) {
+    final primary = _normalizeStatus(json['status']?.toString());
+    final delivery = _normalizeStatus(
+      (json['deliveryStatus'] ?? json['delivery_status'])?.toString(),
+    );
+
+    if (primary == 'delivered') return primary;
+    if (primary.isNotEmpty && primary != 'pending') return primary;
+    if (delivery.isNotEmpty) return delivery;
+    if (primary.isNotEmpty) return primary;
+    return 'pending';
+  }
+
+  static String _normalizeStatus(String? value) {
+    final normalized = (value ?? '').trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
+    if (normalized == 'cancel') return 'cancelled';
+    if (normalized == 'canceled') return 'cancelled';
+    return normalized;
   }
 }

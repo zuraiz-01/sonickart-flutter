@@ -145,7 +145,15 @@ class ProductModel {
     final imageValue = _imageString(rawImageValue);
     final featuredImageValue = _imageString(rawFeaturedImageValue);
     return ProductModel(
-      id: (json['id'] ?? json['_id'] ?? json['productId'])?.toString() ?? '',
+      id:
+          (json['id'] ??
+                  json['_id'] ??
+                  json['productId'] ??
+                  json['product_id'] ??
+                  json['itemId'] ??
+                  json['item_id'])
+              ?.toString() ??
+          '',
       categoryId:
           (json['categoryId'] ??
                   json['category_id'] ??
@@ -154,7 +162,15 @@ class ProductModel {
                   category['categoryId'])
               ?.toString() ??
           '',
-      name: json['name']?.toString() ?? json['product_name']?.toString() ?? '',
+      name:
+          (json['name'] ??
+                  json['productName'] ??
+                  json['product_name'] ??
+                  json['itemName'] ??
+                  json['item_name'] ??
+                  json['title'])
+              ?.toString() ??
+          '',
       description:
           (json['description'] ??
                   json['details'] ??

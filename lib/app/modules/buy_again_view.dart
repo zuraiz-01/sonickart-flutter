@@ -21,7 +21,7 @@ class BuyAgainView extends GetView<OrderController> {
             .where((order) => order.items.isNotEmpty)
             .toList();
         if (orders.isEmpty) {
-          return Center(child: Text('Previous orders will appear here.'));
+          return Center(child: Text('Previous Orders Will Appear Here.'));
         }
         return ListView.separated(
           padding: EdgeInsets.all(16.rpx),
@@ -82,7 +82,7 @@ class BuyAgainView extends GetView<OrderController> {
                         }
                         Get.toNamed(AppRoutes.checkout);
                       },
-                      child: Text('Add all and checkout'),
+                      child: Text('Add All And Checkout'),
                     ),
                   ),
                 ],

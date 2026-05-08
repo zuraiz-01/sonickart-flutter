@@ -53,7 +53,7 @@ class CartController extends GetxController {
       final serverItems = await _tryFetchServerCart();
       items.assignAll(serverItems.isNotEmpty ? serverItems : restoredItems);
       debugPrint(
-        'CartController.syncCartFromStorage: restored ${items.length} lines and $totalItems total items',
+        'CartController.syncCartFromStorage: restored ${items.length} lines and $totalItems Total items',
       );
     } catch (error, stackTrace) {
       debugPrint('CartController.syncCartFromStorage: failed with $error');
@@ -174,7 +174,7 @@ class CartController extends GetxController {
     final payload = items.map((item) => item.toJson()).toList();
     await _storage.write(_storageKey, payload);
     debugPrint(
-      'CartController._persistCart: persisted ${items.length} lines and $totalItems total items',
+      'CartController._persistCart: persisted ${items.length} lines and $totalItems Total items',
     );
   }
 

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
+import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
+import '../../dashboard/controllers/dashboard_controller.dart';
 
 class CartView extends GetView<CartController> {
   const CartView({super.key, this.showScaffold = false});
@@ -13,13 +14,13 @@ class CartView extends GetView<CartController> {
 
   @override
   Widget build(BuildContext context) {
-    final content = Obx(() {
+    final cartContent = Obx(() {
       if (controller.isEmpty) {
         return _CartEmptyState(isSyncing: controller.isSyncingCart.value);
       }
 
       return ListView(
-        padding: EdgeInsets.fromLTRB(16.wpx, 16.hpx, 16.wpx, 24.hpx),
+        padding: EdgeInsets.fromLTRB(16.wpx, 16.hpx, 16.wpx, 110.hpx),
         children: [
           _SummaryCard(
             totalItems: controller.totalItems,
@@ -38,14 +39,81 @@ class CartView extends GetView<CartController> {
       );
     });
 
+    final content = ColoredBox(
+      color: const Color(0xFFF5F8FF),
+      child: Column(
+        children: [
+          _CartHeader(showBackToHome: !showScaffold),
+          Expanded(child: cartContent),
+        ],
+      ),
+    );
+
     if (!showScaffold) {
       return content;
     }
 
     return Scaffold(
-      backgroundColor: Color(0xFFF5F8FF),
-      appBar: AppBar(title: Text('Cart'), centerTitle: true),
-      body: content,
+      backgroundColor: const Color(0xFFF5F8FF),
+      body: SafeArea(child: content),
+    );
+  }
+}
+
+class _CartHeader extends StatelessWidget {
+  const _CartHeader({required this.showBackToHome});
+
+  final bool showBackToHome;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60.hpx,
+      padding: EdgeInsets.all(10.rpx),
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 44.wpx,
+            height: 44.hpx,
+            child: IconButton(
+              onPressed: () {
+                if (showBackToHome && Get.isRegistered<DashboardController>()) {
+                  openDashboardTab(0);
+                  return;
+                }
+                if (Get.key.currentState?.canPop() ?? false) {
+                  Get.back<void>();
+                  return;
+                }
+                openDashboardTab(0);
+              },
+              icon: Icon(
+                Icons.chevron_left_rounded,
+                color: AppColors.textPrimary,
+                size: 24.rpx,
+              ),
+              padding: EdgeInsets.zero,
+              tooltip: 'Go back',
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'Cart',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16.spx,
+              ),
+            ),
+          ),
+          SizedBox(width: 44.wpx, height: 44.hpx),
+        ],
+      ),
     );
   }
 }
@@ -103,7 +171,7 @@ class _ItemsCard extends StatelessWidget {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 8,
@@ -111,9 +179,11 @@ class _ItemsCard extends StatelessWidget {
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          Padding(
+          Container(
+            color: const Color(0xFFFAFBFF),
             padding: EdgeInsets.fromLTRB(14.wpx, 14.hpx, 14.wpx, 8.hpx),
             child: Row(
               children: [
@@ -140,13 +210,10 @@ class _ItemsCard extends StatelessWidget {
           ...controller.items.map((item) {
             return _CartItemRow(
               itemId: item.product.id,
-              emoji: item.product.emoji,
               imageUrl: item.product.resolvedImageUrl,
               name: item.product.name,
-              description: item.product.description,
-              unit: item.product.unit,
               quantity: item.quantity,
-              totalPrice: item.totalPrice,
+              unitPrice: item.product.numericPrice,
               onAdd: () => controller.addItem(item.product),
               onRemove: () => controller.removeItem(item.product.id),
             );
@@ -160,127 +227,110 @@ class _ItemsCard extends StatelessWidget {
 class _CartItemRow extends StatelessWidget {
   const _CartItemRow({
     required this.itemId,
-    required this.emoji,
     required this.imageUrl,
     required this.name,
-    required this.description,
-    required this.unit,
     required this.quantity,
-    required this.totalPrice,
+    required this.unitPrice,
     required this.onAdd,
     required this.onRemove,
   });
 
   final String itemId;
-  final String emoji;
   final String imageUrl;
   final String name;
-  final String description;
-  final String unit;
   final int quantity;
-  final double totalPrice;
+  final double unitPrice;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     debugPrint('CartView._CartItemRow: item=$itemId imageUrl=$imageUrl');
-    return Padding(
-      padding: EdgeInsets.all(14.rpx),
+    return Container(
+      color: AppColors.white,
+      padding: EdgeInsets.symmetric(horizontal: 14.wpx, vertical: 16.hpx),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 62.wpx,
-            height: 62.hpx,
+            width: 70.wpx,
+            height: 70.hpx,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14.rpx),
+              color: const Color(0xFFF3F7FF),
+              borderRadius: BorderRadius.circular(18.rpx),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.10),
+              ),
             ),
             clipBehavior: Clip.antiAlias,
             child: imageUrl.isNotEmpty
                 ? Image.network(
                     imageUrl,
+                    width: 46.wpx,
+                    height: 46.hpx,
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) =>
-                        _ProductImageFallback(emoji: emoji),
+                        const _ProductImageFallback(text: '!'),
                   )
-                : _ProductImageFallback(emoji: emoji),
+                : const _ProductImageFallback(text: '?'),
           ),
-          SizedBox(width: 12.wpx),
+          SizedBox(width: 14.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   name,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 4.hpx),
-                Text(
-                  description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.35,
-                  ),
-                ),
-                SizedBox(height: 6.hpx),
-                Text(
-                  unit,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15.spx,
                   ),
                 ),
-                SizedBox(height: 10.hpx),
-                Row(
-                  children: [
-                    _QuantityButton(
-                      icon: Icons.remove_rounded,
-                      onTap: onRemove,
+                if (unitPrice > 0) ...[
+                  SizedBox(height: 4.hpx),
+                  Text(
+                    '\u20B9${unitPrice.toStringAsFixed(0)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 13.5.spx,
+                      fontWeight: FontWeight.w500,
                     ),
-                    Container(
-                      width: 40.wpx,
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$quantity',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    _QuantityButton(icon: Icons.add_rounded, onTap: onAdd),
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),
-          SizedBox(width: 10.wpx),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '₹${totalPrice.toStringAsFixed(0)}',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
+          SizedBox(width: 12.wpx),
+          Container(
+            constraints: BoxConstraints(minWidth: 104.wpx),
+            padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 6.hpx),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFF),
+              borderRadius: BorderRadius.circular(999.rpx),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _QuantityButton(icon: Icons.remove_rounded, onTap: onRemove),
+                Container(
+                  width: 28.wpx,
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$quantity',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16.spx,
+                    ),
+                  ),
                 ),
-              ),
-              SizedBox(height: 6.hpx),
-              Text(
-                'ID $itemId',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
+                _QuantityButton(icon: Icons.add_rounded, onTap: onAdd),
+              ],
+            ),
           ),
         ],
       ),
@@ -298,13 +348,14 @@ class _QuantityButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12.rpx),
+      borderRadius: BorderRadius.circular(16.rpx),
       child: Ink(
         width: 32.wpx,
         height: 32.hpx,
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12.rpx),
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16.rpx),
+          border: Border.all(color: AppColors.primary),
         ),
         child: Icon(icon, size: 18, color: AppColors.primary),
       ),
@@ -313,23 +364,19 @@ class _QuantityButton extends StatelessWidget {
 }
 
 class _ProductImageFallback extends StatelessWidget {
-  const _ProductImageFallback({required this.emoji});
+  const _ProductImageFallback({required this.text});
 
-  final String emoji;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    if (emoji.trim().isNotEmpty) {
-      return Center(
-        child: Text(emoji, style: TextStyle(fontSize: 28.spx)),
-      );
-    }
-
     return Center(
-      child: Icon(
-        Icons.image_outlined,
-        color: AppColors.primary.withValues(alpha: 0.45),
-        size: 26,
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: AppColors.textSecondary.withValues(alpha: 0.7),
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -349,7 +396,7 @@ class _PriceCard extends StatelessWidget {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x14000000),
             blurRadius: 8,
@@ -405,7 +452,7 @@ class _PriceRow extends StatelessWidget {
           ),
         ),
         Text(
-          '₹${value.toStringAsFixed(0)}',
+          '\u20B9${value.toStringAsFixed(0)}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.primary,
             fontWeight: weight,
@@ -432,10 +479,10 @@ class _ActionSection extends StatelessWidget {
                 ? null
                 : () => _showClearDialog(context),
             style: OutlinedButton.styleFrom(
-              backgroundColor: Color(0xFFDCE5FF),
+              backgroundColor: const Color(0xFFDCE5FF),
               foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary),
-              padding: EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: AppColors.primary),
+              padding: EdgeInsets.symmetric(vertical: 14.hpx),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14.rpx),
               ),
@@ -444,7 +491,7 @@ class _ActionSection extends StatelessWidget {
               controller.isClearingCart.value
                   ? 'Removing...'
                   : 'Remove all items',
-              style: TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -463,12 +510,12 @@ class _ActionSection extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.white,
-              padding: EdgeInsets.symmetric(vertical: 14),
+              padding: EdgeInsets.symmetric(vertical: 14.hpx),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14.rpx),
               ),
             ),
-            child: Text(
+            child: const Text(
               'Go to Checkout',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
@@ -480,23 +527,95 @@ class _ActionSection extends StatelessWidget {
 
   Future<void> _showClearDialog(BuildContext context) async {
     debugPrint('CartView._showClearDialog: opening clear cart confirmation');
-    final confirmed = await Get.dialog<bool>(
-      AlertDialog(
-        title: Text('Remove all items?'),
-        content: Text(
-          'This action clears your entire cart. You cannot undo it.',
+    final confirmed = await Get.bottomSheet<bool>(
+      SafeArea(
+        top: false,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(16.wpx, 16.hpx, 16.wpx, 18.hpx),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24.rpx)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Remove all items?',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Get.back(result: false),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.primary,
+                    ),
+                    tooltip: 'Close',
+                  ),
+                ],
+              ),
+              SizedBox(height: 6.hpx),
+              Text(
+                "This action clears your entire cart. You can't undo it.",
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+              SizedBox(height: 18.hpx),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Get.back(result: false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.border),
+                    padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.rpx),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+              SizedBox(height: 10.hpx),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Get.back(result: true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.white,
+                    padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.rpx),
+                    ),
+                  ),
+                  child: Text(
+                    controller.isClearingCart.value
+                        ? 'Removing...'
+                        : 'Remove everything',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Get.back(result: true),
-            child: Text('Remove everything'),
-          ),
-        ],
       ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
     );
 
     if (confirmed == true) {
@@ -518,17 +637,21 @@ class _CartEmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
+            SizedBox(
               width: 140.wpx,
               height: 140.hpx,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(28.rpx),
-              ),
-              child: Icon(
-                Icons.shopping_cart_checkout_rounded,
-                size: 62,
-                color: AppColors.primary,
+                child: Image.asset(
+                  'assets/images/sonickart1.jpg',
+                  fit: BoxFit.contain,
+                  opacity: const AlwaysStoppedAnimation(0.8),
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.shopping_cart_checkout_rounded,
+                    size: 62,
+                    color: AppColors.primary,
+                  ),
+                ),
               ),
             ),
             SizedBox(height: 18.hpx),
@@ -557,12 +680,15 @@ class _CartEmptyState extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
-                padding: EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 22.wpx,
+                  vertical: 14.hpx,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999.rpx),
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'Explore Categories',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),

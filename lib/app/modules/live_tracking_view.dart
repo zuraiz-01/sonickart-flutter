@@ -6,9 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../core/widgets/app_snackbar.dart';
 import '../data/models/order_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
@@ -72,7 +70,7 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
                   width: double.infinity,
                   color: AppColors.white,
                   child: order == null
-                      ? Center(child: Text('No active order found.'))
+                      ? Center(child: Text('No Active Order Found.'))
                       : RefreshIndicator(
                           color: AppColors.primary,
                           onRefresh: _refreshOrder,
@@ -211,43 +209,49 @@ class _TrackingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final eta = controller.etaFor(order);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(15.wpx, 15.hpx, 15.wpx, 150.hpx),
+      padding: EdgeInsets.fromLTRB(18.wpx, 18.hpx, 18.wpx, 150.hpx),
       children: [
-        _LiveMapCard(order: order, etaLabel: _etaLabel(order.status, eta)),
-        SizedBox(height: 10.hpx),
-        _LiveStatusCard(order: order, controller: controller),
-        SizedBox(height: 10.hpx),
-        _PartnerCard(order: order),
-        SizedBox(height: 10.hpx),
-        _OrderSummaryCard(order: order),
-        SizedBox(height: 10.hpx),
-        _OrderedItemsCard(order: order),
-        SizedBox(height: 10.hpx),
-        _DeliveryAddressCard(order: order),
-        SizedBox(height: 10.hpx),
-        _BillDetailsCard(order: order),
+        _LiveMapCard(
+          order: order,
+          etaLabel: _LiveTrackingHeader._headerSubtitle(
+            order.status,
+            order.raw['etaMinutes'],
+          ),
+        ),
         SizedBox(height: 16.hpx),
+        if (order.status.toLowerCase() != 'cancelled' &&
+            order.status.toLowerCase() != 'delivered') ...[
+          _LiveStatusCard(order: order),
+          SizedBox(height: 16.hpx),
+        ],
+        _OrderSummaryCard(order: order),
+        SizedBox(height: 16.hpx),
+        _OrderedItemsCard(order: order),
+        SizedBox(height: 16.hpx),
+        _DeliveryAddressCard(order: order),
+        SizedBox(height: 16.hpx),
+        _BillDetailsCard(order: order),
+        SizedBox(height: 20.hpx),
         if (order.status.toLowerCase() != 'cancelled' &&
             order.status.toLowerCase() != 'delivered')
           Container(
-            margin: EdgeInsets.symmetric(vertical: 6.hpx),
+            margin: EdgeInsets.symmetric(vertical: 8.hpx),
             child: FilledButton.icon(
               onPressed: () => _cancelOrder(context),
-              icon: Icon(Icons.cancel_outlined),
+              icon: Icon(Icons.cancel_outlined, size: 22.spx),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: AppColors.white,
-                padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                padding: EdgeInsets.symmetric(vertical: 17.hpx),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.rpx),
+                  borderRadius: BorderRadius.circular(10.rpx),
                 ),
               ),
               label: Text(
                 'Cancel Order',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.spx),
               ),
             ),
           ),
@@ -269,17 +273,6 @@ class _TrackingBody extends StatelessWidget {
     if (reason == null || reason.trim().isEmpty) return;
     await controller.cancelOrder(order, reason: reason);
   }
-
-  String _etaLabel(String status, int? eta) {
-    final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Cancelled';
-    if (lower == 'delivered') return 'Fastest Delivery';
-    if (eta == null) {
-      return lower == 'pending' ? 'Getting things ready' : 'Tracking live';
-    }
-    if (eta <= 1) return 'ETA Arriving now';
-    return 'ETA $eta mins';
-  }
 }
 
 class _DeliveryAddressCard extends StatelessWidget {
@@ -290,23 +283,30 @@ class _DeliveryAddressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final address = order.deliveryAddress.trim().isEmpty
-        ? 'Delivery address unavailable'
+        ? 'Delivery Address unavailable'
         : order.deliveryAddress.trim();
     final recipient = order.customerName.trim().isEmpty
-        ? 'Delivery address'
+        ? 'Delivery Address'
         : order.customerName.trim();
     return Container(
-      padding: EdgeInsets.all(16.rpx),
+      padding: EdgeInsets.all(20.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(15.rpx),
+        borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 6,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _RoundIcon(icon: Icons.location_on_outlined),
-          SizedBox(width: 12.wpx),
+          SizedBox(width: 14.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,10 +316,10 @@ class _DeliveryAddressCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.spx,
+                    fontSize: 13.spx,
                   ),
                 ),
-                SizedBox(height: 4.hpx),
+                SizedBox(height: 5.hpx),
                 Text(
                   recipient,
                   maxLines: 1,
@@ -327,20 +327,141 @@ class _DeliveryAddressCard extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w900,
-                    fontSize: 16.spx,
+                    fontSize: 18.spx,
                   ),
                 ),
-                SizedBox(height: 4.hpx),
+                SizedBox(height: 6.hpx),
                 Text(
                   address,
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13.spx,
-                    height: 1.35,
+                    fontSize: 15.spx,
+                    height: 1.4,
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveStatusCard extends StatelessWidget {
+  const _LiveStatusCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _TrackingMapData.fromOrder(order);
+    final eta = order.raw['etaMinutes'] is num
+        ? (order.raw['etaMinutes'] as num).toInt()
+        : int.tryParse('${order.raw['etaMinutes']}');
+    final distance = data.liveDistanceKm;
+    return _SectionCard(
+      padding: EdgeInsets.all(16.rpx),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.route_outlined,
+                size: 18.rpx,
+                color: AppColors.primary,
+              ),
+              SizedBox(width: 8.wpx),
+              Text(
+                'Live Tracking',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16.spx,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.hpx),
+          if (eta != null)
+            _LiveStatusRow(
+              icon: Icons.schedule_outlined,
+              label: 'ETA',
+              value: eta <= 0
+                  ? 'Arriving now'
+                  : '$eta ${eta == 1 ? 'min' : 'mins'}',
+            ),
+          if (distance != null)
+            _LiveStatusRow(
+              icon: Icons.near_me_outlined,
+              label: 'Distance',
+              value: '${distance.toStringAsFixed(2)} km',
+            ),
+          _LiveStatusRow(
+            icon: Icons.info_outline,
+            label: 'Status',
+            value: _statusText(order.status),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _statusText(String status) {
+    final normalized = status.trim().toLowerCase();
+    return switch (normalized) {
+      'pending' => 'Waiting for pickup',
+      'assigned' => 'On the way to pickup',
+      'picked' => 'On the way to delivery',
+      'confirmed' || 'accepted' => 'On the way',
+      'out_for_delivery' => 'Out for delivery',
+      'prepared' => 'Preparing order',
+      'ready' => 'Ready for pickup',
+      _ => normalized.replaceAll('_', ' ').capitalizeFirst ??
+          'Tracking live',
+    };
+  }
+}
+
+class _LiveStatusRow extends StatelessWidget {
+  const _LiveStatusRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 10.hpx),
+      child: Row(
+        children: [
+          Icon(icon, size: 17.rpx, color: AppColors.accent),
+          SizedBox(width: 10.wpx),
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13.spx,
+            ),
+          ),
+          SizedBox(width: 10.wpx),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+                fontSize: 14.spx,
+              ),
             ),
           ),
         ],
@@ -399,18 +520,18 @@ class _OrderedItemsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      padding: EdgeInsets.symmetric(vertical: 10.hpx),
+      padding: EdgeInsets.symmetric(vertical: 14.hpx),
       child: Column(
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10.wpx),
+            padding: EdgeInsets.symmetric(horizontal: 14.wpx),
             child: _SectionHeader(
               icon: Icons.shopping_bag_outlined,
               title: 'Ordered Items (${order.items.length})',
-              subtitle: 'Items in your order',
+              subtitle: 'Items In Your Order',
             ),
           ),
-          SizedBox(height: 10.hpx),
+          SizedBox(height: 14.hpx),
           ...order.items.map((item) => _OrderedItemTile(item: item)),
         ],
       ),
@@ -427,11 +548,11 @@ class _OrderedItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = item.product.resolvedImageUrl;
     return Container(
-      margin: EdgeInsets.fromLTRB(10.wpx, 0, 10.wpx, 10.hpx),
-      padding: EdgeInsets.all(10.rpx),
+      margin: EdgeInsets.fromLTRB(14.wpx, 0, 14.wpx, 12.hpx),
+      padding: EdgeInsets.all(13.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(12.rpx),
+        borderRadius: BorderRadius.circular(15.rpx),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -444,33 +565,33 @@ class _OrderedItemTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 60.wpx,
-            height: 60.wpx,
+            width: 72.wpx,
+            height: 72.wpx,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(15.rpx),
+              borderRadius: BorderRadius.circular(17.rpx),
             ),
             clipBehavior: Clip.antiAlias,
             child: image.isNotEmpty
                 ? Image.network(
                     image,
-                    width: 42.wpx,
-                    height: 42.wpx,
+                    width: 52.wpx,
+                    height: 52.wpx,
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.image_outlined,
                       color: AppColors.textSecondary,
-                      size: 20.spx,
+                      size: 24.spx,
                     ),
                   )
                 : Icon(
                     Icons.image_outlined,
                     color: AppColors.textSecondary,
-                    size: 20.spx,
+                    size: 24.spx,
                   ),
           ),
-          SizedBox(width: 12.wpx),
+          SizedBox(width: 14.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,50 +603,50 @@ class _OrderedItemTile extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 14.spx,
+                    fontSize: 16.spx,
                     height: 1.25,
                   ),
                 ),
-                SizedBox(height: 4.hpx),
+                SizedBox(height: 6.hpx),
                 Text(
                   '₹${item.product.displayPrice}',
                   style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(width: 10.wpx),
+          SizedBox(width: 12.wpx),
           Column(
             children: [
               Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: 12.wpx,
-                  vertical: 6.hpx,
+                  horizontal: 14.wpx,
+                  vertical: 8.hpx,
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(16.rpx),
+                  borderRadius: BorderRadius.circular(18.rpx),
                 ),
                 child: Text(
                   '${item.quantity}',
                   style: TextStyle(
                     color: AppColors.white,
                     fontWeight: FontWeight.w900,
-                    fontSize: 12.spx,
+                    fontSize: 14.spx,
                   ),
                 ),
               ),
-              SizedBox(height: 3.hpx),
+              SizedBox(height: 5.hpx),
               Text(
                 'Qty',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w700,
-                  fontSize: 10.spx,
+                  fontSize: 12.spx,
                 ),
               ),
             ],
@@ -565,22 +686,22 @@ class _BillDetailsCard extends StatelessWidget {
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w900,
-              fontSize: 17.spx,
+              fontSize: 20.spx,
             ),
+          ),
+          SizedBox(height: 18.hpx),
+          _BillRowLine(
+            icon: Icons.article_outlined,
+            label: 'Items Total',
+            value: '₹${itemsTotal.toStringAsFixed(2)}',
           ),
           SizedBox(height: 14.hpx),
           _BillRowLine(
-            icon: Icons.article_outlined,
-            label: 'Items total',
-            value: '₹${itemsTotal.toStringAsFixed(2)}',
-          ),
-          SizedBox(height: 12.hpx),
-          _BillRowLine(
             icon: Icons.pedal_bike_outlined,
-            label: 'Delivery charge',
+            label: 'Delivery Charge',
             value: '₹${deliveryCharge.toStringAsFixed(2)}',
           ),
-          Divider(height: 28.hpx, color: AppColors.border),
+          Divider(height: 34.hpx, color: AppColors.border),
           _SummaryRow(
             label: 'Grand Total',
             value: '₹${grandTotal.toStringAsFixed(2)}',
@@ -606,16 +727,16 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding ?? EdgeInsets.all(15.rpx),
+      padding: padding ?? EdgeInsets.all(20.rpx),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(15.rpx),
+        borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
             color: Color(0x14000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            blurRadius: 6,
+            offset: Offset(0, 3),
           ),
         ],
       ),
@@ -640,7 +761,7 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       children: [
         _RoundIcon(icon: icon),
-        SizedBox(width: 10.wpx),
+        SizedBox(width: 12.wpx),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -650,16 +771,16 @@ class _SectionHeader extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w900,
-                  fontSize: 15.spx,
+                  fontSize: 18.spx,
                 ),
               ),
-              SizedBox(height: 2.hpx),
+              SizedBox(height: 4.hpx),
               Text(
                 subtitle,
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 12.spx,
+                  fontSize: 14.spx,
                 ),
               ),
             ],
@@ -678,13 +799,13 @@ class _RoundIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 40.rpx,
-      height: 40.rpx,
+      width: 48.rpx,
+      height: 48.rpx,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: AppColors.accent, size: 20.spx),
+      child: Icon(icon, color: AppColors.accent, size: 24.spx),
     );
   }
 }
@@ -712,7 +833,7 @@ class _SummaryRow extends StatelessWidget {
               style: TextStyle(
                 color: strong ? AppColors.primary : AppColors.textSecondary,
                 fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
-                fontSize: strong ? 15.spx : 13.spx,
+                fontSize: strong ? 17.spx : 15.spx,
               ),
             ),
           ),
@@ -722,7 +843,7 @@ class _SummaryRow extends StatelessWidget {
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: strong ? FontWeight.w900 : FontWeight.w800,
-              fontSize: strong ? 15.spx : 13.spx,
+              fontSize: strong ? 17.spx : 15.spx,
             ),
           ),
         ],
@@ -746,15 +867,15 @@ class _BillRowLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: AppColors.accent, size: 18.spx),
-        SizedBox(width: 8.wpx),
+        Icon(icon, color: AppColors.accent, size: 20.spx),
+        SizedBox(width: 10.wpx),
         Expanded(
           child: Text(
             label,
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w700,
-              fontSize: 13.spx,
+              fontSize: 15.spx,
             ),
           ),
         ),
@@ -763,240 +884,11 @@ class _BillRowLine extends StatelessWidget {
           style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w800,
-            fontSize: 13.spx,
+            fontSize: 15.spx,
           ),
         ),
       ],
     );
-  }
-}
-
-class _LiveStatusCard extends StatelessWidget {
-  const _LiveStatusCard({required this.order, required this.controller});
-
-  final OrderModel order;
-  final OrderController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final mapData = _TrackingMapData.fromOrder(order);
-    final eta = controller.etaFor(order);
-    final distance = mapData.liveDistanceKm;
-    return _SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            icon: Icons.route_outlined,
-            title: 'Live Tracking',
-            subtitle: 'Latest delivery movement',
-          ),
-          SizedBox(height: 12.hpx),
-          _LiveMetricRow(
-            icon: Icons.schedule_outlined,
-            label: 'ETA',
-            value: eta == null
-                ? 'Tracking live'
-                : eta <= 1
-                ? 'Arriving now'
-                : '$eta mins',
-          ),
-          if (distance != null) ...[
-            SizedBox(height: 9.hpx),
-            _LiveMetricRow(
-              icon: Icons.near_me_outlined,
-              label: 'Distance',
-              value: '${distance.toStringAsFixed(2)} km',
-            ),
-          ],
-          SizedBox(height: 9.hpx),
-          _LiveMetricRow(
-            icon: Icons.info_outline,
-            label: 'Status',
-            value: _statusCopy(order.status),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _statusCopy(String status) {
-    final normalized = status.trim().toLowerCase();
-    if (normalized == 'pending') return 'Waiting for pickup';
-    if (normalized == 'assigned') return 'On the way to pickup';
-    if (normalized == 'picked') return 'On the way to delivery';
-    if (normalized == 'confirmed' || normalized == 'accepted') {
-      return 'On the way';
-    }
-    if (normalized == 'out_for_delivery' || normalized == 'arriving') {
-      return 'Out for delivery';
-    }
-    if (normalized == 'prepared' || normalized == 'ready') {
-      return 'Preparing order';
-    }
-    if (normalized.isEmpty) return 'Tracking live';
-    return normalized.replaceAll('_', ' ').capitalizeFirst ?? normalized;
-  }
-}
-
-class _LiveMetricRow extends StatelessWidget {
-  const _LiveMetricRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.accent, size: 18.spx),
-        SizedBox(width: 10.wpx),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.spx,
-                ),
-              ),
-              SizedBox(height: 1.hpx),
-              Text(
-                value,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14.spx,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PartnerCard extends StatelessWidget {
-  const _PartnerCard({required this.order});
-
-  final OrderModel order;
-
-  @override
-  Widget build(BuildContext context) {
-    final partner = _deliveryPartner(order);
-    final name =
-        _firstString([
-          partner['name'],
-          partner['fullName'],
-          partner['firstName'],
-          partner['lastName'],
-          order.raw['deliveryPartnerName'],
-        ]) ??
-        'We will soon assign delivery partner';
-    final phone = _firstString([
-      partner['phone'],
-      partner['contactNumber'],
-      partner['mobile'],
-      partner['phoneNumber'],
-      order.raw['deliveryPartnerPhone'],
-    ]);
-    return Container(
-      padding: EdgeInsets.all(10.rpx),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(15.rpx),
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.7)),
-      ),
-      child: Row(
-        children: [
-          _RoundIcon(
-            icon: phone == null ? Icons.shopping_bag_outlined : Icons.phone,
-          ),
-          SizedBox(width: 12.wpx),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14.spx,
-                  ),
-                ),
-                if (phone != null) ...[
-                  SizedBox(height: 4.hpx),
-                  InkWell(
-                    onTap: () => _callPhone(phone),
-                    child: Text(
-                      phone,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        decoration: TextDecoration.underline,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-                SizedBox(height: 4.hpx),
-                Text(
-                  phone == null
-                      ? 'Delivery partner details will appear here.'
-                      : 'For delivery instructions you can contact here.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.spx,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Map<String, dynamic> _deliveryPartner(OrderModel order) {
-    final raw = order.raw['deliveryPartner'];
-    return raw is Map ? Map<String, dynamic>.from(raw) : const {};
-  }
-
-  static String? _firstString(List<Object?> values) {
-    for (final value in values) {
-      final text = value?.toString().trim() ?? '';
-      if (text.isNotEmpty) return text;
-    }
-    return null;
-  }
-
-  static Future<void> _callPhone(String phone) async {
-    final sanitized = phone.trim().replaceAll(RegExp(r'[^\d+]'), '');
-    if (sanitized.isEmpty) {
-      AppSnackBar.show('Call failed', 'Phone number is not available.');
-      return;
-    }
-    final uri = Uri(scheme: 'tel', path: sanitized);
-    if (!await canLaunchUrl(uri)) {
-      AppSnackBar.show(
-        'Call failed',
-        'Your device cannot place calls right now.',
-      );
-      return;
-    }
-    await launchUrl(uri);
   }
 }
 
@@ -1157,11 +1049,23 @@ class _TrackingMapData {
     return _TrackingMapData(
       deliveryLocation:
           _coordinateFrom(raw['deliveryLocation']) ??
+          _coordinateFrom(raw['dropLocation']) ??
           _coordinateFrom({
-            'latitude': raw['customerLatitude'],
-            'longitude': raw['customerLongitude'],
+            'latitude':
+                raw['customerLatitude'] ??
+                raw['latitude'] ??
+                raw['deliveryLatitude'] ??
+                raw['delivery_latitude'],
+            'longitude':
+                raw['customerLongitude'] ??
+                raw['longitude'] ??
+                raw['deliveryLongitude'] ??
+                raw['delivery_longitude'],
           }),
-      pickupLocation: _coordinateFrom(raw['pickupLocation']),
+      pickupLocation:
+          _coordinateFrom(raw['pickupLocation']) ??
+          _coordinateFrom(raw['vendorLocation']) ??
+          _coordinateFrom(raw['storeLocation']),
       deliveryPersonLocation:
           _coordinateFrom(raw['deliveryPersonLocation']) ??
           _coordinateFrom(deliveryPartner['liveLocation']),
@@ -1206,7 +1110,7 @@ class _TrackingMapData {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueOrange,
           ),
-          infoWindow: const InfoWindow(title: 'Delivery address'),
+          infoWindow: const InfoWindow(title: 'Delivery Address'),
         ),
       if (pickupLocation != null)
         Marker(
@@ -1224,7 +1128,7 @@ class _TrackingMapData {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueAzure,
           ),
-          infoWindow: const InfoWindow(title: 'Delivery partner'),
+          infoWindow: const InfoWindow(title: 'Delivery Partner'),
         ),
     };
   }
@@ -1476,14 +1380,14 @@ class _CancellationReasonSheet extends StatefulWidget {
 
 class _CancellationReasonSheetState extends State<_CancellationReasonSheet> {
   static const _reasons = [
-    (icon: Icons.error_outline, title: 'Ordered by mistake'),
+    (icon: Icons.error_outline, title: 'Ordered By Mistake'),
     (
       icon: Icons.location_off_outlined,
-      title: 'Wrong address or delivery location',
+      title: 'Wrong Address Or Delivery Location',
     ),
-    (icon: Icons.local_offer_outlined, title: 'Found a better price or offer'),
+    (icon: Icons.local_offer_outlined, title: 'Found A Better Price Or Offer'),
     (icon: Icons.cancel_outlined, title: "Don't need the items anymore"),
-    (icon: Icons.access_time, title: 'Delivery time is too long'),
+    (icon: Icons.access_time, title: 'Delivery Time Is Too Long'),
   ];
 
   String? _selectedReason;

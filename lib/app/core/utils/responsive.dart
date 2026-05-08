@@ -13,9 +13,9 @@ class AppResponsive {
   static double radius(num value) => math.min(width(value), height(value));
 
   static double font(num value) {
-    final scaled = value.sp;
-    final min = value.toDouble() * 0.9;
-    final max = value.toDouble() * 1.2;
+    final scaled = value.sp * 1.08;
+    final min = value.toDouble();
+    final max = value.toDouble() * 1.32;
     return scaled.clamp(min, max).toDouble();
   }
 }
