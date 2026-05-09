@@ -58,7 +58,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: AppColors.primary,
-            fontSize: 14.spx,
+            fontSize: 17.spx,
             fontWeight: FontWeight.w900,
             letterSpacing: 0,
           ),

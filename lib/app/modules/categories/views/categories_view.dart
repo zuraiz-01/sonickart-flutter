@@ -23,7 +23,11 @@ class CategoriesView extends GetView<CategoriesController> {
         title: Obx(
           () => Text(
             controller.selectedCategory.value?.name ?? 'Categories',
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 17.spx,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
         centerTitle: true,

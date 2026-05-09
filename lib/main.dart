@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:sizer/sizer.dart';
@@ -8,6 +9,7 @@ import 'app/core/services/firebase_bootstrap.dart';
 import 'app/core/services/session_controller.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
+import 'app/theme/app_colors.dart';
 import 'app/theme/app_theme.dart';
 
 Future<void> main() async {
@@ -47,18 +49,30 @@ Future<void> _initializeFirebase() async {
 class SonicCartApp extends StatelessWidget {
   const SonicCartApp({super.key});
 
+  static const _defaultSystemUiStyle = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+    systemNavigationBarColor: AppColors.white,
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarDividerColor: AppColors.white,
+  );
+
   @override
   Widget build(BuildContext context) {
     return Sizer(
       builder: (context, orientation, deviceType) {
         return ToastificationWrapper(
           child: GetMaterialApp(
-            title: 'sonickart',
+            title: 'SonicKart',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             initialRoute: AppRoutes.splash,
             getPages: AppPages.routes,
-            builder: (context, child) => SessionExpiredOverlay(child: child),
+            builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+              value: _defaultSystemUiStyle,
+              child: SessionExpiredOverlay(child: child),
+            ),
           ),
         );
       },

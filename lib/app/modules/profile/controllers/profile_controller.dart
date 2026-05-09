@@ -370,16 +370,22 @@ class ProfileController extends GetxController {
     clearTransientOverlays();
     final uri = Uri.parse('https://sonickartnow.com');
     try {
-      final canOpen = await canLaunchUrl(uri);
-      if (canOpen && await launchUrl(uri, mode: LaunchMode.platformDefault)) {
-        return;
-      }
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (opened) return;
     } catch (error) {
-      debugPrint('ProfileController.openWebsite failed: $error');
+      debugPrint('ProfileController.openWebsite external failed: $error');
     }
+
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (opened) return;
+    } catch (error) {
+      debugPrint('ProfileController.openWebsite platform failed: $error');
+    }
+
     AppSnackBar.show(
-      'Error',
-      'Unable to open website. Please visit sonickartnow.com manually.',
+      'Website Error',
+      'Unable to open website. Please check browser app and try again.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }

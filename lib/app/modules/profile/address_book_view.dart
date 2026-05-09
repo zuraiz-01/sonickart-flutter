@@ -22,8 +22,8 @@ class AddressBookView extends GetView<ProfileController> {
             'Address Book',
             style: TextStyle(
               color: AppColors.primary,
-              fontSize: 15.spx,
-              fontWeight: FontWeight.w800,
+              fontSize: 17.spx,
+              fontWeight: FontWeight.w900,
             ),
           ),
           centerTitle: true,

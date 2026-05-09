@@ -46,8 +46,8 @@ class ProfileView extends GetView<ProfileController> {
                           style: Theme.of(context).textTheme.labelLarge
                               ?.copyWith(
                                 color: AppColors.primary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14.spx,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 17.spx,
                               ),
                         ),
                       ),

@@ -105,9 +105,9 @@ class _CartHeader extends StatelessWidget {
               'Cart',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 16.spx,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+                fontSize: 17.spx,
               ),
             ),
           ),

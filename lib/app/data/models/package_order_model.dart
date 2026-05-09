@@ -225,7 +225,24 @@
       (json['deliveryStatus'] ?? json['delivery_status'])?.toString(),
     );
 
+    final hasExplicitCancellation =
+        primary == 'cancelled' ||
+        json['isCancelled'] == true ||
+        json['isCanceled'] == true ||
+        _firstString([
+          json['cancelledAt'],
+          json['canceledAt'],
+          json['cancelled_at'],
+          json['canceled_at'],
+          json['cancellationReason'],
+          json['cancellation_reason'],
+          json['cancelReason'],
+        ]).isNotEmpty;
+
     if (primary == 'delivered') return primary;
+    if (delivery == 'cancelled' && !hasExplicitCancellation) {
+      return primary.isNotEmpty ? primary : 'pending';
+    }
     if (primary.isNotEmpty && primary != 'pending') return primary;
     if (delivery.isNotEmpty) return delivery;
     if (primary.isNotEmpty) return primary;

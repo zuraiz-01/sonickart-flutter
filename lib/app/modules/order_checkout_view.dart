@@ -25,8 +25,8 @@ class OrderCheckoutView extends GetView<OrderController> {
           'Checkout',
           style: TextStyle(
             color: AppColors.primary,
-            fontSize: 14.spx,
-            fontWeight: FontWeight.w800,
+            fontSize: 17.spx,
+            fontWeight: FontWeight.w900,
           ),
         ),
         centerTitle: true,
@@ -36,79 +36,82 @@ class OrderCheckoutView extends GetView<OrderController> {
         toolbarHeight: 40.hpx,
         iconTheme: IconThemeData(color: AppColors.primary, size: 17.spx),
       ),
-      body: Obx(() {
-        final items = cartController.items
-            .where((item) => item.quantity > 0)
-            .toList(growable: false);
-        final totals = controller.calculateCheckoutTotals(items);
-        final freeLeft = controller.freeDeliveryAmountLeft(items);
-        final selectedCoupon = controller.selectedCoupon.value;
-        final shouldLeaveCheckout =
-            !cartController.isSyncingCart.value &&
-            !controller.isPlacingOrder.value &&
-            !controller.isValidatingCartAvailability.value &&
-            !controller.isHandlingUnavailableCart.value &&
-            items.isEmpty;
-        if (shouldLeaveCheckout) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (Get.currentRoute == AppRoutes.checkout) {
-              Get.offNamed(AppRoutes.dashboard);
-            }
-          });
-          return const SizedBox.shrink();
-        }
-        if (selectedCoupon != null) {
-          final couponError = controller.couponEligibilityMessage(
-            selectedCoupon,
-            items,
-          );
-          if (couponError != null) {
+      body: SafeArea(
+        top: false,
+        child: Obx(() {
+          final items = cartController.items
+              .where((item) => item.quantity > 0)
+              .toList(growable: false);
+          final totals = controller.calculateCheckoutTotals(items);
+          final freeLeft = controller.freeDeliveryAmountLeft(items);
+          final selectedCoupon = controller.selectedCoupon.value;
+          final shouldLeaveCheckout =
+              !cartController.isSyncingCart.value &&
+              !controller.isPlacingOrder.value &&
+              !controller.isValidatingCartAvailability.value &&
+              !controller.isHandlingUnavailableCart.value &&
+              items.isEmpty;
+          if (shouldLeaveCheckout) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (controller.selectedCoupon.value?.id == selectedCoupon.id) {
-                controller.clearInvalidCoupon(couponError);
+              if (Get.currentRoute == AppRoutes.checkout) {
+                Get.offNamed(AppRoutes.dashboard);
               }
             });
+            return const SizedBox.shrink();
           }
-        }
+          if (selectedCoupon != null) {
+            final couponError = controller.couponEligibilityMessage(
+              selectedCoupon,
+              items,
+            );
+            if (couponError != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (controller.selectedCoupon.value?.id == selectedCoupon.id) {
+                  controller.clearInvalidCoupon(couponError);
+                }
+              });
+            }
+          }
 
-        return Stack(
-          children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 92.hpx),
-              children: [
-                if (freeLeft > 0) ...[
-                  _FreeDeliveryHint(amountLeft: freeLeft),
+          return Stack(
+            children: [
+              ListView(
+                padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 92.hpx),
+                children: [
+                  if (freeLeft > 0) ...[
+                    _FreeDeliveryHint(amountLeft: freeLeft),
+                    SizedBox(height: 10.hpx),
+                  ],
+                  _AddressCard(controller: controller),
                   SizedBox(height: 10.hpx),
-                ],
-                _AddressCard(controller: controller),
-                SizedBox(height: 10.hpx),
-                if (items.isNotEmpty) ...[
-                  _OrderListCard(items: items, cart: cartController),
+                  if (items.isNotEmpty) ...[
+                    _OrderListCard(items: items, cart: cartController),
+                    SizedBox(height: 10.hpx),
+                  ],
+                  _CouponRow(controller: controller, totals: totals),
                   SizedBox(height: 10.hpx),
+                  _BillDetails(totals: totals),
                 ],
-                _CouponRow(controller: controller, totals: totals),
-                SizedBox(height: 10.hpx),
-                _BillDetails(totals: totals),
-              ],
-            ),
-            Positioned(
-              left: 16.wpx,
-              right: 16.wpx,
-              bottom: 10.hpx,
-              child: _CheckoutFooter(
-                loading:
-                    controller.isPlacingOrder.value ||
-                    controller.isValidatingCartAvailability.value,
-                disabled:
-                    items.isEmpty ||
-                    totals.grandTotal <= 0 ||
-                    controller.isHandlingUnavailableCart.value,
-                onPressed: () => _showAddressConfirmation(context),
               ),
-            ),
-          ],
-        );
-      }),
+              Positioned(
+                left: 16.wpx,
+                right: 16.wpx,
+                bottom: 10.hpx,
+                child: _CheckoutFooter(
+                  loading:
+                      controller.isPlacingOrder.value ||
+                      controller.isValidatingCartAvailability.value,
+                  disabled:
+                      items.isEmpty ||
+                      totals.grandTotal <= 0 ||
+                      controller.isHandlingUnavailableCart.value,
+                  onPressed: () => _showAddressConfirmation(context),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
     );
   }
 

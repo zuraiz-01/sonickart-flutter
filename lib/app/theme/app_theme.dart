@@ -17,11 +17,16 @@ class AppTheme {
     );
 
     return base.copyWith(
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
         foregroundColor: AppColors.textPrimary,
+        titleTextStyle: TextStyle(
+          color: AppColors.primary,
+          fontSize: 17.spx,
+          fontWeight: FontWeight.w900,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

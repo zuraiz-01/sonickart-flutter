@@ -513,9 +513,9 @@ class PackageController extends GetxController {
     if (normalized.isEmpty) return selectedOrder.value;
     final remote = await _tryFetchPackageOrderById(normalized);
     if (remote != null) {
-      await _upsertOrder(remote);
-      selectedOrder.value = remote;
-      return remote;
+      final updated = await _upsertOrder(remote);
+      selectedOrder.value = updated;
+      return updated;
     }
     final local = findOrderById(normalized);
     if (local != null) selectedOrder.value = local;
@@ -546,8 +546,11 @@ class PackageController extends GetxController {
     final parsed = PackageOrderModel.fromJson(merged);
     if (parsed.id.isEmpty) return false;
 
-    await _upsertOrder(parsed);
-    selectedOrder.value = parsed;
+    final updated = await _upsertOrder(
+      parsed,
+      allowCancellation: _hasExplicitCancellation(raw),
+    );
+    selectedOrder.value = updated;
     return true;
   }
 
@@ -559,16 +562,22 @@ class PackageController extends GetxController {
     try {
       final updated = await _tryCancelPackageOrder(order);
       if (updated != null) {
-        await _upsertOrder(updated);
-        selectedOrder.value = updated;
+        final cancelled = await _upsertOrder(
+          updated,
+          allowCancellation: true,
+        );
+        selectedOrder.value = cancelled;
       } else {
         final cancelled = PackageOrderModel.fromJson({
           ...order.toJson(),
           'status': 'cancelled',
           'deliveryStatus': 'cancelled',
         });
-        await _upsertOrder(cancelled);
-        selectedOrder.value = cancelled;
+        final persisted = await _upsertOrder(
+          cancelled,
+          allowCancellation: true,
+        );
+        selectedOrder.value = persisted;
       }
       _showSnack(
         'Package Cancelled',
@@ -963,14 +972,21 @@ class PackageController extends GetxController {
     );
   }
 
-  Future<void> _upsertOrder(PackageOrderModel order) async {
+  Future<PackageOrderModel> _upsertOrder(
+    PackageOrderModel order, {
+    bool allowCancellation = false,
+  }) async {
     final incomingIds = _orderIdentifiers(order).map(_normalizeId).toSet();
     final index = orders.indexWhere(
       (item) =>
           _orderIdentifiers(item).map(_normalizeId).any(incomingIds.contains),
     );
     final nextOrder = index >= 0
-        ? _protectTerminalStatus(orders[index], order)
+        ? _protectStatusRegression(
+            orders[index],
+            order,
+            allowCancellation: allowCancellation,
+          )
         : order;
     if (index >= 0) {
       orders[index] = nextOrder;
@@ -979,12 +995,14 @@ class PackageController extends GetxController {
     }
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     await _persistOrders();
+    return nextOrder;
   }
 
-  PackageOrderModel _protectTerminalStatus(
+  PackageOrderModel _protectStatusRegression(
     PackageOrderModel existing,
-    PackageOrderModel incoming,
-  ) {
+    PackageOrderModel incoming, {
+    required bool allowCancellation,
+  }) {
     final existingStatus = _normalizeStatus(existing.status);
     final incomingStatus = _normalizeStatus(incoming.status);
     final existingIsDone =
@@ -994,10 +1012,28 @@ class PackageController extends GetxController {
         incomingStatus == 'canceled' ||
         incomingStatus == 'cancelled';
 
+    final existingIsActive =
+        existingStatus.isNotEmpty &&
+        existingStatus != 'cancelled' &&
+        existingStatus != 'delivered' &&
+        existingStatus != 'completed';
+
+    if (existingIsActive && incomingIsCancel && !allowCancellation) {
+      debugPrint(
+        'PackageController._protectStatusRegression: ignoring stale cancel for ${existing.id}',
+      );
+      return PackageOrderModel.fromJson({
+        ...incoming.raw,
+        ...incoming.toJson(),
+        'status': existing.status,
+        'deliveryStatus': existing.status,
+      });
+    }
+
     if (!existingIsDone || !incomingIsCancel) return incoming;
 
     debugPrint(
-      'PackageController._protectTerminalStatus: keeping ${existing.status} over ${incoming.status} for ${existing.id}',
+      'PackageController._protectStatusRegression: keeping ${existing.status} over ${incoming.status} for ${existing.id}',
     );
     return PackageOrderModel.fromJson({
       ...incoming.raw,
@@ -1298,6 +1334,23 @@ class PackageController extends GetxController {
       return 'cancelled';
     }
     return normalized;
+  }
+
+  bool _hasExplicitCancellation(Map<String, dynamic> raw) {
+    final status = _normalizeStatus(raw['status']?.toString() ?? '');
+    if (status == 'cancelled') return true;
+    if (raw['isCancelled'] == true || raw['isCanceled'] == true) return true;
+    return [
+      raw['cancelledAt'],
+      raw['canceledAt'],
+      raw['cancelled_at'],
+      raw['canceled_at'],
+      raw['cancellationReason'],
+      raw['cancellation_reason'],
+      raw['cancelReason'],
+      raw['cancelledBy'],
+      raw['canceledBy'],
+    ].any((value) => value?.toString().trim().isNotEmpty == true);
   }
 
   bool _isTerminalStatus(String status) {

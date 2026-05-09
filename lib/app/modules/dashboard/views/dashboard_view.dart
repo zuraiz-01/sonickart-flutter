@@ -87,19 +87,21 @@ class DashboardView extends GetView<DashboardController> {
             ServiceAreaGateOverlay(controller: serviceGateController),
           ],
         ),
-        bottomNavigationBar: _BottomNav(
-          index: controller.currentIndex.value,
-          onTap: (value) {
-            if (controller.currentIndex.value == 4 && value != 4) {
-              profileController.clearTransientOverlays();
-            }
-            if (value == 1) {
-              Get.toNamed(AppRoutes.categories);
-              return;
-            }
-            controller.changeTab(value);
-          },
-        ),
+        bottomNavigationBar: serviceGateController.isBlocked
+            ? null
+            : _BottomNav(
+                index: controller.currentIndex.value,
+                onTap: (value) {
+                  if (controller.currentIndex.value == 4 && value != 4) {
+                    profileController.clearTransientOverlays();
+                  }
+                  if (value == 1) {
+                    Get.toNamed(AppRoutes.categories);
+                    return;
+                  }
+                  controller.changeTab(value);
+                },
+              ),
       ),
     );
   }
