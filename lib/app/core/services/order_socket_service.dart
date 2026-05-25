@@ -49,7 +49,7 @@ class OrderSocketService extends GetxService {
     disconnect();
     _joinedOrderId = orderId;
     final socket = io.io(
-      ApiConstants.mobileHost,
+      ApiConstants.socketHost,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -70,6 +70,13 @@ class OrderSocketService extends GetxService {
       })
       ..onError((error) {
         debugPrint('OrderSocketService socket error: $error');
+      })
+      ..onReconnect((_) {
+        debugPrint('OrderSocketService: reconnected for order $orderId');
+        socket.emit('joinRoom', orderId);
+        if (user.id.isNotEmpty) {
+          socket.emit('joinRoom', 'user-${user.id}');
+        }
       })
       ..onDisconnect((_) {
         debugPrint('OrderSocketService: disconnected');

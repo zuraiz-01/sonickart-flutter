@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -13,6 +13,7 @@ class ApiService {
 
   final GetStorage _storage;
   final http.Client _client = http.Client();
+  final _inFlightGets = <String, Future<Map<String, dynamic>>>{};
 
   String buildUrl(String endpoint) {
     if (endpoint.startsWith('http')) return endpoint;
@@ -25,13 +26,24 @@ class ApiService {
     bool authenticated = true,
     Map<String, String>? headers,
   }) {
-    return _request(
+    final key = _requestKey(
+      endpoint: endpoint,
+      query: query,
+      authenticated: authenticated,
+      headers: headers,
+    );
+    final existing = _inFlightGets[key];
+    if (existing != null) return existing;
+
+    final future = _request(
       method: 'GET',
       endpoint: endpoint,
       query: query,
       authenticated: authenticated,
       headers: headers,
     );
+    _inFlightGets[key] = future;
+    return future.whenComplete(() => _inFlightGets.remove(key));
   }
 
   Future<Map<String, dynamic>> post({
@@ -180,6 +192,32 @@ class ApiService {
       }
     });
     return uri.replace(queryParameters: existing);
+  }
+
+  String _requestKey({
+    required String endpoint,
+    required Map<String, dynamic>? query,
+    required bool authenticated,
+    required Map<String, String>? headers,
+  }) {
+    String sorted(Object? value) {
+      if (value is Map) {
+        final keys = value.keys.map((key) => key.toString()).toList()..sort();
+        return keys.map((key) => '$key=${value[key]}').join('&');
+      }
+      return '';
+    }
+
+    final token = authenticated
+        ? _storage.read<String>('accessToken') ?? ''
+        : '';
+    return [
+      endpoint,
+      sorted(query),
+      authenticated,
+      token.isEmpty ? 'guest' : token.hashCode,
+      sorted(headers),
+    ].join('|');
   }
 
   http.Request _buildRequest({

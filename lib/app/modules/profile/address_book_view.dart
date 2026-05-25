@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
@@ -103,13 +104,13 @@ class AddressBookView extends GetView<ProfileController> {
               _AddressStateCard(
                 child: Column(
                   children: [
-                    Icon(
-                      controller.requiresAddressRelogin.value
-                          ? Icons.lock_clock_outlined
-                          : Icons.cloud_off_rounded,
-                      size: 56,
-                      color: AppColors.primary,
-                    ),
+                      Icon(
+                        controller.requiresAddressRelogin.value
+                            ? Icons.lock_clock_outlined
+                            : Icons.cloud_off_rounded,
+                        size: 56,
+                        color: AppColors.price,
+                      ),
                     SizedBox(height: 12.hpx),
                     Text(
                       controller.requiresAddressRelogin.value
@@ -151,7 +152,7 @@ class AddressBookView extends GetView<ProfileController> {
                 padding: EdgeInsets.all(24.rpx),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: AppColors.price.withValues(alpha: 0.1),
                   ),
                   borderRadius: BorderRadius.circular(16.rpx),
                 ),
@@ -160,7 +161,7 @@ class AddressBookView extends GetView<ProfileController> {
                     Icon(
                       Icons.home_outlined,
                       size: 56,
-                      color: AppColors.primary,
+                      color: AppColors.price,
                     ),
                     SizedBox(height: 12.hpx),
                     Text(
@@ -190,7 +191,7 @@ class AddressBookView extends GetView<ProfileController> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14.rpx),
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.08),
+                    color: AppColors.price.withValues(alpha: 0.08),
                   ),
                 ),
                 child: Column(
@@ -240,7 +241,7 @@ class AddressBookView extends GetView<ProfileController> {
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(12.rpx),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.18),
+                      color: AppColors.price.withValues(alpha: 0.18),
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -257,7 +258,7 @@ class AddressBookView extends GetView<ProfileController> {
                         children: [
                           Icon(
                             Icons.location_on_outlined,
-                            color: AppColors.primary,
+                            color: AppColors.price,
                             size: 18.spx,
                           ),
                           SizedBox(width: 8.wpx),
@@ -279,7 +280,7 @@ class AddressBookView extends GetView<ProfileController> {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: Color(0xFFEAF1FF),
+                                color: AppColors.muted,
                                 borderRadius: BorderRadius.circular(20.rpx),
                               ),
                               child: Text(
@@ -445,7 +446,7 @@ class AddressBookView extends GetView<ProfileController> {
                               ),
                               child: Icon(
                                 Icons.close_rounded,
-                                color: AppColors.primary,
+                                color: AppColors.price,
                                 size: 18,
                               ),
                             ),
@@ -459,7 +460,7 @@ class AddressBookView extends GetView<ProfileController> {
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(14.rpx),
                           border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.08),
+                            color: AppColors.price.withValues(alpha: 0.08),
                           ),
                         ),
                         child: Row(
@@ -482,7 +483,7 @@ class AddressBookView extends GetView<ProfileController> {
                                     )
                                   : Icon(
                                       Icons.my_location_rounded,
-                                      color: AppColors.primary,
+                                      color: AppColors.price,
                                       size: 20,
                                     ),
                             ),
@@ -511,7 +512,7 @@ class AddressBookView extends GetView<ProfileController> {
                                               forceAddressFill: true,
                                             ),
                                         style: TextButton.styleFrom(
-                                          foregroundColor: AppColors.primary,
+                                          foregroundColor: AppColors.price,
                                           padding: EdgeInsets.zero,
                                           minimumSize: Size.zero,
                                           tapTargetSize:
@@ -556,7 +557,13 @@ class AddressBookView extends GetView<ProfileController> {
                       TextField(
                         controller: controller.addressPhoneController,
                         keyboardType: TextInputType.phone,
+                        maxLength: 10,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
                         decoration: InputDecoration(
+                          counterText: '',
                           hintText: 'Enter Mobile Number',
                         ),
                       ),
@@ -603,7 +610,7 @@ class AddressBookView extends GetView<ProfileController> {
                             color: AppColors.white,
                             borderRadius: BorderRadius.circular(14.rpx),
                             border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.1),
+                              color: AppColors.price.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Column(
@@ -617,7 +624,7 @@ class AddressBookView extends GetView<ProfileController> {
                                     ),
                                     leading: Icon(
                                       Icons.location_on_outlined,
-                                      color: AppColors.primary,
+                                      color: AppColors.price,
                                       size: 18,
                                     ),
                                     title: Text(
@@ -659,9 +666,9 @@ class AddressBookView extends GetView<ProfileController> {
                             child: OutlinedButton(
                               onPressed: Get.back,
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
+                                foregroundColor: AppColors.price,
                                 padding: EdgeInsets.symmetric(vertical: 14.hpx),
-                                side: BorderSide(color: AppColors.primary),
+                                side: BorderSide(color: AppColors.price),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12.rpx),
                                 ),
@@ -716,7 +723,7 @@ class _AddressStateCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(24.rpx),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        border: Border.all(color: AppColors.price.withValues(alpha: 0.1)),
         borderRadius: BorderRadius.circular(16.rpx),
       ),
       child: child,
@@ -758,7 +765,7 @@ class _AddressActionButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           backgroundColor: background,
           foregroundColor: foreground,
-          side: BorderSide(color: AppColors.primary, width: 1),
+          side: BorderSide(color: AppColors.price, width: 1),
           padding: EdgeInsets.symmetric(horizontal: 8.wpx),
           iconColor: foreground,
           shape: RoundedRectangleBorder(

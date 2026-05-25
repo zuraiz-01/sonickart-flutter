@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
@@ -11,15 +12,31 @@ import 'cart/controllers/cart_controller.dart';
 import 'order_controller.dart';
 import 'profile/controllers/profile_controller.dart';
 
-class OrderCheckoutView extends GetView<OrderController> {
+enum _AddressSheetResult { cancelled, keptCurrent, changed }
+
+class OrderCheckoutView extends StatefulWidget {
   const OrderCheckoutView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final cartController = Get.find<CartController>();
+  State<OrderCheckoutView> createState() => _OrderCheckoutViewState();
+}
+
+class _OrderCheckoutViewState extends State<OrderCheckoutView> {
+  late final OrderController controller = Get.find<OrderController>();
+  late final CartController cartController = Get.find<CartController>();
+  bool _showingAddressConfirmation = false;
+  bool _showingPaymentOptions = false;
+
+  @override
+  void initState() {
+    super.initState();
     unawaited(controller.preloadCheckoutContext());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           'Checkout',
@@ -34,7 +51,7 @@ class OrderCheckoutView extends GetView<OrderController> {
         surfaceTintColor: AppColors.white,
         elevation: 0,
         toolbarHeight: 40.hpx,
-        iconTheme: IconThemeData(color: AppColors.primary, size: 17.spx),
+        iconTheme: IconThemeData(color: AppColors.price, size: 17.spx),
       ),
       body: SafeArea(
         top: false,
@@ -91,6 +108,8 @@ class OrderCheckoutView extends GetView<OrderController> {
                   _CouponRow(controller: controller, totals: totals),
                   SizedBox(height: 10.hpx),
                   _BillDetails(totals: totals),
+                  SizedBox(height: 10.hpx),
+                  _DeliveryNoteBox(controller: controller),
                 ],
               ),
               Positioned(
@@ -105,7 +124,7 @@ class OrderCheckoutView extends GetView<OrderController> {
                       items.isEmpty ||
                       totals.grandTotal <= 0 ||
                       controller.isHandlingUnavailableCart.value,
-                  onPressed: () => _showAddressConfirmation(context),
+                  onPressed: () => unawaited(_showAddressConfirmation()),
                 ),
               ),
             ],
@@ -115,8 +134,18 @@ class OrderCheckoutView extends GetView<OrderController> {
     );
   }
 
-  void _showAddressConfirmation(BuildContext context) {
-    Get.dialog(
+  Future<void> _showAddressConfirmation() async {
+    if (_showingAddressConfirmation ||
+        _showingPaymentOptions ||
+        controller.isPlacingOrder.value ||
+        controller.isValidatingCartAvailability.value ||
+        controller.isHandlingUnavailableCart.value ||
+        Get.isDialogOpen == true) {
+      return;
+    }
+
+    _showingAddressConfirmation = true;
+    await Get.dialog<void>(
       Dialog(
         backgroundColor: AppColors.white,
         insetPadding: EdgeInsets.symmetric(horizontal: 24.wpx),
@@ -132,12 +161,12 @@ class OrderCheckoutView extends GetView<OrderController> {
                 width: 50.rpx,
                 height: 50.rpx,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF1FF),
+                  color: AppColors.muted,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.location_on_rounded,
-                  color: AppColors.primary,
+                  color: AppColors.price,
                   size: 25.spx,
                 ),
               ),
@@ -161,7 +190,9 @@ class OrderCheckoutView extends GetView<OrderController> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: Get.back,
+                      onPressed: () => unawaited(
+                        _handleAddressChangeFromConfirmation(context),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         side: BorderSide(
@@ -183,12 +214,20 @@ class OrderCheckoutView extends GetView<OrderController> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () {
+                        _showingAddressConfirmation = false;
                         Get.back();
-                        _showPaymentOptions(context);
+                        Future<void>.delayed(
+                          const Duration(milliseconds: 90),
+                          () {
+                            if (mounted) {
+                              unawaited(_showPaymentOptions());
+                            }
+                          },
+                        );
                       },
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.white,
+                        backgroundColor: AppColors.buttonFill,
+                        foregroundColor: AppColors.onButtonFill,
                         minimumSize: Size(0, 44.hpx),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(9.rpx),
@@ -209,10 +248,48 @@ class OrderCheckoutView extends GetView<OrderController> {
       ),
       barrierColor: AppColors.black.withValues(alpha: 0.45),
     );
+    _showingAddressConfirmation = false;
   }
 
-  void _showPaymentOptions(BuildContext context) {
-    Get.dialog(
+  Future<void> _handleAddressChangeFromConfirmation(
+    BuildContext context,
+  ) async {
+    Get.back<void>();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!context.mounted) return;
+
+    final result = await _showCheckoutAddressSheet(
+      context,
+      controller: controller,
+    );
+    if (result == _AddressSheetResult.cancelled) return;
+    if (!context.mounted || Get.currentRoute != AppRoutes.checkout) return;
+    if (controller.isHandlingUnavailableCart.value ||
+        controller.isValidatingCartAvailability.value ||
+        controller.isPlacingOrder.value) {
+      return;
+    }
+
+    final cartController = Get.find<CartController>();
+    final hasCheckoutItems = cartController.items.any(
+      (item) => item.quantity > 0,
+    );
+    if (!hasCheckoutItems) return;
+
+    unawaited(_showPaymentOptions());
+  }
+
+  Future<void> _showPaymentOptions() async {
+    if (_showingPaymentOptions ||
+        controller.isPlacingOrder.value ||
+        controller.isValidatingCartAvailability.value ||
+        controller.isHandlingUnavailableCart.value ||
+        Get.isDialogOpen == true) {
+      return;
+    }
+
+    _showingPaymentOptions = true;
+    await Get.dialog<void>(
       Dialog(
         backgroundColor: AppColors.white,
         insetPadding: EdgeInsets.symmetric(horizontal: 28.wpx),
@@ -260,14 +337,16 @@ class OrderCheckoutView extends GetView<OrderController> {
                   SizedBox(width: 10.wpx),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () {
-                        controller.selectPaymentMode('COD');
-                        Get.back();
-                        controller.placeOrder();
-                      },
+                      onPressed: controller.isPlacingOrder.value
+                          ? null
+                          : () {
+                              controller.selectPaymentMode('COD');
+                              Get.back();
+                              unawaited(controller.placeOrder());
+                            },
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.white,
+                        backgroundColor: AppColors.buttonFill,
+                        foregroundColor: AppColors.onButtonFill,
                         minimumSize: Size(0, 44.hpx),
                         padding: EdgeInsets.symmetric(horizontal: 8.wpx),
                         shape: RoundedRectangleBorder(
@@ -293,6 +372,196 @@ class OrderCheckoutView extends GetView<OrderController> {
       ),
       barrierColor: AppColors.black.withValues(alpha: 0.45),
     );
+    _showingPaymentOptions = false;
+  }
+}
+
+class _DeliveryNoteBox extends StatelessWidget {
+  const _DeliveryNoteBox({required this.controller});
+
+  final OrderController controller;
+
+  static const _quickNotes = [
+    'Call on arrival',
+    'Leave at door',
+    'Don\u2019t ring bell',
+    'Avoid calling',
+    'Give to security',
+  ];
+
+  void _showQuickNotes(BuildContext context) {
+    Get.bottomSheet(
+      Container(
+        padding: EdgeInsets.fromLTRB(20.wpx, 16.hpx, 20.wpx, 24.hpx),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20.rpx)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.bolt_rounded, color: AppColors.accent, size: 20.spx),
+                SizedBox(width: 8.wpx),
+                Text(
+                  'Quick Notes',
+                  style: TextStyle(
+                    color: AppColors.price,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16.spx,
+                  ),
+                ),
+                Spacer(),
+                InkWell(
+                  onTap: () => Get.back<void>(),
+                  borderRadius: BorderRadius.circular(18.rpx),
+                  child: Container(
+                    width: 32.wpx,
+                    height: 32.hpx,
+                    decoration: BoxDecoration(
+                      color: AppColors.muted,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: AppColors.price,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 6.hpx),
+            Text(
+              'Tap to add a note',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14.spx,
+              ),
+            ),
+            SizedBox(height: 14.hpx),
+            ..._quickNotes.map(
+              (note) => Padding(
+                padding: EdgeInsets.only(bottom: 8.hpx),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      controller.deliveryNoteController.text = note;
+                      Get.back<void>();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.price,
+                      side: BorderSide(
+                        color: AppColors.price.withValues(alpha: 0.2),
+                      ),
+                      padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.rpx),
+                      ),
+                    ),
+                    child: Text(
+                      note,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.spx,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.rpx),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14.rpx),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.sticky_note_2_outlined,
+                color: AppColors.price,
+                size: 18.spx,
+              ),
+              SizedBox(width: 8.wpx),
+              Text(
+                'Delivery Note',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15.spx,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10.hpx),
+          TextField(
+            controller: controller.deliveryNoteController,
+            minLines: 2,
+            maxLines: 4,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.inputFill,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.rpx),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.rpx),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12.rpx),
+                borderSide: BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+          SizedBox(height: 10.hpx),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _showQuickNotes(context),
+              icon: Icon(Icons.bolt_rounded, size: 16.spx),
+              label: Text(
+                'Quick Notes',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.spx),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: BorderSide(
+                  color: AppColors.accent.withValues(alpha: 0.4),
+                ),
+                padding: EdgeInsets.symmetric(vertical: 10.hpx),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10.rpx),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -311,14 +580,14 @@ class _ConfirmationAddressCard extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(12.rpx),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F8FC),
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(12.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.home_outlined, color: AppColors.primary, size: 19.spx),
+          Icon(Icons.home_outlined, color: AppColors.price, size: 19.spx),
           SizedBox(width: 9.wpx),
           Expanded(
             child: Column(
@@ -467,207 +736,250 @@ class _AddressCard extends StatelessWidget {
   }
 
   void _showAddressSheet(BuildContext context) {
-    final profile = Get.isRegistered<ProfileController>()
-        ? Get.find<ProfileController>()
-        : null;
-    if (profile != null &&
-        profile.addresses.isEmpty &&
-        !profile.isLoadingAddresses.value) {
-      unawaited(profile.loadAddresses());
-    }
-    Get.bottomSheet(
-      SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.86,
-          ),
-          padding: EdgeInsets.fromLTRB(16.wpx, 12.hpx, 16.wpx, 16.hpx),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24.rpx)),
-          ),
-          child: Obx(() {
-            final addresses = profile?.addresses.toList(growable: false) ?? [];
-            final isLoading = profile?.isLoadingAddresses.value == true;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (controller.isValidatingCartAvailability.value) ...[
-                  LinearProgressIndicator(
-                    minHeight: 3.hpx,
-                    color: AppColors.primary,
-                    backgroundColor: AppColors.surface,
-                  ),
-                  SizedBox(height: 10.hpx),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Select delivery address',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18.spx,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: Get.back,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8.hpx),
-                if (isLoading)
-                  Expanded(
-                    child: Center(
-                      child: SizedBox(
-                        width: 28.wpx,
-                        height: 28.wpx,
-                        child: const CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                        ),
-                      ),
-                    ),
-                  )
-                else if (addresses.isEmpty)
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'No saved addresses yet. Add one from Address Book.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14.spx,
-                            ),
-                          ),
-                          SizedBox(height: 14.hpx),
-                          FilledButton.icon(
-                            onPressed: () {
-                              Get.back<void>();
-                              Get.toNamed(AppRoutes.addressBook);
-                            },
-                            icon: const Icon(Icons.add_location_alt_outlined),
-                            label: const Text('Add Address'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: addresses.length,
-                      separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
-                      itemBuilder: (context, index) {
-                        final address = addresses[index];
-                        final selected =
-                            controller.selectedCheckoutAddress.value?.id ==
-                            address.id;
-                        final isSelecting =
-                            controller.selectingCheckoutAddressId.value ==
-                            address.id;
-                        return InkWell(
-                          onTap: isSelecting
-                              ? null
-                              : () async {
-                                  Get.back();
-                                  await controller.selectAddress(address);
-                                },
-                          borderRadius: BorderRadius.circular(14.rpx),
-                          child: Container(
-                            padding: EdgeInsets.all(14.rpx),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? const Color(0xFFEEF4FF)
-                                  : const Color(0xFFF8FAFF),
-                              borderRadius: BorderRadius.circular(14.rpx),
-                              border: Border.all(
-                                color: selected
-                                    ? AppColors.primary
-                                    : AppColors.border,
-                              ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  isSelecting
-                                      ? Icons.hourglass_top_rounded
-                                      : selected
-                                      ? Icons.radio_button_checked
-                                      : Icons.radio_button_off,
-                                  color: AppColors.primary,
-                                ),
-                                SizedBox(width: 10.wpx),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        address.fullName,
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16.spx,
-                                        ),
-                                      ),
-                                      SizedBox(height: 4.hpx),
-                                      Text(
-                                        address.address,
-                                        style: TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14.spx,
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (isSelecting)
-                                  SizedBox(
-                                    width: 18.rpx,
-                                    height: 18.rpx,
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                if (addresses.isNotEmpty) ...[
-                  SizedBox(height: 12.hpx),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Get.back<void>();
-                        Get.toNamed(AppRoutes.addressBook);
-                      },
-                      icon: const Icon(Icons.manage_accounts_outlined),
-                      label: const Text('Manage Addresses'),
-                    ),
-                  ),
-                ],
-              ],
-            );
-          }),
-        ),
-      ),
-      isScrollControlled: true,
-    );
+    unawaited(_showCheckoutAddressSheet(context, controller: controller));
   }
+}
+
+Future<_AddressSheetResult> _showCheckoutAddressSheet(
+  BuildContext context, {
+  required OrderController controller,
+}) async {
+  final profile = Get.isRegistered<ProfileController>()
+      ? Get.find<ProfileController>()
+      : null;
+  if (profile != null &&
+      profile.addresses.isEmpty &&
+      !profile.isLoadingAddresses.value) {
+    unawaited(profile.loadAddresses());
+  }
+
+  final result = await Get.bottomSheet<_AddressSheetResult>(
+    SafeArea(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        padding: EdgeInsets.fromLTRB(16.wpx, 12.hpx, 16.wpx, 16.hpx),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24.rpx)),
+        ),
+        child: Obx(() {
+          final addresses = profile?.addresses.toList(growable: false) ?? [];
+          final isLoading = profile?.isLoadingAddresses.value == true;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (controller.isValidatingCartAvailability.value) ...[
+                LinearProgressIndicator(
+                  minHeight: 3.hpx,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.surface,
+                ),
+                SizedBox(height: 10.hpx),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Select delivery address',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18.spx,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Get.back<_AddressSheetResult>(
+                      result: _AddressSheetResult.cancelled,
+                    ),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8.hpx),
+              if (isLoading)
+                Expanded(
+                  child: Center(
+                    child: SizedBox(
+                      width: 28.wpx,
+                      height: 28.wpx,
+                      child: const CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  ),
+                )
+              else if (addresses.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'No saved addresses yet. Add one from Address Book.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.spx,
+                          ),
+                        ),
+                        SizedBox(height: 14.hpx),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Get.back<_AddressSheetResult>(
+                              result: _AddressSheetResult.cancelled,
+                            );
+                            Get.toNamed(AppRoutes.addressBook);
+                          },
+                          icon: const Icon(Icons.add_location_alt_outlined),
+                          label: const Text('Add Address'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: addresses.length,
+                    separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
+                    itemBuilder: (context, index) {
+                      final address = addresses[index];
+                      final selected = _isSelectedCheckoutAddress(
+                        controller.selectedCheckoutAddress.value,
+                        address,
+                      );
+                      final isSelecting =
+                          controller.selectingCheckoutAddressId.value ==
+                          address.id;
+                      return InkWell(
+                        onTap: isSelecting
+                            ? null
+                            : () async {
+                                if (selected) {
+                                  Get.back<_AddressSheetResult>(
+                                    result: _AddressSheetResult.keptCurrent,
+                                  );
+                                  return;
+                                }
+
+                                final didSelect = await controller
+                                    .selectAddress(address);
+                                if (!didSelect) return;
+                                if (Get.isBottomSheetOpen == true) {
+                                  Get.back<_AddressSheetResult>(
+                                    result: _AddressSheetResult.changed,
+                                  );
+                                }
+                              },
+                        borderRadius: BorderRadius.circular(14.rpx),
+                        child: Container(
+                          padding: EdgeInsets.all(14.rpx),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.muted
+                                : AppColors.inputFill,
+                            borderRadius: BorderRadius.circular(14.rpx),
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                isSelecting
+                                    ? Icons.hourglass_top_rounded
+                                    : selected
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                color: AppColors.primary,
+                              ),
+                              SizedBox(width: 10.wpx),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      address.fullName,
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 16.spx,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4.hpx),
+                                    Text(
+                                      address.address,
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14.spx,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isSelecting)
+                                SizedBox(
+                                  width: 18.rpx,
+                                  height: 18.rpx,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              if (addresses.isNotEmpty) ...[
+                SizedBox(height: 12.hpx),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Get.back<_AddressSheetResult>(
+                        result: _AddressSheetResult.cancelled,
+                      );
+                      Get.toNamed(AppRoutes.addressBook);
+                    },
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('Manage Addresses'),
+                  ),
+                ),
+              ],
+            ],
+          );
+        }),
+      ),
+    ),
+    isScrollControlled: true,
+  );
+
+  return result ?? _AddressSheetResult.cancelled;
+}
+
+bool _isSelectedCheckoutAddress(
+  AddressModel? selected,
+  AddressModel candidate,
+) {
+  if (selected == null) return false;
+  final selectedId = selected.id.trim();
+  final candidateId = candidate.id.trim();
+  final selectedAddress = selected.address.trim().toLowerCase();
+  final candidateAddress = candidate.address.trim().toLowerCase();
+  if (selectedId.isNotEmpty && candidateId.isNotEmpty) {
+    return selectedId == candidateId && selectedAddress == candidateAddress;
+  }
+
+  return selectedAddress == candidateAddress;
 }
 
 class _OrderListCard extends StatelessWidget {
@@ -712,7 +1024,7 @@ class _OrderItemTile extends StatelessWidget {
             width: 52.wpx,
             height: 52.wpx,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F7FF),
+              color: AppColors.muted,
               borderRadius: BorderRadius.circular(8.rpx),
               border: Border.all(
                 color: AppColors.primary.withValues(alpha: 0.10),
@@ -746,7 +1058,7 @@ class _OrderItemTile extends StatelessWidget {
                 Text(
                   '₹${item.unitPrice.toStringAsFixed(2)}',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: AppColors.price,
                     fontWeight: FontWeight.w600,
                     fontSize: 14.spx,
                   ),
@@ -758,7 +1070,7 @@ class _OrderItemTile extends StatelessWidget {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 5.wpx, vertical: 4.hpx),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFF),
+              color: AppColors.inputFill,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -825,9 +1137,9 @@ class _QtyButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.white,
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.primary),
+          border: Border.all(color: AppColors.price),
         ),
-        child: Icon(icon, color: AppColors.primary, size: 14.spx),
+        child: Icon(icon, color: AppColors.price, size: 14.spx),
       ),
     );
   }
@@ -980,7 +1292,7 @@ class _CouponRow extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                           filled: true,
-                          fillColor: AppColors.white,
+                          fillColor: AppColors.inputFill,
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 12.wpx,
                             vertical: 13.hpx,
@@ -1014,8 +1326,8 @@ class _CouponRow extends StatelessWidget {
                                 }
                               },
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.white,
+                          backgroundColor: AppColors.buttonFill,
+                          foregroundColor: AppColors.onButtonFill,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8.rpx),
@@ -1029,9 +1341,9 @@ class _CouponRow extends StatelessWidget {
                             ? SizedBox(
                                 width: 16.wpx,
                                 height: 16.wpx,
-                                child: const CircularProgressIndicator(
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: AppColors.white,
+                                  color: AppColors.onButtonFill,
                                 ),
                               )
                             : const Text('Apply'),
@@ -1055,7 +1367,7 @@ class _CouponRow extends StatelessWidget {
                   width: double.infinity,
                   padding: EdgeInsets.all(12.rpx),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF1FF),
+                    color: AppColors.muted,
                     borderRadius: BorderRadius.circular(8.rpx),
                   ),
                   child: Column(
@@ -1073,7 +1385,7 @@ class _CouponRow extends StatelessWidget {
                       Text(
                         '₹${totals.grandTotal.toStringAsFixed(2)}',
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: AppColors.price,
                           fontWeight: FontWeight.w900,
                           fontSize: 15.spx,
                         ),
@@ -1267,13 +1579,13 @@ class _CouponCard extends StatelessWidget {
                   vertical: 6.hpx,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF1FF),
+                  color: AppColors.muted,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   value,
                   style: TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.price,
                     fontWeight: FontWeight.w900,
                     fontSize: 15.spx,
                   ),
@@ -1420,7 +1732,7 @@ class _BillDetails extends StatelessWidget {
                 Text(
                   '₹${totals.grandTotal.toStringAsFixed(2)}',
                   style: TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.price,
                     fontWeight: FontWeight.w900,
                     fontSize: 15.spx,
                   ),
@@ -1469,7 +1781,7 @@ class _BillRow extends StatelessWidget {
         Text(
           display,
           style: TextStyle(
-            color: isDiscount ? AppColors.success : AppColors.primary,
+            color: isDiscount ? AppColors.success : AppColors.price,
             fontWeight: FontWeight.w800,
             fontSize: 15.spx,
           ),
@@ -1497,9 +1809,9 @@ class _CheckoutFooter extends StatelessWidget {
       child: FilledButton(
         onPressed: disabled || loading ? null : onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.white,
-          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
+          backgroundColor: AppColors.buttonFill,
+          foregroundColor: AppColors.onButtonFill,
+          disabledBackgroundColor: AppColors.buttonFill.withValues(alpha: 0.45),
           padding: EdgeInsets.symmetric(horizontal: 16.wpx),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(7.rpx),
@@ -1509,9 +1821,9 @@ class _CheckoutFooter extends StatelessWidget {
             ? SizedBox(
                 width: 18.wpx,
                 height: 18.wpx,
-                child: const CircularProgressIndicator(
+                child: CircularProgressIndicator(
                   strokeWidth: 2.2,
-                  color: AppColors.white,
+                  color: AppColors.onButtonFill,
                 ),
               )
             : Row(
@@ -1544,11 +1856,8 @@ class _CircleIcon extends StatelessWidget {
     return Container(
       width: 30.wpx,
       height: 30.wpx,
-      decoration: const BoxDecoration(
-        color: Color(0xFFEEF4FF),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: AppColors.primary, size: 15.spx),
+      decoration: BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
+      child: Icon(icon, color: AppColors.price, size: 15.spx),
     );
   }
 }

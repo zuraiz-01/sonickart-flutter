@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -85,7 +85,7 @@ class SessionExpiredOverlay extends StatelessWidget {
                               child: Container(
                                 width: 60,
                                 height: 60,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: AppColors.white,
                                   shape: BoxShape.circle,
                                   boxShadow: [
@@ -96,7 +96,7 @@ class SessionExpiredOverlay extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.schedule_rounded,
                                   size: 48,
                                   color: AppColors.primary,
@@ -104,8 +104,8 @@ class SessionExpiredOverlay extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 24,
                               vertical: 24,
                             ),

@@ -32,7 +32,7 @@ class PackageSocketService extends GetxService {
         ? Get.find<AuthController>().currentUser
         : null;
     final socket = io.io(
-      ApiConstants.mobileHost,
+      ApiConstants.socketHost,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -52,6 +52,12 @@ class PackageSocketService extends GetxService {
       })
       ..onError((error) {
         debugPrint('PackageSocketService socket error: $error');
+      })
+      ..onReconnect((_) {
+        debugPrint('PackageSocketService: reconnected for package $normalizedId');
+        for (final room in _roomsFor(orderId, normalizedId, user?.id)) {
+          socket.emit('joinRoom', room);
+        }
       })
       ..onDisconnect((_) {
         debugPrint('PackageSocketService: disconnected');

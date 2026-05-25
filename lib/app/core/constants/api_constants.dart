@@ -1,4 +1,5 @@
 class ApiConstants {
+  static const socketHost = 'https://api.sonickartnow.com';
   static const mobileHost = 'https://api.sonickartnow.com/mobile';
   static const baseUrl = '$mobileHost/api';
 
@@ -44,7 +45,13 @@ class ApiConstants {
 
   static String orderById(String id) => '/order/$id';
 
+  static String orderRating(String id) => '/order/$id/rate';
+
   static String packageOrderById(String id) => '/order/package/$id';
 
   static String addressById(String id) => '/address/$id';
+
+  static const deleteAccount = '/customer/delete-account';
+
+  static String packageOrderRating(String id) => '/order/package/$id/rate';
 }

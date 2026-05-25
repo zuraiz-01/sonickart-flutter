@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../core/utils/phone_dialer.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/theme_controller.dart';
 import '../dashboard/controllers/dashboard_controller.dart' as dashboard;
 import 'controllers/profile_controller.dart';
 
@@ -18,7 +19,7 @@ class ProfileView extends GetView<ProfileController> {
       return Stack(
         children: [
           Container(
-            color: Color(0xFFF6F8FC),
+            color: AppColors.surface,
             child: ListView(
               padding: EdgeInsets.fromLTRB(12.wpx, 12.hpx, 12.wpx, 18.hpx),
               children: [
@@ -82,7 +83,7 @@ class ProfileView extends GetView<ProfileController> {
                               vertical: 4.hpx,
                             ),
                             decoration: BoxDecoration(
-                              color: Color(0xFFF3F6FF),
+                              color: AppColors.muted,
                               borderRadius: BorderRadius.circular(999.rpx),
                             ),
                             child: Text(
@@ -218,7 +219,7 @@ class ProfileView extends GetView<ProfileController> {
                 Container(
                   padding: EdgeInsets.all(12.rpx),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: AppColors.walletCard,
                     borderRadius: BorderRadius.circular(8.rpx),
                     border: Border.all(
                       color: AppColors.primaryDark.withValues(alpha: 0.12),
@@ -260,7 +261,7 @@ class ProfileView extends GetView<ProfileController> {
                                   'SonicKart Wallet & Gift Card',
                                   style: Theme.of(context).textTheme.labelLarge
                                       ?.copyWith(
-                                        color: AppColors.white,
+                                        color: Colors.white,
                                         fontWeight: FontWeight.w800,
                                         fontSize: 15.spx,
                                       ),
@@ -270,7 +271,7 @@ class ProfileView extends GetView<ProfileController> {
                                   'Manage payments and offers at one place',
                                   style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
-                                        color: AppColors.white.withValues(
+                                        color: Colors.white.withValues(
                                           alpha: 0.78,
                                         ),
                                         fontWeight: FontWeight.w500,
@@ -293,7 +294,7 @@ class ProfileView extends GetView<ProfileController> {
                                   'Available Balance',
                                   style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
-                                        color: AppColors.white.withValues(
+                                        color: Colors.white.withValues(
                                           alpha: 0.78,
                                         ),
                                         fontWeight: FontWeight.w700,
@@ -317,8 +318,8 @@ class ProfileView extends GetView<ProfileController> {
                           FilledButton(
                             onPressed: () => controller.openInfoModal('wallet'),
                             style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.white,
-                              foregroundColor: AppColors.primary,
+                              backgroundColor: AppColors.buttonFill,
+                              foregroundColor: AppColors.onButtonFill,
                               padding: EdgeInsets.symmetric(
                                 horizontal: 14.wpx,
                                 vertical: 8.hpx,
@@ -346,9 +347,7 @@ class ProfileView extends GetView<ProfileController> {
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(18.rpx),
-                    border: Border.all(
-                      color: AppColors.black.withValues(alpha: 0.05),
-                    ),
+                    border: Border.all(color: AppColors.border),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.black.withValues(alpha: 0.06),
@@ -384,6 +383,7 @@ class ProfileView extends GetView<ProfileController> {
                         label: 'Suggest Products',
                         onTap: () => controller.handleMenuAction('suggest'),
                       ),
+                      _DarkModeToggle(controller: controller),
                       _MenuAction(
                         icon: Icons.info_outline_rounded,
                         label: 'About',
@@ -408,6 +408,32 @@ class ProfileView extends GetView<ProfileController> {
                   ),
                   label: Text(
                     'Logout',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15.spx,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 14.hpx),
+                OutlinedButton.icon(
+                  onPressed: () => _confirmDeleteAccount(context),
+                  icon: Icon(
+                    Icons.delete_forever_rounded,
+                    color: AppColors.error,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    backgroundColor: AppColors.white,
+                    side: BorderSide(
+                      color: AppColors.error.withValues(alpha: 0.3),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6.rpx),
+                    ),
+                  ),
+                  label: Text(
+                    'Delete Account',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 15.spx,
@@ -470,7 +496,7 @@ class _QuickActionCard extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 12.hpx, horizontal: 8.wpx),
         decoration: BoxDecoration(
-          color: Color(0xFFF7F9FF),
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(6.rpx),
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
         ),
@@ -489,6 +515,60 @@ class _QuickActionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DarkModeToggle extends StatelessWidget {
+  const _DarkModeToggle({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final themeController = Get.find<AppThemeController>();
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 15.wpx, vertical: 15.hpx),
+          child: Row(
+            children: [
+              Icon(
+                Icons.dark_mode_rounded,
+                color: AppColors.accent,
+                size: 20.rpx,
+              ),
+              SizedBox(width: 15.wpx),
+              Expanded(
+                child: Text(
+                  'Dark Mode',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.spx,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+              Obx(
+                () => Switch(
+                  value: themeController.isDarkMode.value,
+                  onChanged: (value) {
+                    themeController.setDarkMode(value);
+                  },
+                  activeThumbColor: AppColors.accent,
+                  activeTrackColor: AppColors.accent.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          height: 1,
+          margin: EdgeInsets.only(left: 15.wpx),
+          color: AppColors.border,
+        ),
+      ],
     );
   }
 }
@@ -742,5 +822,102 @@ class _OverlayCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteAccount(BuildContext context) async {
+  final confirmed = await Get.dialog<bool>(
+    Dialog(
+      backgroundColor: AppColors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.delete_forever_rounded,
+                color: AppColors.error,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Delete Account',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Do you really want to delete your account?\nThis action cannot be undone.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: AppColors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Delete',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+  );
+
+  if (confirmed == true) {
+    await Get.find<ProfileController>().deleteAccount();
   }
 }

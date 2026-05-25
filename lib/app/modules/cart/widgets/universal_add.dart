@@ -53,7 +53,7 @@ class UniversalAdd extends StatelessWidget {
                     child: Text(
                       'ADD',
                       style: TextStyle(
-                        color: AppColors.primary,
+                        color: AppColors.lightPrimary,
                         fontSize: 14.spx,
                         fontWeight: FontWeight.w800,
                       ),
@@ -85,7 +85,7 @@ class UniversalAdd extends StatelessWidget {
                               '$count',
                               maxLines: 1,
                               style: TextStyle(
-                                color: AppColors.white,
+                                color: AppColors.onColored,
                                 fontSize: 15.spx,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -169,8 +169,8 @@ class UniversalAdd extends StatelessWidget {
                     await cart.addItem(product);
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
+                    backgroundColor: AppColors.buttonFill,
+                    foregroundColor: AppColors.onButtonFill,
                     minimumSize: Size(double.infinity, 52.hpx),
                     padding: EdgeInsets.symmetric(vertical: 14.hpx),
                     shape: RoundedRectangleBorder(
@@ -255,7 +255,7 @@ class _CounterTap extends StatelessWidget {
       child: SizedBox(
         width: compact ? 14.wpx : 18.wpx,
         height: 30.hpx,
-        child: Icon(icon, color: AppColors.white, size: 13.spx),
+        child: Icon(icon, color: AppColors.onColored, size: 13.spx),
       ),
     );
   }

@@ -70,7 +70,7 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
 
       if (order == null) {
         return Scaffold(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.walletCard,
           body: SafeArea(
             child: Column(
               children: [
@@ -87,9 +87,7 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
                     color: AppColors.white,
                     child: Center(
                       child: _isRefreshing
-                          ? const CircularProgressIndicator(
-                              color: AppColors.primary,
-                            )
+                          ? CircularProgressIndicator(color: AppColors.primary)
                           : Text(
                               'Order Not Found.',
                               style: TextStyle(
@@ -114,7 +112,7 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
       final canCancel = !order.isInactive;
 
       return Scaffold(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.walletCard,
         body: SafeArea(
           child: Column(
             children: [
@@ -139,7 +137,7 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
                       ),
                       children: [
                         if (_isRefreshing && order.items.isEmpty)
-                          const LinearProgressIndicator(
+                          LinearProgressIndicator(
                             color: AppColors.primary,
                             minHeight: 2,
                           ),
@@ -189,7 +187,7 @@ class _LiveHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: 68.hpx,
-      color: AppColors.primary,
+      color: AppColors.walletCard,
       child: Row(
         children: [
           SizedBox(
@@ -199,7 +197,7 @@ class _LiveHeader extends StatelessWidget {
                 onPressed: onBack,
                 icon: Icon(
                   Icons.chevron_left,
-                  color: AppColors.white,
+                  color: Colors.white,
                   size: 24.rpx,
                 ),
                 style: IconButton.styleFrom(
@@ -220,7 +218,7 @@ class _LiveHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.white,
+                    color: Colors.white,
                     fontWeight: FontWeight.w600,
                     fontSize: 12.rpx,
                   ),
@@ -232,7 +230,7 @@ class _LiveHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.white,
+                    color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 18.rpx,
                   ),
@@ -495,7 +493,7 @@ class _OrderedItemsLoadingCard extends StatelessWidget {
             SizedBox(
               width: 18.rpx,
               height: 18.rpx,
-              child: const CircularProgressIndicator(
+              child: CircularProgressIndicator(
                 color: AppColors.primary,
                 strokeWidth: 2,
               ),
@@ -548,7 +546,7 @@ class _OrderedItemRow extends StatelessWidget {
                 ? Image.network(
                     imageUrl,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
+                    errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.image_outlined,
                       color: AppColors.textSecondary,
                     ),
@@ -979,11 +977,11 @@ class _CircleIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(10.rpx),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: AppColors.primary, size: 20.rpx),
+      child: Icon(icon, color: AppColors.price, size: 20.rpx),
     );
   }
 }

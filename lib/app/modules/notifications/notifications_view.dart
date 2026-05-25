@@ -11,7 +11,7 @@ class NotificationsView extends GetView<NotificationService> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('Notifications'),
         centerTitle: true,
@@ -144,27 +144,27 @@ class _NotificationVisual {
 
   factory _NotificationVisual.fromCategory(String category) {
     return switch (category) {
-      'address' => const _NotificationVisual(
+      'address' => _NotificationVisual(
         icon: Icons.location_on_rounded,
         color: AppColors.secondaryBlue,
       ),
-      'cart' => const _NotificationVisual(
+      'cart' => _NotificationVisual(
         icon: Icons.shopping_cart_rounded,
         color: AppColors.primary,
       ),
-      'order' => const _NotificationVisual(
+      'order' => _NotificationVisual(
         icon: Icons.receipt_long_rounded,
         color: AppColors.success,
       ),
-      'package' => const _NotificationVisual(
+      'package' => _NotificationVisual(
         icon: Icons.local_shipping_rounded,
-        color: Color(0xFF8754D1),
+        color: const Color(0xFF8754D1),
       ),
-      'profile' => const _NotificationVisual(
+      'profile' => _NotificationVisual(
         icon: Icons.person_rounded,
-        color: Color(0xFF0B8F86),
+        color: const Color(0xFF0B8F86),
       ),
-      _ => const _NotificationVisual(
+      _ => _NotificationVisual(
         icon: Icons.notifications_rounded,
         color: AppColors.primary,
       ),
@@ -190,7 +190,7 @@ class _EmptyNotifications extends StatelessWidget {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(24.rpx),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.notifications_none_rounded,
                 color: AppColors.primary,
                 size: 42,

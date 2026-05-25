@@ -6,6 +6,7 @@ import '../core/widgets/app_snackbar.dart';
 import '../data/models/product_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_controller.dart';
 import 'cart/controllers/cart_controller.dart';
 import 'dashboard/controllers/dashboard_controller.dart';
 
@@ -30,6 +31,14 @@ class _ProductDetailViewState extends State<ProductDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final themeController = Get.find<AppThemeController>();
+    return Obx(() {
+      themeController.isDarkMode.value;
+      return _buildScaffold(context);
+    });
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final product = _resolveProduct();
     if (product == null) {
       debugPrint(
@@ -50,7 +59,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
     );
     final cart = Get.find<CartController>();
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           product.name.isEmpty ? 'Product Detail' : product.name.toUpperCase(),
@@ -64,8 +73,8 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           ),
         ),
         centerTitle: true,
-        backgroundColor: AppColors.white,
-        surfaceTintColor: AppColors.white,
+        backgroundColor: AppColors.card,
+        surfaceTintColor: AppColors.card,
         elevation: 0,
         toolbarHeight: 40.hpx,
         iconTheme: IconThemeData(color: AppColors.primary, size: 17.spx),
@@ -116,7 +125,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
               Text(
                 '\u20B9${product.displayPrice}',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.primary,
+                  color: AppColors.price,
                   fontWeight: FontWeight.w900,
                   fontSize: 18.spx,
                 ),
@@ -183,9 +192,9 @@ class _ProductImageCarousel extends StatelessWidget {
       height: 265.hpx,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(8.rpx),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.10)),
+        border: Border.all(color: AppColors.border),
       ),
       child: imageUrls.isEmpty
           ? Center(child: _FallbackProductArt(product: product, size: 120))
@@ -278,8 +287,8 @@ class _DetailCartActions extends StatelessWidget {
             child: FilledButton(
               onPressed: _buyNow,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
+                backgroundColor: AppColors.buttonFill,
+                foregroundColor: AppColors.onButtonFill,
                 minimumSize: Size(double.infinity, 45.hpx),
                 padding: EdgeInsets.symmetric(vertical: 12.hpx),
                 shape: RoundedRectangleBorder(
@@ -371,8 +380,8 @@ class _DetailCartActions extends StatelessWidget {
               child: FilledButton(
                 onPressed: () => Get.toNamed(AppRoutes.checkout),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
+                  backgroundColor: AppColors.buttonFill,
+                  foregroundColor: AppColors.onButtonFill,
                   minimumSize: Size(double.infinity, 45.hpx),
                   padding: EdgeInsets.symmetric(vertical: 12.hpx),
                   shape: RoundedRectangleBorder(
@@ -440,7 +449,7 @@ class _FallbackProductArt extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.productImageFill,
         borderRadius: BorderRadius.circular(24.rpx),
       ),
       child: Text(

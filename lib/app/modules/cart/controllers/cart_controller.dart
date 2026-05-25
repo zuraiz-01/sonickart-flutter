@@ -50,11 +50,11 @@ class CartController extends GetxController {
           )
           .where((item) => item.product.id.isNotEmpty && item.quantity > 0)
           .toList();
-      final serverItems = await _tryFetchServerCart();
-      items.assignAll(serverItems.isNotEmpty ? serverItems : restoredItems);
+      items.assignAll(restoredItems);
       debugPrint(
         'CartController.syncCartFromStorage: restored ${items.length} lines and $totalItems Total items',
       );
+      unawaited(_refreshCartFromServer());
     } catch (error, stackTrace) {
       debugPrint('CartController.syncCartFromStorage: failed with $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -62,6 +62,13 @@ class CartController extends GetxController {
     } finally {
       isSyncingCart.value = false;
     }
+  }
+
+  Future<void> _refreshCartFromServer() async {
+    final serverItems = await _tryFetchServerCart();
+    if (serverItems.isEmpty) return;
+    items.assignAll(serverItems);
+    await _persistCart();
   }
 
   Future<void> addItem(ProductModel product) async {

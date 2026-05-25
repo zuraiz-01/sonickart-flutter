@@ -11,6 +11,7 @@ import 'package:get_storage/get_storage.dart';
 import '../../firebase_options.dart';
 import '../core/constants/api_constants.dart';
 import '../core/network/api_service.dart';
+import '../core/services/local_notification_service.dart';
 import '../core/services/location_lookup_service.dart';
 import '../core/services/notification_service.dart';
 import '../core/widgets/app_snackbar.dart';
@@ -40,6 +41,7 @@ class OrderController extends GetxController {
   final LocationLookupService _locationLookupService = LocationLookupService();
 
   final deliveryAddressController = TextEditingController();
+  final deliveryNoteController = TextEditingController();
   final selectedPaymentMode = 'COD'.obs;
   final couponCodeController = TextEditingController();
   final isPlacingOrder = false.obs;
@@ -61,6 +63,8 @@ class OrderController extends GetxController {
   final isHandlingUnavailableCart = false.obs;
   final isValidatingCartAvailability = false.obs;
   final selectingCheckoutAddressId = RxnString();
+  final needsRatingForOrder = Rxn<OrderModel>();
+  final _ratedOrderIds = <String>{};
 
   bool _hasManualCheckoutAddress = false;
 
@@ -384,8 +388,8 @@ class OrderController extends GetxController {
     return null;
   }
 
-  Future<void> selectAddress(AddressModel address) async {
-    if (selectingCheckoutAddressId.value != null) return;
+  Future<bool> selectAddress(AddressModel address) async {
+    if (selectingCheckoutAddressId.value != null) return false;
     selectingCheckoutAddressId.value = address.id;
     try {
       final normalizedAddress = address.address.trim();
@@ -394,7 +398,7 @@ class OrderController extends GetxController {
           'Invalid Address',
           'Selected address is missing details.',
         );
-        return;
+        return false;
       }
 
       isValidatingCartAvailability.value = true;
@@ -428,7 +432,7 @@ class OrderController extends GetxController {
           'Invalid address location',
           'Selected address does not have valid map coordinates. Please update this address and try again.',
         );
-        return;
+        return false;
       }
 
       final user = _authController?.currentUser;
@@ -469,20 +473,24 @@ class OrderController extends GetxController {
       );
       if (unavailable.isNotEmpty) {
         await _handleUnavailableCartItems(unavailable);
-        return;
+        return false;
       }
 
-      _notifyAction(
-        'Address Selected',
-        'Delivery Address selected for checkout.',
-        category: 'address',
+      unawaited(
+        _notifyAction(
+          'Address Selected',
+          'Delivery Address selected for checkout.',
+          category: 'address',
+        ),
       );
+      return true;
     } catch (error) {
       debugPrint('OrderController.selectAddress failed: $error');
       await _showAddressSelectionError(
         'Failed to select address',
         'Please try again.',
       );
+      return false;
     } finally {
       isValidatingCartAvailability.value = false;
       selectingCheckoutAddressId.value = null;
@@ -493,6 +501,13 @@ class OrderController extends GetxController {
     if (isLoadingOrders.value) return;
     isLoadingOrders.value = true;
     try {
+      final restored = _restoreStoredOrders();
+      if (restored.isNotEmpty) {
+        orders.assignAll(restored);
+        latestOrder.value = restored.firstOrNull;
+        activeProductOrder.value = _latestActiveProductOrder(restored);
+      }
+
       final fromApi = await _tryFetchOrders();
       if (fromApi.isNotEmpty) {
         final hydrated = await _hydrateOrdersForList(fromApi);
@@ -503,23 +518,22 @@ class OrderController extends GetxController {
         return;
       }
 
-      final rawOrders =
-          _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
-      final restored =
-          rawOrders
-              .whereType<Map>()
-              .map(
-                (item) => OrderModel.fromJson(Map<String, dynamic>.from(item)),
-              )
-              .toList()
-            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      orders.assignAll(restored);
-      latestOrder.value = restored.firstOrNull;
-      activeProductOrder.value = _latestActiveProductOrder(restored);
-      unawaited(_enrichOrdersMissingItemDetails(restored));
+      if (restored.isNotEmpty) {
+        unawaited(_enrichOrdersMissingItemDetails(restored));
+      }
     } finally {
       isLoadingOrders.value = false;
     }
+  }
+
+  List<OrderModel> _restoreStoredOrders() {
+    final rawOrders =
+        _storage.read<List<dynamic>>(_ordersStorageKey) ?? <dynamic>[];
+    return rawOrders
+        .whereType<Map>()
+        .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item)))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Future<void> syncActiveProductOrder() async {
@@ -701,6 +715,7 @@ class OrderController extends GetxController {
         totals: totals,
         customerName: address.fullName,
         customerPhone: address.contactNumber,
+        deliveryNote: deliveryNoteController.text.trim(),
       );
 
       final response = await _api.post(
@@ -760,10 +775,11 @@ class OrderController extends GetxController {
       await _persistOrders();
       selectedCoupon.value = null;
       couponCodeController.clear();
+      deliveryNoteController.clear();
       couponFeedback.value = null;
-      _notifyAction(
+      await _notifyAction(
         'Order Placed',
-        'Your order ${createdOrder.id} has been placed successfully.',
+        'Your order  has been placed successfully.',
         category: 'order',
       );
       await cart.clearCart(notify: false);
@@ -1301,6 +1317,7 @@ class OrderController extends GetxController {
     required CheckoutTotals totals,
     required String customerName,
     required String customerPhone,
+    required String deliveryNote,
   }) {
     final vendorId = vendorContext.vendorId;
     final branchId = vendorContext.branchId;
@@ -1364,6 +1381,13 @@ class OrderController extends GetxController {
       'customerPhone': customerPhone,
       'address': address,
     };
+    if (deliveryNote.trim().isNotEmpty) {
+      payload['deliveryNote'] = deliveryNote.trim();
+      payload['delivery_note'] = deliveryNote.trim();
+      payload['note'] = deliveryNote.trim();
+      payload['notes'] = deliveryNote.trim();
+      payload['deliveryPartnerNote'] = deliveryNote.trim();
+    }
     if (latitude != null && longitude != null) {
       payload['latitude'] = latitude;
       payload['longitude'] = longitude;
@@ -1426,20 +1450,25 @@ class OrderController extends GetxController {
     List<OrderModel> source,
   ) async {
     final hydrated = [...source];
-    var attempts = 0;
+    final candidates = <({int index, OrderModel order, String id})>[];
 
     for (var index = 0; index < hydrated.length; index += 1) {
+      if (candidates.length >= _maxOrderListHydrations) break;
       final order = hydrated[index];
       if (!_needsItemDetailRefresh(order)) continue;
-      if (attempts >= _maxOrderListHydrations) break;
+      final ids = _orderIdentifiers(order);
+      if (ids.isEmpty) continue;
+      candidates.add((index: index, order: order, id: ids.first));
+    }
 
-      attempts += 1;
-      for (final id in _orderIdentifiers(order)) {
-        final detailed = await _tryFetchOrderById(id);
-        if (detailed == null) continue;
-        hydrated[index] = _mergeOrderForList(order, detailed);
-        if (!_needsItemDetailRefresh(hydrated[index])) break;
-      }
+    final detailedOrders = await Future.wait(
+      candidates.map((candidate) => _tryFetchOrderById(candidate.id)),
+    );
+    for (var i = 0; i < candidates.length; i += 1) {
+      final detailed = detailedOrders[i];
+      if (detailed == null) continue;
+      final candidate = candidates[i];
+      hydrated[candidate.index] = _mergeOrderForList(candidate.order, detailed);
     }
 
     hydrated.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -1524,6 +1553,7 @@ class OrderController extends GetxController {
     final index = orders.indexWhere(
       (item) => _orderIdentifiers(item).any(incomingIds.contains),
     );
+    final existing = index >= 0 ? orders[index] : null;
     if (index >= 0) {
       orders[index] = order;
     } else {
@@ -1541,6 +1571,7 @@ class OrderController extends GetxController {
     }
 
     await _persistOrders();
+    _notifyProductStatusChange(existing, order);
   }
 
   ({double latitude, double longitude})? _coordinateFrom(Object? source) {
@@ -1914,19 +1945,156 @@ class OrderController extends GetxController {
   @override
   void onClose() {
     deliveryAddressController.dispose();
+    deliveryNoteController.dispose();
     couponCodeController.dispose();
     super.onClose();
   }
 
-  void _notifyAction(String title, String message, {required String category}) {
-    if (!Get.isRegistered<NotificationService>()) return;
-    unawaited(
-      Get.find<NotificationService>().record(
+  Future<void> submitDeliveryRating({
+    required String orderId,
+    required int rating,
+    String feedback = '',
+  }) async {
+    _ratedOrderIds.add(orderId);
+    needsRatingForOrder.value = null;
+    if (!Get.isRegistered<ApiService>()) return;
+    try {
+      await _api.post(
+        endpoint: ApiConstants.orderRating(orderId),
+        data: {
+          'orderId': orderId,
+          'rating': rating.clamp(1, 5),
+          if (feedback.isNotEmpty) 'feedback': feedback,
+        },
+      );
+    } catch (error) {
+      debugPrint('OrderController.submitDeliveryRating failed: $error');
+    }
+  }
+
+  String deliveryPartnerNameFor(OrderModel order) {
+    final partner = order.raw['deliveryPartner'] is Map
+        ? Map<String, dynamic>.from(order.raw['deliveryPartner'] as Map)
+        : const <String, dynamic>{};
+    return _firstNonEmpty([
+          partner['name'],
+          partner['fullName'],
+          order.raw['deliveryPersonName'],
+          order.raw['riderName'],
+          order.raw['driverName'],
+          order.raw['deliveryPartnerName'],
+        ]) ??
+        '';
+  }
+
+  Future<void> _notifyAction(
+    String title,
+    String message, {
+    required String category,
+  }) async {
+    if (Get.isRegistered<NotificationService>()) {
+      await Get.find<NotificationService>().record(
         title: title,
         message: message,
         category: category,
-      ),
+      );
+    }
+
+    if (category == 'order' && Get.isRegistered<LocalNotificationService>()) {
+      await Get.find<LocalNotificationService>().show(
+        title: title,
+        body: message,
+        channelId: LocalNotificationService.defaultChannelId,
+        channelName: LocalNotificationService.defaultChannelName,
+        channelDescription: 'Product order status notifications',
+      );
+    }
+  }
+
+  void _notifyProductStatusChange(OrderModel? existing, OrderModel order) {
+    if (!order.isProductOrder) return;
+    final status = _normalizeLocalStatus(order.status);
+    if (!_shouldNotifyProductStatus(status)) return;
+    final previousStatus = existing == null
+        ? ''
+        : _normalizeLocalStatus(existing.status);
+    if (existing != null && previousStatus == status) return;
+
+    final title = existing == null
+        ? 'Order Sent'
+        : 'Order ${_statusTitle(status)}';
+    final message = existing == null
+        ? 'Your order ${order.id} has been sent.'
+        : 'Your order ${order.id} is ${_statusTitle(status).toLowerCase()}.';
+    if (Get.isRegistered<LocalNotificationService>()) {
+      Get.find<LocalNotificationService>().show(
+        title: title,
+        body: message,
+        channelId: 'sonickart_order_updates',
+        channelName: 'Order updates',
+        channelDescription: 'Product order status notifications',
+      );
+    }
+
+    final wasDelivered =
+        previousStatus == 'delivered' || previousStatus == 'completed';
+    if (!wasDelivered &&
+        existing != null &&
+        (status == 'delivered' || status == 'completed') &&
+        !_ratedOrderIds.contains(order.id) &&
+        !_ratedOrderIds.containsAll(_orderIdentifiers(order))) {
+      needsRatingForOrder.value = order;
+    }
+  }
+
+  bool _shouldNotifyProductStatus(String status) {
+    return const {
+      'placed',
+      'pending',
+      'sent',
+      'send',
+      'confirmed',
+      'accepted',
+      'assigned',
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'out_for_delivery',
+      'delivered',
+      'completed',
+      'cancelled',
+      'prepared',
+      'ready',
+    }.contains(status);
+  }
+
+  String _statusTitle(String status) {
+    return status
+        .replaceAll('_', ' ')
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+        .join(' ');
+  }
+
+  String _normalizeLocalStatus(String status) {
+    final normalized = status.trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
     );
+    final compact = normalized.replaceAll('_', '');
+    if (compact == 'picked' ||
+        compact == 'pickup' ||
+        compact == 'pickedup' ||
+        compact == 'orderpickedup') {
+      return 'picked_up';
+    }
+    if (compact == 'intransit' ||
+        compact == 'transit' ||
+        compact == 'orderintransit') {
+      return 'in_transit';
+    }
+    return normalized;
   }
 }
 
@@ -1949,7 +2117,7 @@ class _UnavailableCartDialog extends StatelessWidget {
             Container(
               width: 48,
               height: 48,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.surface,
                 shape: BoxShape.circle,
               ),
@@ -1973,7 +2141,7 @@ class _UnavailableCartDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'Item unavailable',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -1986,7 +2154,7 @@ class _UnavailableCartDialog extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
                 fontSize: 12,

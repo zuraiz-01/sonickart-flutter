@@ -33,6 +33,7 @@ class ServiceAreaGateController extends GetxController {
 
   Timer? _suggestionDebounce;
   bool _checkedForSession = false;
+  Future<void>? _activeCheck;
 
   bool get isBlocked => blockedResult.value != null;
 
@@ -54,7 +55,19 @@ class ServiceAreaGateController extends GetxController {
   }
 
   Future<void> checkCurrentLocation() async {
-    if (isChecking.value) return;
+    if (_activeCheck != null) return _activeCheck;
+    final check = _runCurrentLocationCheck();
+    _activeCheck = check;
+    try {
+      await check;
+    } finally {
+      if (identical(_activeCheck, check)) {
+        _activeCheck = null;
+      }
+    }
+  }
+
+  Future<void> _runCurrentLocationCheck() async {
     isChecking.value = true;
     statusMessage.value = null;
     try {

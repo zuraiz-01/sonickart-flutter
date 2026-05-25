@@ -46,7 +46,7 @@ class ServiceAreaGateService {
       debugPrint(
         'ServiceAreaGateService.evaluate: checking position ${_coordinateLabel(position.latitude, position.longitude)}',
       );
-      return _evaluateCoordinate(
+      final result = await _evaluateCoordinate(
         latitude: position.latitude,
         longitude: position.longitude,
         locationLabel: await _locationLabel(
@@ -54,6 +54,20 @@ class ServiceAreaGateService {
           position.longitude,
         ),
       );
+      if (!result.isAllowed && result.reason == ServiceAreaBlockReason.outsideWorkingArea) {
+        final areas = await _fetchServiceAreas();
+        final hasAnyCoords = areas.any((a) => a.hasCoordinateRule);
+        if (!hasAnyCoords && areas.isNotEmpty) {
+          return ServiceAreaGateResult.blocked(
+            reason: ServiceAreaBlockReason.outsideWorkingArea,
+            locationLabel: result.locationLabel,
+            message: 'Service areas are missing location data. Please try again or contact support.',
+            latitude: position.latitude,
+            longitude: position.longitude,
+          );
+        }
+      }
+      return result;
     } catch (error) {
       debugPrint('ServiceAreaGateService.evaluate failed: $error');
       return _blockedWithCurrentLocation(
@@ -285,18 +299,56 @@ class ServiceAreaGateService {
         );
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
-      debugPrint(
-        'Splash live location -> latitude: ${position.latitude}, longitude: ${position.longitude}',
-      );
-      return _PositionResult(
-        label: _coordinateLabel(position.latitude, position.longitude),
-        position: position,
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: using last known -> latitude: ${lastKnown.latitude}, longitude: ${lastKnown.longitude}',
+        );
+        return _PositionResult(
+          label: _coordinateLabel(lastKnown.latitude, lastKnown.longitude),
+          position: lastKnown,
+        );
+      }
+
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: live location -> latitude: ${position.latitude}, longitude: ${position.longitude}',
+        );
+        return _PositionResult(
+          label: _coordinateLabel(position.latitude, position.longitude),
+          position: position,
+        );
+      } catch (_) {
+        debugPrint('ServiceAreaGateService._resolvePosition: high accuracy failed, trying medium');
+      }
+
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: medium accuracy -> latitude: ${position.latitude}, longitude: ${position.longitude}',
+        );
+        return _PositionResult(
+          label: _coordinateLabel(position.latitude, position.longitude),
+          position: position,
+        );
+      } catch (_) {
+        debugPrint('ServiceAreaGateService._resolvePosition: medium accuracy also failed');
+      }
+
+      return const _PositionResult(
+        label: 'Unable to read live location',
+        position: null,
       );
     } catch (error) {
       debugPrint('ServiceAreaGateService._resolvePosition failed: $error');

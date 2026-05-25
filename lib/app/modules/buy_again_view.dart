@@ -14,7 +14,7 @@ class BuyAgainView extends GetView<OrderController> {
   Widget build(BuildContext context) {
     final cart = Get.find<CartController>();
     return Scaffold(
-      backgroundColor: Color(0xFFF5F8FF),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(title: Text('Buy Again'), centerTitle: true),
       body: Obx(() {
         final orders = controller.orders

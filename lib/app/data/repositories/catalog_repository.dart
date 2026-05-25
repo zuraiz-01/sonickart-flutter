@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -24,24 +24,58 @@ class CatalogRepository {
   double _productRadiusKm = _defaultProductRadiusKm;
   int _featuredProductsLimit = _defaultFeaturedProductsLimit;
   bool _settingsLoaded = false;
+  Future<ProductCatalogSettings>? _settingsLoadFuture;
+  Future<List<CategoryModel>>? _categoriesLoadFuture;
+  List<CategoryModel>? _cachedCategories;
+  DateTime? _categoriesCachedAt;
+  final _productCache = <String, _TimedCache<List<ProductModel>>>{};
+  final _productLoadFutures = <String, Future<List<ProductModel>>>{};
+  final _visibleProductsById = <String, ProductModel>{};
+
+  static const _catalogCacheTtl = Duration(minutes: 2);
+
+  List<ProductModel> get visibleProducts =>
+      List.unmodifiable(_visibleProductsById.values);
+
+  void invalidateProductScope() {
+    _productCache.clear();
+    _productLoadFutures.clear();
+    _visibleProductsById.clear();
+  }
 
   Future<List<CategoryModel>> fetchCategories() async {
+    final cached = _cachedCategories;
+    if (cached != null && !_isExpired(_categoriesCachedAt)) {
+      return cached;
+    }
+    final inFlight = _categoriesLoadFuture;
+    if (inFlight != null) return inFlight;
+
     debugPrint('CatalogRepository.fetchCategories: request started');
-    try {
+    final future = () async {
       final response = await _apiService.get(
         endpoint: ApiConstants.categories,
         authenticated: false,
       );
-      return _extractList(response)
+      final categories = _extractList(response)
           .whereType<Map>()
           .map(
             (item) => CategoryModel.fromJson(Map<String, dynamic>.from(item)),
           )
           .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
           .toList();
+      _cachedCategories = categories;
+      _categoriesCachedAt = DateTime.now();
+      return categories;
+    }();
+    _categoriesLoadFuture = future;
+    try {
+      return await future;
     } catch (error) {
       debugPrint('CatalogRepository.fetchCategories: failed $error');
       return const [];
+    } finally {
+      _categoriesLoadFuture = null;
     }
   }
 
@@ -58,13 +92,45 @@ class CatalogRepository {
       latitude: latitude,
       longitude: longitude,
     );
+    final cacheKey = _productCacheKey(
+      categoryId: categoryId,
+      preferredVendorId: preferredVendorId,
+      context: context,
+    );
+    final cached = _productCache[cacheKey];
+    if (cached != null && !_isExpired(cached.cachedAt)) {
+      return cached.value;
+    }
+    final inFlight = _productLoadFutures[cacheKey];
+    if (inFlight != null) return inFlight;
+
+    final future = _fetchProductsByCategoryWithContext(
+      categoryId,
+      context,
+      preferredVendorId: preferredVendorId,
+    );
+    _productLoadFutures[cacheKey] = future;
+    try {
+      final products = await future;
+      _productCache[cacheKey] = _TimedCache(products);
+      return products;
+    } finally {
+      _productLoadFutures.remove(cacheKey);
+    }
+  }
+
+  Future<List<ProductModel>> _fetchProductsByCategoryWithContext(
+    String categoryId,
+    ProductCatalogContext context, {
+    String? preferredVendorId,
+  }) async {
     final scopedVendorIds = _selectScopedVendorIds(
       context.vendorIds,
       preferredVendorId,
     );
     if (scopedVendorIds.isEmpty) {
       debugPrint(
-        'CatalogRepository.fetchProductsByCategory: no vendor context',
+        'CatalogRepository.fetchProductsByCategory: no matching vendors in active scope',
       );
       return const [];
     }
@@ -84,7 +150,9 @@ class CatalogRepository {
 
     final context = await _resolveProductContext();
     if (context.vendorIds.isEmpty) {
-      debugPrint('CatalogRepository.searchProducts: no vendor context');
+      debugPrint(
+        'CatalogRepository.searchProducts: no matching vendors in active scope',
+      );
       return const [];
     }
 
@@ -100,38 +168,70 @@ class CatalogRepository {
     }).toList();
   }
 
+  Future<ProductSearchResult> searchProductsInActiveScope(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return const ProductSearchResult();
+
+    final context = await _resolveProductContext();
+    if (context.vendorIds.isEmpty) {
+      return const ProductSearchResult(vendorContextMissing: true);
+    }
+
+    final lists = await Future.wait(
+      context.vendorIds.map(
+        (vendorId) => _searchProductsForVendor(normalized, vendorId, context),
+      ),
+    );
+    final selectedVendorIds = context.vendorIds.toSet();
+    final products = _dedupeProducts(lists.expand((items) => items)).where((
+      product,
+    ) {
+      final productVendorIds = _collectVendorIds(product.raw, product.vendorId);
+      if (productVendorIds.isEmpty) return false;
+      return productVendorIds.any(selectedVendorIds.contains);
+    }).toList();
+
+    _rememberVisibleProducts(products);
+    return ProductSearchResult(products: products);
+  }
+
   Future<List<ProductModel>> fetchFeaturedProducts(
     List<CategoryModel> categories,
   ) async {
     if (categories.isEmpty) return const [];
 
     final context = await _resolveProductContext();
-    if (context.vendorIds.isEmpty) return const [];
 
     final random = Random();
     final target = max(1, _featuredProductsLimit);
+
     final categoryPool = [...categories]..shuffle(random);
     final productMap = <String, ProductModel>{};
 
-    Future<void> appendFromCategory(CategoryModel category) async {
-      if (productMap.length >= target) return;
-      final products = await fetchProductsByCategory(category.id);
-      final randomized = [...products]..shuffle(random);
+    Future<void> appendFromCategories(List<CategoryModel> batch) async {
+      final lists = await Future.wait(
+        batch.map(
+          (category) =>
+              _fetchProductsByCategoryWithContext(category.id, context),
+        ),
+      );
+      final randomized = lists.expand((items) => items).toList()
+        ..shuffle(random);
       for (final product in randomized) {
         if (productMap.length >= target) break;
         productMap.putIfAbsent(product.id, () => product);
       }
     }
 
-    for (final category in categoryPool.take(
-      min(categoryPool.length, target),
-    )) {
-      await appendFromCategory(category);
-    }
-    if (productMap.length < target) {
-      for (final category in categoryPool) {
-        await appendFromCategory(category);
-      }
+    const batchSize = 4;
+    for (
+      var start = 0;
+      start < categoryPool.length && productMap.length < target;
+      start += batchSize
+    ) {
+      await appendFromCategories(
+        categoryPool.skip(start).take(batchSize).toList(growable: false),
+      );
     }
 
     final result = productMap.values.toList()..shuffle(random);
@@ -147,8 +247,11 @@ class CatalogRepository {
         featuredProductsLimit: _featuredProductsLimit,
       );
     }
+    if (!force && _settingsLoadFuture != null) {
+      return _settingsLoadFuture!;
+    }
 
-    try {
+    final future = () async {
       final firebaseHeaders = await _firebaseAuthHeaders();
       if (firebaseHeaders == null) {
         _settingsLoaded = true;
@@ -187,34 +290,46 @@ class CatalogRepository {
         ], _defaultFeaturedProductsLimit.toDouble()).round(),
       );
       _settingsLoaded = true;
+      return ProductCatalogSettings(
+        productRadiusKm: _productRadiusKm,
+        featuredProductsLimit: _featuredProductsLimit,
+      );
+    }();
+    _settingsLoadFuture = future;
+    try {
+      return await future;
     } catch (_) {
       _settingsLoaded = true;
+      return ProductCatalogSettings(
+        productRadiusKm: _productRadiusKm,
+        featuredProductsLimit: _featuredProductsLimit,
+      );
+    } finally {
+      _settingsLoadFuture = null;
     }
-
-    return ProductCatalogSettings(
-      productRadiusKm: _productRadiusKm,
-      featuredProductsLimit: _featuredProductsLimit,
-    );
   }
 
   Future<List<ProductModel>> _fetchProductsByCategoryForVendor(
     String categoryId,
-    String vendorId,
+    String? vendorId,
     ProductCatalogContext context,
   ) async {
     try {
+      final query = <String, dynamic>{
+        'categoryId': categoryId,
+        'latitude': context.latitude,
+        'longitude': context.longitude,
+        'radiusKm': context.radiusKm,
+      };
+      if (vendorId != null && vendorId.trim().isNotEmpty) {
+        query['vendorId'] = vendorId;
+      }
       final response = await _apiService.get(
         endpoint: ApiConstants.productsByCategory(categoryId),
-        query: {
-          'categoryId': categoryId,
-          'vendorId': vendorId,
-          'latitude': context.latitude,
-          'longitude': context.longitude,
-          'radiusKm': context.radiusKm,
-        },
+        query: query,
         authenticated: false,
       );
-      return _extractList(response)
+      final products = _extractList(response)
           .whereType<Map>()
           .map(
             (item) => ProductModel.fromJson(
@@ -227,6 +342,8 @@ class CatalogRepository {
           )
           .where((item) => item.id.isNotEmpty && !_isRemovedProduct(item.raw))
           .toList();
+      _rememberVisibleProducts(products);
+      return products;
     } catch (error) {
       debugPrint(
         'CatalogRepository.fetchProductsByCategory: failed after $error',
@@ -237,20 +354,23 @@ class CatalogRepository {
 
   Future<List<ProductModel>> _searchProductsForVendor(
     String query,
-    String vendorId,
+    String? vendorId,
     ProductCatalogContext context,
   ) async {
     try {
+      final params = <String, dynamic>{
+        'q': query,
+        'query': query,
+        'latitude': context.latitude,
+        'longitude': context.longitude,
+        'radiusKm': context.radiusKm,
+      };
+      if (vendorId != null && vendorId.trim().isNotEmpty) {
+        params['vendorId'] = vendorId;
+      }
       final response = await _apiService.get(
         endpoint: ApiConstants.productSearch,
-        query: {
-          'q': query,
-          'query': query,
-          'vendorId': vendorId,
-          'latitude': context.latitude,
-          'longitude': context.longitude,
-          'radiusKm': context.radiusKm,
-        },
+        query: params,
         authenticated: false,
       );
       return _extractList(response)
@@ -316,12 +436,17 @@ class CatalogRepository {
     }
 
     final selectedAddress = _selectedAddress;
-    final scopedLatitude = latitude ?? selectedAddress?.latitude;
-    final scopedLongitude = longitude ?? selectedAddress?.longitude;
+    var scopedLatitude = latitude ?? selectedAddress?.latitude;
+    var scopedLongitude = longitude ?? selectedAddress?.longitude;
     final storedVendorIds = _uniqueVendorIds(
       _selectedVendorId?.split(',') ?? const [],
     );
     if (storedVendorIds.isNotEmpty) {
+      if (!_hasValidCoordinates(scopedLatitude, scopedLongitude)) {
+        final deviceCoordinate = await _readDeviceCoordinate();
+        scopedLatitude = deviceCoordinate?.latitude;
+        scopedLongitude = deviceCoordinate?.longitude;
+      }
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
         latitude: scopedLatitude,
@@ -370,6 +495,7 @@ class CatalogRepository {
           'longitude': longitude,
           'radiusKm': _productRadiusKm,
         },
+        authenticated: false,
       );
       final vendorIds = _resolveNearbyVendorIds(response, _productRadiusKm);
       if (vendorIds.isNotEmpty) {
@@ -395,13 +521,20 @@ class CatalogRepository {
           permission == LocationPermission.deniedForever) {
         return null;
       }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
-      return (latitude: position.latitude, longitude: position.longitude);
+      for (final accuracy in [LocationAccuracy.low, LocationAccuracy.medium]) {
+        try {
+          final position = await Geolocator.getCurrentPosition(
+            locationSettings: LocationSettings(
+              accuracy: accuracy,
+              timeLimit: const Duration(seconds: 12),
+            ),
+          );
+          return (latitude: position.latitude, longitude: position.longitude);
+        } catch (_) {
+          continue;
+        }
+      }
+      return null;
     } catch (error) {
       debugPrint('CatalogRepository._readDeviceCoordinate: failed $error');
       return null;
@@ -449,6 +582,13 @@ class CatalogRepository {
       map.putIfAbsent(product.id, () => product);
     }
     return map.values.toList();
+  }
+
+  void _rememberVisibleProducts(Iterable<ProductModel> products) {
+    for (final product in products) {
+      if (product.id.isEmpty) continue;
+      _visibleProductsById[product.id] = product;
+    }
   }
 
   bool _isRemovedProduct(Map<String, dynamic> product) {
@@ -499,8 +639,18 @@ class CatalogRepository {
       return _uniqueVendorIds(nearbyVendors.map(_vendorIdentifier));
     }
 
-    final nearestVendor = response['nearestVendor'] is Map
-        ? Map<String, dynamic>.from(response['nearestVendor'] as Map)
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+    final nearestVendorSource =
+        response['nearestVendor'] ??
+        data['nearestVendor'] ??
+        result['nearestVendor'];
+    final nearestVendor = nearestVendorSource is Map
+        ? Map<String, dynamic>.from(nearestVendorSource)
         : const <String, dynamic>{};
     final nearestDistance =
         _distanceKmFrom(nearestVendor) ?? _distanceKmFrom(response);
@@ -512,6 +662,16 @@ class CatalogRepository {
       if (response['vendorIds'] is List) ...(response['vendorIds'] as List),
       response['vendorId'],
       response['vendor_id'],
+      if (response['data'] is Map &&
+          (response['data'] as Map)['vendorIds'] is List)
+        ...((response['data'] as Map)['vendorIds'] as List),
+      if (response['data'] is Map) (response['data'] as Map)['vendorId'],
+      if (response['data'] is Map) (response['data'] as Map)['vendor_id'],
+      if (response['result'] is Map &&
+          (response['result'] as Map)['vendorIds'] is List)
+        ...((response['result'] as Map)['vendorIds'] as List),
+      if (response['result'] is Map) (response['result'] as Map)['vendorId'],
+      if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
   }
@@ -521,6 +681,8 @@ class CatalogRepository {
       response['vendors'],
       if (response['data'] is Map) (response['data'] as Map)['vendors'],
       if (response['result'] is Map) (response['result'] as Map)['vendors'],
+      if (response['data'] is Map) (response['data'] as Map)['data'],
+      if (response['result'] is Map) (response['result'] as Map)['data'],
     ];
     for (final candidate in candidates) {
       if (candidate is List) {
@@ -579,6 +741,28 @@ class CatalogRepository {
 
   bool _hasValidCoordinates(double? lat, double? lng) {
     return lat != null && lng != null && lat.isFinite && lng.isFinite;
+  }
+
+  bool _isExpired(DateTime? cachedAt) =>
+      cachedAt == null ||
+      DateTime.now().difference(cachedAt) > _catalogCacheTtl;
+
+  String _productCacheKey({
+    required String categoryId,
+    required String? preferredVendorId,
+    required ProductCatalogContext context,
+  }) {
+    final vendors = [...context.vendorIds]..sort();
+    String coordinate(double? value) =>
+        value == null ? '-' : value.toStringAsFixed(3);
+    return [
+      categoryId,
+      preferredVendorId ?? '',
+      vendors.join(','),
+      coordinate(context.latitude),
+      coordinate(context.longitude),
+      context.radiusKm.toStringAsFixed(1),
+    ].join('|');
   }
 
   Future<Map<String, String>?> _firebaseAuthHeaders() async {
@@ -648,6 +832,13 @@ class CatalogRepository {
   }
 }
 
+class _TimedCache<T> {
+  _TimedCache(this.value) : cachedAt = DateTime.now();
+
+  final T value;
+  final DateTime cachedAt;
+}
+
 class ProductCatalogSettings {
   const ProductCatalogSettings({
     required this.productRadiusKm,
@@ -656,6 +847,16 @@ class ProductCatalogSettings {
 
   final double productRadiusKm;
   final int featuredProductsLimit;
+}
+
+class ProductSearchResult {
+  const ProductSearchResult({
+    this.products = const [],
+    this.vendorContextMissing = false,
+  });
+
+  final List<ProductModel> products;
+  final bool vendorContextMissing;
 }
 
 class ProductCatalogContext {
