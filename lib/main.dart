@@ -1,25 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
 
 import 'app/core/services/firebase_bootstrap.dart';
+import 'app/core/services/local_notification_service.dart';
+import 'app/core/services/push_notification_service.dart';
 import 'app/core/services/session_controller.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
-import 'app/theme/app_colors.dart';
 import 'app/theme/app_theme.dart';
+import 'app/theme/theme_controller.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await FirebaseBootstrap.initialize();
+  await LocalNotificationService.showRemoteMessageFromBackground(message);
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await _clearLaunchAddressSelection();
+  if (!Get.isRegistered<AppThemeController>()) {
+    Get.put(AppThemeController(GetStorage()), permanent: true);
+  }
   if (!Get.isRegistered<SessionController>()) {
     Get.put(SessionController(GetStorage()), permanent: true);
   }
+  if (!Get.isRegistered<LocalNotificationService>()) {
+    await Get.putAsync(
+      () => LocalNotificationService().init(),
+      permanent: true,
+    );
+  }
   await _initializeFirebase();
+  if (!Get.isRegistered<PushNotificationService>()) {
+    await Get.putAsync(() => PushNotificationService().init(), permanent: true);
+  }
   runApp(const SonicCartApp());
 }
 
@@ -49,29 +70,25 @@ Future<void> _initializeFirebase() async {
 class SonicCartApp extends StatelessWidget {
   const SonicCartApp({super.key});
 
-  static const _defaultSystemUiStyle = SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.white,
-    systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AppColors.white,
-  );
-
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<AppThemeController>()) {
+      Get.put(AppThemeController(GetStorage()), permanent: true);
+    }
+    final themeController = Get.find<AppThemeController>();
     return Sizer(
       builder: (context, orientation, deviceType) {
-        return ToastificationWrapper(
-          child: GetMaterialApp(
-            title: 'SonicKart',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            initialRoute: AppRoutes.splash,
-            getPages: AppPages.routes,
-            builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-              value: _defaultSystemUiStyle,
-              child: SessionExpiredOverlay(child: child),
+        return Obx(
+          () => ToastificationWrapper(
+            child: GetMaterialApp(
+              title: 'SonicKart',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeController.themeMode,
+              initialRoute: AppRoutes.splash,
+              getPages: AppPages.routes,
+              builder: (context, child) => SessionExpiredOverlay(child: child),
             ),
           ),
         );

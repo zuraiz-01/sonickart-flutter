@@ -53,7 +53,7 @@ class ServiceAreaGateOverlay extends StatelessWidget {
                                     'HANG',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: AppColors.white,
+                                      color: Color(0xFFFFFFFF),
                                       fontSize: 46.spx,
                                       height: 0.9,
                                       fontWeight: FontWeight.w900,
@@ -84,7 +84,7 @@ class ServiceAreaGateOverlay extends StatelessWidget {
                                         : 'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: AppColors.white.withValues(
+                                      color: Color(0xFFFFFFFF).withValues(
                                         alpha: 0.84,
                                       ),
                                       fontSize: 12.spx,
@@ -131,14 +131,14 @@ class ServiceAreaGateOverlay extends StatelessWidget {
                             ),
                             if (controller.statusMessage.value != null) ...[
                               SizedBox(height: 12.hpx),
-                              Text(
-                                controller.statusMessage.value!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AppColors.white.withValues(
-                                    alpha: 0.86,
-                                  ),
-                                  fontSize: 11.spx,
+                                Text(
+                                  controller.statusMessage.value!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Color(0xFFFFFFFF).withValues(
+                                      alpha: 0.86,
+                                    ),
+                                    fontSize: 11.spx,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -156,7 +156,7 @@ class ServiceAreaGateOverlay extends StatelessWidget {
                   child: IgnorePointer(
                     child: ColoredBox(
                       color: Colors.black.withValues(alpha: 0.18),
-                      child: const Center(
+                      child: Center(
                         child: CircularProgressIndicator(
                           color: AppColors.accent,
                         ),
@@ -283,7 +283,7 @@ class _LocationSheet extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final suggestion = controller.placeSuggestions[index];
                     return ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.place_outlined,
                         color: AppColors.primary,
                       ),
@@ -374,7 +374,7 @@ class _TopLocationChip extends StatelessWidget {
                         color: AppColors.accent.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(16.rpx),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.location_on_rounded,
                         color: AppColors.accent,
                         size: 20,
@@ -401,7 +401,7 @@ class _TopLocationChip extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: AppColors.white.withValues(alpha: 0.82),
+                              color: Color(0xFFFFFFFF).withValues(alpha: 0.82),
                               fontSize: 10.spx,
                               height: 1.2,
                               fontWeight: FontWeight.w600,
@@ -413,7 +413,7 @@ class _TopLocationChip extends StatelessWidget {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.keyboard_arrow_down_rounded,
                           color: AppColors.accent,
                           size: 18,
@@ -442,7 +442,7 @@ class _TopLocationChip extends StatelessWidget {
             border: Border.all(color: AppColors.accent),
             borderRadius: BorderRadius.circular(20.rpx),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.person_rounded,
             color: AppColors.accent,
             size: 20,
@@ -516,7 +516,7 @@ class _InfoSteps extends StatelessWidget {
                       Text(
                         item.$3,
                         style: TextStyle(
-                          color: AppColors.white.withValues(alpha: 0.78),
+                          color: Color(0xFFFFFFFF).withValues(alpha: 0.78),
                           fontSize: 10.spx,
                           height: 1.22,
                           fontWeight: FontWeight.w600,
@@ -551,7 +551,7 @@ class _GateButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.accent,
-        side: const BorderSide(color: AppColors.accent),
+        side: BorderSide(color: AppColors.accent),
         padding: EdgeInsets.symmetric(horizontal: 16.wpx, vertical: 11.hpx),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999.rpx),

@@ -89,7 +89,7 @@ class CartSummaryBar extends StatelessWidget {
                   onPressed: () => Get.toNamed(AppRoutes.checkout),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.secondaryBlue,
-                    foregroundColor: AppColors.white,
+                    foregroundColor: AppColors.onColored,
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20.rpx),

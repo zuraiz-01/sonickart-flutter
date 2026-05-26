@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
@@ -129,24 +129,21 @@ class _OrderSuccessViewState extends State<OrderSuccessView> {
     return 'Selected delivery address';
   }
 
-  void _openLiveTracking() {
+  Future<void> _openLiveTracking() async {
     if (_didNavigate) return;
     _didNavigate = true;
-    Get.offAllNamed(AppRoutes.dashboard);
-    Future.delayed(const Duration(milliseconds: 60), () {
-      Get.toNamed(
-        AppRoutes.liveTracking,
-        arguments: {
-          if (_orderId != null && _orderId.isNotEmpty) 'orderId': _orderId,
-        },
-      );
-    });
+    await Get.offAllNamed(
+      AppRoutes.liveTracking,
+      arguments: {
+        if (_orderId != null && _orderId.isNotEmpty) 'orderId': _orderId,
+      },
+    );
   }
 
-  void _openDashboardOnly() {
+  Future<void> _openDashboardOnly() async {
     if (_didNavigate) return;
     _didNavigate = true;
     _timer?.cancel();
-    Get.offAllNamed(AppRoutes.dashboard);
+    await Get.offAllNamed(AppRoutes.dashboard);
   }
 }

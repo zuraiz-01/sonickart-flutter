@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/services/firebase_bootstrap.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -265,6 +266,9 @@ class AuthController extends GetxController {
     if (Get.isRegistered<ProfileController>()) {
       Get.find<ProfileController>().clearSessionState();
     }
+    if (Get.isRegistered<PushNotificationService>()) {
+      await Get.find<PushNotificationService>().clearTokenCache();
+    }
     await _clearFirebaseUser();
     await _storage.erase();
     clearForms();
@@ -497,6 +501,9 @@ class AuthController extends GetxController {
 
     await _storage.write('isLoggedIn', true);
     await _storage.write('currentUser', appUser.toJson());
+    if (Get.isRegistered<PushNotificationService>()) {
+      await Get.find<PushNotificationService>().registerCurrentToken();
+    }
     if (Get.isRegistered<ProfileController>()) {
       await Get.find<ProfileController>().refreshForAuthenticatedSession();
     }

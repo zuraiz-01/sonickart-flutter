@@ -9,6 +9,7 @@ import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import '../../core/services/package_socket_service.dart';
 import '../../core/utils/phone_dialer.dart';
+import '../../core/widgets/delivery_rating_dialog.dart';
 import '../../data/models/package_order_model.dart';
 import '../../theme/app_colors.dart';
 import 'controllers/package_controller.dart';
@@ -29,6 +30,8 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
       : null;
   late final String orderId = Get.arguments?['orderId']?.toString() ?? '';
   bool _refreshing = false;
+  Timer? _trackingTimer;
+  Worker? _ratingWorker;
 
   @override
   void initState() {
@@ -38,11 +41,46 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
         socketService?.connectToOrder(controller, orderId);
       }
       unawaited(_refreshOrder());
+      _startTracking();
+      _setupRatingWorker();
+    });
+  }
+
+  void _setupRatingWorker() {
+    _ratingWorker = ever(controller.needsRatingForOrder, (order) {
+      if (order == null || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _trackingTimer?.cancel();
+        Get.dialog(
+          DeliveryRatingDialog(
+            orderId: order.id,
+            deliveryPartnerName: controller.deliveryPartnerNameFor(order),
+            onSubmitRating:
+                ({required orderId, required rating, required feedback}) =>
+                    controller.submitDeliveryRating(
+                      orderId: orderId,
+                      rating: rating,
+                      feedback: feedback,
+                    ),
+          ),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+        );
+      });
+    });
+  }
+
+  void _startTracking() {
+    _trackingTimer?.cancel();
+    _trackingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (mounted && orderId.trim().isNotEmpty) unawaited(_refreshOrder());
     });
   }
 
   @override
   void dispose() {
+    _trackingTimer?.cancel();
+    _ratingWorker?.dispose();
     socketService?.disconnect();
     super.dispose();
   }
@@ -126,6 +164,7 @@ class _PackageSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = _normalizedStatus(order.status);
     final createdAt = order.createdAt.toLocal().toString().substring(0, 16);
+    final showDropDetails = _dropDetailCount(order) > 1;
 
     return _CardShell(
       child: Column(
@@ -212,6 +251,40 @@ class _PackageSummaryCard extends StatelessWidget {
             label: 'Drop',
             value: order.dropAddress.isNotEmpty ? order.dropAddress : 'N/A',
           ),
+          if (order.totalDrops > 1) ...[
+            SizedBox(height: 12.hpx),
+            _LocationRow(
+              icon: Icons.route_outlined,
+              color: AppColors.secondaryBlue,
+              label: 'Current Drop',
+              value:
+                  'Drop ${order.currentDropIndex + 1} of ${order.totalDrops}',
+            ),
+          ],
+          if (showDropDetails) ...[
+            SizedBox(height: 12.hpx),
+            _DropDetailsList(order: order),
+          ],
+          if (order.senderName.isNotEmpty || order.senderPhone.isNotEmpty) ...[
+            SizedBox(height: 12.hpx),
+            _LocationRow(
+              icon: Icons.person_pin_circle_outlined,
+              color: AppColors.secondaryBlue,
+              label: 'Sender',
+              value: _contactValue(order.senderName, order.senderPhone),
+            ),
+          ],
+          if (!showDropDetails &&
+              (order.receiverName.isNotEmpty ||
+                  order.receiverPhone.isNotEmpty)) ...[
+            SizedBox(height: 12.hpx),
+            _LocationRow(
+              icon: Icons.person_add_alt_1_outlined,
+              color: AppColors.primary,
+              label: 'Receiver',
+              value: _contactValue(order.receiverName, order.receiverPhone),
+            ),
+          ],
           SizedBox(height: 14.hpx),
           Row(
             children: [
@@ -262,7 +335,7 @@ class _QuickStatTile extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(10.rpx),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF4FF),
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(10.rpx),
         border: Border.all(color: AppColors.border),
       ),
@@ -396,18 +469,88 @@ class _PackageLiveMapCard extends StatefulWidget {
 
 class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
   GoogleMapController? _mapController;
+  LatLng? _displayedPartnerLoc;
+  LatLng? _targetPartnerLoc;
+  Timer? _glideTimer;
 
   @override
   void didUpdateWidget(covariant _PackageLiveMapCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.order.raw != widget.order.raw ||
-        oldWidget.order.status != widget.order.status) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fitBounds());
+    final data = _PackageTrackingMapData.fromOrder(widget.order);
+    final newLoc = data.deliveryPersonLocation;
+
+    if (newLoc != null &&
+        _displayedPartnerLoc != null &&
+        _targetPartnerLoc != null &&
+        newLoc != _targetPartnerLoc &&
+        _distanceKm(newLoc, _targetPartnerLoc!) > 0.01) {
+      _targetPartnerLoc = newLoc;
+      _startGlide();
+    } else if (data.deliveryPersonLocation != null &&
+        _displayedPartnerLoc == null) {
+      _displayedPartnerLoc = data.deliveryPersonLocation;
+      _targetPartnerLoc = data.deliveryPersonLocation;
     }
+  }
+
+  void _startGlide() {
+    _glideTimer?.cancel();
+    _glideTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      if (!mounted ||
+          _displayedPartnerLoc == null ||
+          _targetPartnerLoc == null) {
+        _glideTimer?.cancel();
+        return;
+      }
+      final from = _displayedPartnerLoc!;
+      final to = _targetPartnerLoc!;
+      final newLat = from.latitude + (to.latitude - from.latitude) * 0.1;
+      final newLng = from.longitude + (to.longitude - from.longitude) * 0.1;
+      _displayedPartnerLoc = LatLng(newLat, newLng);
+      if (_distanceKm(from, to) < 0.005) {
+        _displayedPartnerLoc = to;
+        _glideTimer?.cancel();
+      }
+      setState(() {});
+    });
+  }
+
+  Set<Marker> _animatedMarkers(_PackageTrackingMapData data) {
+    final partnerPos = _displayedPartnerLoc ?? data.deliveryPersonLocation;
+    return {
+      if (data.pickupLocation != null)
+        Marker(
+          markerId: const MarkerId('pickupLocation'),
+          position: data.pickupLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+          infoWindow: const InfoWindow(title: 'Pickup'),
+        ),
+      if (data.dropLocation != null)
+        Marker(
+          markerId: const MarkerId('dropLocation'),
+          position: data.dropLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          ),
+          infoWindow: const InfoWindow(title: 'Drop'),
+        ),
+      if (partnerPos != null)
+        Marker(
+          markerId: const MarkerId('deliveryPartner'),
+          position: partnerPos,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+          infoWindow: const InfoWindow(title: 'Delivery Partner'),
+        ),
+    };
   }
 
   @override
   void dispose() {
+    _glideTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -441,7 +584,7 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
                             target: data.initialTarget,
                             zoom: 14,
                           ),
-                          markers: data.markers,
+                          markers: _animatedMarkers(data),
                           polylines: data.polylines,
                           myLocationButtonEnabled: false,
                           zoomControlsEnabled: false,
@@ -501,6 +644,21 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
       ),
     );
   }
+
+  double _distanceKm(LatLng a, LatLng b) {
+    const r = 6371.0;
+    final dLat = _rad(b.latitude - a.latitude);
+    final dLon = _rad(b.longitude - a.longitude);
+    final x =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_rad(a.latitude)) *
+            cos(_rad(b.latitude)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    return r * 2 * atan2(sqrt(x), sqrt(1 - x));
+  }
+
+  double _rad(double v) => v * pi / 180;
 
   Future<void> _fitBounds() async {
     final controller = _mapController;
@@ -619,7 +777,7 @@ class _MetaChip extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 10.wpx, vertical: 9.hpx),
         decoration: BoxDecoration(
-          color: const Color(0xFFEEF4FF),
+          color: AppColors.muted,
           borderRadius: BorderRadius.circular(12.rpx),
           border: Border.all(color: AppColors.border),
         ),
@@ -694,11 +852,150 @@ class _LocationRow extends StatelessWidget {
   }
 }
 
+class _DropDetailsList extends StatelessWidget {
+  const _DropDetailsList({required this.order});
+
+  final PackageOrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _dropDetailCount(order);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.route_outlined, size: 19.rpx, color: AppColors.primary),
+        SizedBox(width: 10.wpx),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Drops',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 8.hpx),
+              for (var i = 0; i < count; i++) ...[
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(10.rpx),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10.rpx),
+                    border: Border.all(
+                      color: i == order.currentDropIndex
+                          ? AppColors.primary.withValues(alpha: 0.28)
+                          : AppColors.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        i == order.currentDropIndex
+                            ? 'Drop ${i + 1} (Current)'
+                            : 'Drop ${i + 1}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (_dropAddressAt(order, i).isNotEmpty) ...[
+                        SizedBox(height: 4.hpx),
+                        Text(
+                          _dropAddressAt(order, i),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.35,
+                              ),
+                        ),
+                      ],
+                      if (_dropContactValue(order, i).isNotEmpty) ...[
+                        SizedBox(height: 4.hpx),
+                        Text(
+                          'Receiver: ${_dropContactValue(order, i)}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                      if (_dropStatusAt(order, i).isNotEmpty ||
+                          _dropPaymentLine(order, i).isNotEmpty) ...[
+                        SizedBox(height: 6.hpx),
+                        Wrap(
+                          spacing: 8.wpx,
+                          runSpacing: 6.hpx,
+                          children: [
+                            if (_dropStatusAt(order, i).isNotEmpty)
+                              _DropMetaPill(
+                                text: _titleStatus(_dropStatusAt(order, i)),
+                                icon: Icons.check_circle_outline,
+                              ),
+                            if (_dropPaymentLine(order, i).isNotEmpty)
+                              _DropMetaPill(
+                                text: _dropPaymentLine(order, i),
+                                icon: Icons.payments_outlined,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (i != count - 1) SizedBox(height: 8.hpx),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DropMetaPill extends StatelessWidget {
+  const _DropMetaPill({required this.text, required this.icon});
+
+  final String text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 5.hpx),
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        borderRadius: BorderRadius.circular(999.rpx),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13.rpx, color: AppColors.primary),
+          SizedBox(width: 4.wpx),
+          Text(
+            text,
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 11.spx,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoLine extends StatelessWidget {
   const _InfoLine({
     required this.icon,
     required this.value,
-    this.valueColor = AppColors.primary,
+    this.valueColor = const Color(0xFF092774),
   });
 
   final IconData icon;
@@ -808,7 +1105,7 @@ class _MapFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFEEF4FF),
+      color: AppColors.muted,
       alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -850,6 +1147,7 @@ class _PackageTrackingMapData {
     final status = _normalizedStatus(order.status);
     return _PackageTrackingMapData(
       dropLocation:
+          _currentDropCoordinate(order, raw) ??
           _coordinateFrom(raw['dropLocation']) ??
           _coordinateFrom(raw['deliveryLocation']) ??
           _coordinateFrom({
@@ -1016,6 +1314,50 @@ class _PackageTrackingMapData {
     return _valid(latitude, longitude) ? LatLng(latitude, longitude) : null;
   }
 
+  static LatLng? _currentDropCoordinate(
+    PackageOrderModel order,
+    Map<String, dynamic> raw,
+  ) {
+    var index = order.currentDropIndex;
+    final maxIndex = max(order.totalDrops - 1, 0);
+    if (index < 0) index = 0;
+    if (index > maxIndex) index = maxIndex;
+
+    final rawDrops = _listFrom(
+      raw['dropLocations'] ?? raw['drop_locations'] ?? raw['drops'],
+    );
+    if (rawDrops.isNotEmpty && index < rawDrops.length) {
+      final coordinate = _coordinateFrom(rawDrops[index]);
+      if (coordinate != null) return coordinate;
+    }
+
+    if (index < order.dropLatitudes.length &&
+        index < order.dropLongitudes.length) {
+      final latitude = order.dropLatitudes[index];
+      final longitude = order.dropLongitudes[index];
+      if (latitude != null &&
+          longitude != null &&
+          _valid(latitude, longitude)) {
+        return LatLng(latitude, longitude);
+      }
+    }
+
+    return null;
+  }
+
+  static List<dynamic> _listFrom(Object? source) {
+    if (source is List) return source;
+    if (source is String) {
+      try {
+        final decoded = jsonDecode(source);
+        return decoded is List ? decoded : const [];
+      } catch (_) {
+        return const [];
+      }
+    }
+    return const [];
+  }
+
   static double? _double(Object? value) {
     if (value is num && value.isFinite) return value.toDouble();
     return double.tryParse(value?.toString() ?? '');
@@ -1073,16 +1415,21 @@ bool _hasPickedUp(String status) {
     'picked',
     'picked_up',
     'arriving',
+    'in_transit',
     'out_for_delivery',
+    'delivered',
+    'completed',
   }.contains(status);
 }
 
 String _trackingLabel(String status) {
+  if (status == 'delivered' || status == 'completed') {
+    return 'Package Delivered';
+  }
   if (_hasPickedUp(status)) return 'Delivery Partner Is Heading To Drop';
   if (const {'assigned', 'confirmed', 'accepted'}.contains(status)) {
     return 'Delivery Partner Is Heading To Pickup';
   }
-  if (status == 'delivered') return 'Package Delivered';
   return 'Waiting For Delivery Partner';
 }
 
@@ -1090,6 +1437,81 @@ String _displayStatusHeading(String status) {
   if (status == 'pending') return 'Packing Your Package Order';
   final text = status.replaceAll(RegExp(r'[-_]+'), ' ').trim();
   if (text.isEmpty) return 'Package Order';
+  return text
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(
+        (word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
+String _contactValue(String name, String phone) {
+  final parts = [
+    name.trim(),
+    phone.trim(),
+  ].where((value) => value.isNotEmpty).join(' | ');
+  return parts.isEmpty ? 'N/A' : parts;
+}
+
+int _dropDetailCount(PackageOrderModel order) {
+  return [
+    order.totalDrops,
+    order.dropAddresses.length,
+    order.dropReceiverNames.length,
+    order.dropReceiverPhones.length,
+    order.dropPaymentAmounts.length,
+    order.dropPaymentStatuses.length,
+    order.dropStatuses.length,
+  ].fold<int>(0, max);
+}
+
+String _dropAddressAt(PackageOrderModel order, int index) {
+  if (index < 0 || index >= order.dropAddresses.length) return '';
+  return order.dropAddresses[index].trim();
+}
+
+String _dropContactValue(PackageOrderModel order, int index) {
+  final name = index >= 0 && index < order.dropReceiverNames.length
+      ? order.dropReceiverNames[index].trim()
+      : '';
+  final phone = index >= 0 && index < order.dropReceiverPhones.length
+      ? order.dropReceiverPhones[index].trim()
+      : '';
+  return [name, phone].where((value) => value.isNotEmpty).join(' | ');
+}
+
+String _dropStatusAt(PackageOrderModel order, int index) {
+  if (index >= 0 && index < order.dropStatuses.length) {
+    final status = order.dropStatuses[index].trim();
+    if (status.isNotEmpty) return status;
+  }
+  final normalized = _normalizedStatus(order.status);
+  if (normalized == 'delivered' || normalized == 'completed') {
+    return 'completed';
+  }
+  if (!_hasPickedUp(normalized)) return 'pending';
+  if (index < order.currentDropIndex) return 'completed';
+  if (index == order.currentDropIndex) return 'active';
+  return 'pending';
+}
+
+String _dropPaymentLine(PackageOrderModel order, int index) {
+  final amount = index >= 0 && index < order.dropPaymentAmounts.length
+      ? order.dropPaymentAmounts[index]
+      : 0.0;
+  final paymentStatus = index >= 0 && index < order.dropPaymentStatuses.length
+      ? order.dropPaymentStatuses[index].trim()
+      : '';
+  if (amount <= 0 && paymentStatus.isEmpty) return '';
+  final statusText = paymentStatus.isEmpty ? 'pending' : paymentStatus;
+  if (amount <= 0) return _titleStatus(statusText);
+  return 'Rs ${amount.toStringAsFixed(2)} ${_titleStatus(statusText)}';
+}
+
+String _titleStatus(String status) {
+  final text = status.replaceAll(RegExp(r'[-_]+'), ' ').trim();
+  if (text.isEmpty) return '';
   return text
       .split(RegExp(r'\s+'))
       .where((word) => word.isNotEmpty)

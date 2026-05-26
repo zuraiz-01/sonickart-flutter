@@ -6,6 +6,7 @@ import '../data/models/product_model.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_controller.dart';
 import 'cart/widgets/cart_summary_bar.dart';
 import 'cart/widgets/universal_add.dart';
 
@@ -21,8 +22,10 @@ class _SearchViewState extends State<SearchView> {
   final _results = <ProductModel>[].obs;
   final _loading = false.obs;
   final _hasSearched = false.obs;
+  final _vendorContextMissing = false.obs;
   Worker? _debounceWorker;
   final _query = ''.obs;
+  int _searchRequestId = 0;
 
   @override
   void initState() {
@@ -48,15 +51,29 @@ class _SearchViewState extends State<SearchView> {
     if (query.isEmpty) {
       _results.clear();
       _hasSearched.value = false;
+      _vendorContextMissing.value = false;
+      _loading.value = false;
       return;
     }
-    _loading.value = true;
+    final requestId = ++_searchRequestId;
     _hasSearched.value = true;
+    _vendorContextMissing.value = false;
+    _loading.value = true;
+
     try {
-      final repo = Get.find<CatalogRepository>();
-      _results.assignAll(await repo.searchProducts(query));
+      final result = await Get.find<CatalogRepository>()
+          .searchProductsInActiveScope(query);
+      if (requestId != _searchRequestId) return;
+      _vendorContextMissing.value = result.vendorContextMissing;
+      _results.assignAll(result.products);
+    } catch (_) {
+      if (requestId != _searchRequestId) return;
+      _vendorContextMissing.value = false;
+      _results.clear();
     } finally {
-      _loading.value = false;
+      if (requestId == _searchRequestId) {
+        _loading.value = false;
+      }
     }
   }
 
@@ -69,83 +86,90 @@ class _SearchViewState extends State<SearchView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(title: Text('Search Products'), centerTitle: true),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.all(12.rpx),
-                child: TextField(
-                  controller: _queryController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search For Products...',
-                    prefixIcon: Icon(Icons.search, color: AppColors.primary),
-                    suffixIcon: Obx(
-                      () => _query.value.isEmpty
-                          ? SizedBox.shrink()
-                          : IconButton(
-                              onPressed: _queryController.clear,
-                              icon: Icon(Icons.cancel_outlined),
-                            ),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14.rpx),
+    final themeController = Get.find<AppThemeController>();
+    return Obx(() {
+      themeController.isDarkMode.value;
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(title: Text('Search Products'), centerTitle: true),
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(12.rpx),
+                  child: TextField(
+                    controller: _queryController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Search For Products...',
+                      prefixIcon: Icon(Icons.search, color: AppColors.primary),
+                      suffixIcon: Obx(
+                        () => _query.value.isEmpty
+                            ? SizedBox.shrink()
+                            : IconButton(
+                                onPressed: _queryController.clear,
+                                icon: Icon(Icons.cancel_outlined),
+                              ),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14.rpx),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Obx(() {
-                  if (_loading.value) {
-                    return Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
+                Expanded(
+                  child: Obx(() {
+                    if (_loading.value) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+                    if (!_hasSearched.value) {
+                      return _SearchState(
+                        icon: Icons.search,
+                        title: 'Search For Products',
+                        subtitle:
+                            'Enter a product name to search nearby vendor products.',
+                      );
+                    }
+                    if (_results.isEmpty) {
+                      return _SearchState(
+                        icon: Icons.search_off,
+                        title: _vendorContextMissing.value
+                            ? 'Location Not Available'
+                            : 'No Products Found',
+                        subtitle: _vendorContextMissing.value
+                            ? 'Enable location or select a delivery address to search nearby vendor products.'
+                            : 'Try searching with different keywords.',
+                      );
+                    }
+                    return ListView.separated(
+                      padding: EdgeInsets.fromLTRB(
+                        12.wpx,
+                        4.hpx,
+                        12.wpx,
+                        112.hpx,
                       ),
+                      itemCount: _results.length,
+                      separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
+                      itemBuilder: (context, index) {
+                        final product = _results[index];
+                        return _ProductTile(product: product);
+                      },
                     );
-                  }
-                  if (!_hasSearched.value) {
-                    return _SearchState(
-                      icon: Icons.search,
-                      title: 'Search For Products',
-                      subtitle:
-                          'Enter a product name to search nearby catalog.',
-                    );
-                  }
-                  if (_results.isEmpty) {
-                    return _SearchState(
-                      icon: Icons.search_off,
-                      title: 'No Products Found',
-                      subtitle:
-                          'Try another keyword or select a delivery address first.',
-                    );
-                  }
-                  return ListView.separated(
-                    padding: EdgeInsets.fromLTRB(
-                      12.wpx,
-                      4.hpx,
-                      12.wpx,
-                      112.hpx,
-                    ),
-                    itemCount: _results.length,
-                    separatorBuilder: (_, _) => SizedBox(height: 10.hpx),
-                    itemBuilder: (context, index) {
-                      final product = _results[index];
-                      return _ProductTile(product: product);
-                    },
-                  );
-                }),
-              ),
-            ],
-          ),
-          Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
-        ],
-      ),
-    );
+                  }),
+                ),
+              ],
+            ),
+            Positioned(left: 0, right: 0, bottom: 0, child: CartSummaryBar()),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -163,12 +187,12 @@ class _ProductTile extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(12.rpx),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(16.rpx),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+          border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Color(0x14000000),
+              color: AppColors.softCardShadow,
               blurRadius: 8,
               offset: Offset(0, 3),
             ),
@@ -250,7 +274,7 @@ class _ProductVisual extends StatelessWidget {
     height: size,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      color: AppColors.surface,
+      color: AppColors.productImageFill,
       borderRadius: BorderRadius.circular(14.rpx),
     ),
     child: Text(

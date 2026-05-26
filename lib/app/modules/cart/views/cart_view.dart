@@ -40,7 +40,7 @@ class CartView extends GetView<CartController> {
     });
 
     final content = ColoredBox(
-      color: const Color(0xFFF5F8FF),
+      color: AppColors.surface,
       child: Column(
         children: [
           _CartHeader(showBackToHome: !showScaffold),
@@ -54,7 +54,7 @@ class CartView extends GetView<CartController> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8FF),
+      backgroundColor: AppColors.surface,
       body: SafeArea(child: content),
     );
   }
@@ -70,7 +70,7 @@ class _CartHeader extends StatelessWidget {
     return Container(
       height: 60.hpx,
       padding: EdgeInsets.all(10.rpx),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.white,
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
       ),
@@ -171,9 +171,9 @@ class _ItemsCard extends StatelessWidget {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x14000000),
+            color: AppColors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: Offset(0, 3),
           ),
@@ -183,7 +183,7 @@ class _ItemsCard extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            color: const Color(0xFFFAFBFF),
+            color: AppColors.inputFill,
             padding: EdgeInsets.fromLTRB(14.wpx, 14.hpx, 14.wpx, 8.hpx),
             child: Row(
               children: [
@@ -257,7 +257,7 @@ class _CartItemRow extends StatelessWidget {
             height: 70.hpx,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F7FF),
+              color: AppColors.muted,
               borderRadius: BorderRadius.circular(18.rpx),
               border: Border.all(
                 color: AppColors.primary.withValues(alpha: 0.10),
@@ -309,7 +309,7 @@ class _CartItemRow extends StatelessWidget {
             constraints: BoxConstraints(minWidth: 104.wpx),
             padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 6.hpx),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFF),
+              color: AppColors.inputFill,
               borderRadius: BorderRadius.circular(999.rpx),
             ),
             child: Row(
@@ -396,9 +396,9 @@ class _PriceCard extends StatelessWidget {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x14000000),
+            color: AppColors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: Offset(0, 3),
           ),
@@ -479,9 +479,9 @@ class _ActionSection extends StatelessWidget {
                 ? null
                 : () => _showClearDialog(context),
             style: OutlinedButton.styleFrom(
-              backgroundColor: const Color(0xFFDCE5FF),
+              backgroundColor: AppColors.muted,
               foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
+              side: BorderSide(color: AppColors.primary),
               padding: EdgeInsets.symmetric(vertical: 14.hpx),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14.rpx),
@@ -508,8 +508,8 @@ class _ActionSection extends StatelessWidget {
                     Get.toNamed(AppRoutes.checkout);
                   },
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.white,
+              backgroundColor: AppColors.buttonFill,
+              foregroundColor: AppColors.onButtonFill,
               padding: EdgeInsets.symmetric(vertical: 14.hpx),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14.rpx),
@@ -554,10 +554,7 @@ class _ActionSection extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () => Get.back(result: false),
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: AppColors.primary,
-                    ),
+                    icon: Icon(Icons.close_rounded, color: AppColors.primary),
                     tooltip: 'Close',
                   ),
                 ],
@@ -595,8 +592,8 @@ class _ActionSection extends StatelessWidget {
                 child: FilledButton(
                   onPressed: () => Get.back(result: true),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
+                    backgroundColor: AppColors.buttonFill,
+                    foregroundColor: AppColors.onButtonFill,
                     padding: EdgeInsets.symmetric(vertical: 14.hpx),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14.rpx),
@@ -646,7 +643,7 @@ class _CartEmptyState extends StatelessWidget {
                   'assets/images/sonickart1.jpg',
                   fit: BoxFit.contain,
                   opacity: const AlwaysStoppedAnimation(0.8),
-                  errorBuilder: (_, _, _) => const Icon(
+                  errorBuilder: (_, _, _) => Icon(
                     Icons.shopping_cart_checkout_rounded,
                     size: 62,
                     color: AppColors.primary,
@@ -678,8 +675,8 @@ class _CartEmptyState extends StatelessWidget {
             FilledButton(
               onPressed: () => Get.toNamed(AppRoutes.categories),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
+                backgroundColor: AppColors.buttonFill,
+                foregroundColor: AppColors.onButtonFill,
                 padding: EdgeInsets.symmetric(
                   horizontal: 22.wpx,
                   vertical: 14.hpx,

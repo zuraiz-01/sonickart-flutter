@@ -36,6 +36,7 @@ react-native app/
 
 # Symbolication related
 app.*.symbols
+*.hprof
 
 # Obfuscation related
 app.*.map.json

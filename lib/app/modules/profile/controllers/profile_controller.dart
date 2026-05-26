@@ -426,6 +426,20 @@ class ProfileController extends GetxController {
     Get.offAllNamed(AppRoutes.login);
   }
 
+  Future<void> deleteAccount() async {
+    debugPrint('ProfileController.deleteAccount: delete requested');
+    try {
+      if (Get.isRegistered<ApiService>()) {
+        await Get.find<ApiService>().delete(
+          endpoint: ApiConstants.deleteAccount,
+        );
+      }
+    } catch (error) {
+      debugPrint('ProfileController.deleteAccount API failed: $error');
+    }
+    await logout();
+  }
+
   Future<void> loadAddresses() async {
     debugPrint('ProfileController.loadAddresses: loading saved addresses');
     isLoadingAddresses.value = true;
@@ -531,7 +545,7 @@ class ProfileController extends GetxController {
     try {
       final existing = editingAddress.value;
       if (existing == null) {
-        final address = await _saveAddressRemote(
+        final savedAddress = await _saveAddressRemote(
           AddressModel(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             fullName: fullName,
@@ -540,14 +554,18 @@ class ProfileController extends GetxController {
             latitude: draftLatitude.value,
             longitude: draftLongitude.value,
             placeId: draftPlaceId.value ?? '',
-            isSelected: addresses.isEmpty,
+            isSelected: true,
           ),
         );
-        addresses.insert(0, address);
-        if (address.isSelected) {
-          await _applySelectedAddressContext(address);
-        }
-        debugPrint('ProfileController.saveAddress: created ${address.id}');
+        final selectedAddress = savedAddress.copyWith(isSelected: true);
+        addresses.assignAll([
+          selectedAddress,
+          ...addresses.map((item) => item.copyWith(isSelected: false)),
+        ]);
+        await _applySelectedAddressContext(selectedAddress);
+        debugPrint(
+          'ProfileController.saveAddress: created ${selectedAddress.id}',
+        );
         _notifyAction(
           'Address Added',
           'New delivery address was saved.',
@@ -556,7 +574,7 @@ class ProfileController extends GetxController {
       } else {
         final index = addresses.indexWhere((item) => item.id == existing.id);
         if (index >= 0) {
-          final updatedAddress = await _saveAddressRemote(
+          final savedAddress = await _saveAddressRemote(
             existing.copyWith(
               fullName: fullName,
               contactNumber: phone,
@@ -564,13 +582,17 @@ class ProfileController extends GetxController {
               latitude: draftLatitude.value,
               longitude: draftLongitude.value,
               placeId: draftPlaceId.value ?? '',
+              isSelected: true,
             ),
           );
-          addresses[index] = updatedAddress;
-          if (updatedAddress.isSelected ||
-              selectedAddressId.value == updatedAddress.id) {
-            await _applySelectedAddressContext(updatedAddress);
-          }
+          final selectedAddress = savedAddress.copyWith(isSelected: true);
+          addresses.assignAll(
+            addresses.map((item) {
+              if (item.id == selectedAddress.id) return selectedAddress;
+              return item.copyWith(isSelected: false);
+            }),
+          );
+          await _applySelectedAddressContext(selectedAddress);
           debugPrint('ProfileController.saveAddress: updated ${existing.id}');
           _notifyAction(
             'Address Updated',
@@ -692,6 +714,7 @@ class ProfileController extends GetxController {
     );
 
     selectedAddressId.value = temporaryAddress.id;
+    await _storage.remove(_selectedVendorIdStorageKey);
     await _persistSelectedAddress(temporaryAddress);
     liveLocationAddress.value = normalizedAddress;
     await _updateUserLocation(temporaryAddress);
@@ -699,7 +722,7 @@ class ProfileController extends GetxController {
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
     }
-    unawaited(_refreshCatalogAfterAddressChange());
+    await _refreshCatalogAfterAddressChange();
   }
 
   Future<void> deleteAddress(AddressModel address) async {
@@ -906,14 +929,49 @@ class ProfileController extends GetxController {
         latitude: position.latitude,
         longitude: position.longitude,
       );
-      if (resolved != null && resolved.trim().isNotEmpty) {
-        liveLocationAddress.value = resolved.trim();
-      }
+      final locationLabel = resolved?.trim().isNotEmpty == true
+          ? resolved!.trim()
+          : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      liveLocationAddress.value = locationLabel;
+      await _applyLiveLocationCatalogContext(
+        address: locationLabel,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
     } catch (error) {
       debugPrint('ProfileController._resolveHomeLocationPreview: $error');
     } finally {
       isResolvingLocation.value = false;
     }
+  }
+
+  Future<void> _applyLiveLocationCatalogContext({
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final user = currentUser;
+    final liveAddress = AddressModel(
+      id: 'live-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : 'Customer',
+      contactNumber: user?.phone ?? '',
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
+      isSelected: true,
+    );
+
+    selectedAddressId.value = liveAddress.id;
+    await _storage.remove(_selectedVendorIdStorageKey);
+    await _persistSelectedAddress(liveAddress);
+    await _updateUserLocation(liveAddress);
+    final vendorId = await _tryResolveVendor(liveAddress);
+    if (vendorId == null) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
+    await _refreshCatalogAfterAddressChange();
   }
 
   Future<void> _persistSelectedAddress(AddressModel address) async {
@@ -922,6 +980,7 @@ class ProfileController extends GetxController {
 
   Future<String?> _applySelectedAddressContext(AddressModel address) async {
     selectedAddressId.value = address.id;
+    await _storage.remove(_selectedVendorIdStorageKey);
     await _persistSelectedAddress(address);
     liveLocationAddress.value = address.address;
     await _updateUserLocation(address);
@@ -931,7 +990,7 @@ class ProfileController extends GetxController {
       await _storage.remove(_selectedVendorIdStorageKey);
     }
 
-    unawaited(_refreshCatalogAfterAddressChange());
+    await _refreshCatalogAfterAddressChange();
     return vendorId;
   }
 
@@ -979,11 +1038,16 @@ class ProfileController extends GetxController {
   }
 
   Future<void> _refreshCatalogAfterAddressChange() async {
+    if (Get.isRegistered<CatalogRepository>()) {
+      Get.find<CatalogRepository>().invalidateProductScope();
+    }
     if (Get.isRegistered<DashboardController>()) {
       await Get.find<DashboardController>().loadCatalog(force: true);
     }
     if (Get.isRegistered<CategoriesController>()) {
-      await Get.find<CategoriesController>().reloadSelectedCategory();
+      await Get.find<CategoriesController>().reloadSelectedCategory(
+        force: true,
+      );
     }
   }
 
@@ -1131,8 +1195,18 @@ class ProfileController extends GetxController {
       return _uniqueVendorIds(nearbyVendors.map(_vendorIdentifier));
     }
 
-    final nearestVendor = response['nearestVendor'] is Map
-        ? Map<String, dynamic>.from(response['nearestVendor'] as Map)
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+    final nearestVendorSource =
+        response['nearestVendor'] ??
+        data['nearestVendor'] ??
+        result['nearestVendor'];
+    final nearestVendor = nearestVendorSource is Map
+        ? Map<String, dynamic>.from(nearestVendorSource)
         : const <String, dynamic>{};
     final nearestDistance =
         _distanceKmFrom(nearestVendor) ?? _distanceKmFrom(response);
@@ -1144,6 +1218,16 @@ class ProfileController extends GetxController {
       if (response['vendorIds'] is List) ...(response['vendorIds'] as List),
       response['vendorId'],
       response['vendor_id'],
+      if (response['data'] is Map &&
+          (response['data'] as Map)['vendorIds'] is List)
+        ...((response['data'] as Map)['vendorIds'] as List),
+      if (response['data'] is Map) (response['data'] as Map)['vendorId'],
+      if (response['data'] is Map) (response['data'] as Map)['vendor_id'],
+      if (response['result'] is Map &&
+          (response['result'] as Map)['vendorIds'] is List)
+        ...((response['result'] as Map)['vendorIds'] as List),
+      if (response['result'] is Map) (response['result'] as Map)['vendorId'],
+      if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
   }
@@ -1153,6 +1237,8 @@ class ProfileController extends GetxController {
       response['vendors'],
       if (response['data'] is Map) (response['data'] as Map)['vendors'],
       if (response['result'] is Map) (response['result'] as Map)['vendors'],
+      if (response['data'] is Map) (response['data'] as Map)['data'],
+      if (response['result'] is Map) (response['result'] as Map)['data'],
     ];
     for (final candidate in candidates) {
       if (candidate is List) {

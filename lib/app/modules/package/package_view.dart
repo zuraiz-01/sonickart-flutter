@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
@@ -20,7 +21,7 @@ class PackageView extends GetView<PackageController> {
   Widget build(BuildContext context) {
     return Obx(
       () => Container(
-        color: Color(0xFFF5F8FF),
+        color: AppColors.surface,
         child: Stack(
           children: [
             Column(
@@ -117,7 +118,7 @@ class _TabButton extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 12.hpx, horizontal: 10.wpx),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFEEF4FF) : Colors.transparent,
+            color: active ? AppColors.muted : Colors.transparent,
             borderRadius: BorderRadius.circular(9.rpx),
           ),
           child: Row(
@@ -185,28 +186,11 @@ class _SendPane extends StatelessWidget {
               onBackTap: controller.goBackStep,
             ),
           if (controller.currentStep.value == PackageStep.drop)
-            _AddressStep(
-              title: 'Drop Location',
-              subtitle:
-                  controller.packageOrderType.value == PackageOrderType.receive
-                  ? 'Where should we deliver the package to you?'
-                  : 'Where should we deliver your package?',
-              hint: 'Enter drop location',
-              icon: Icons.location_on_outlined,
-              fieldController: controller.dropController,
-              onChanged: controller.onDropChanged,
-              suggestions: controller.dropSuggestions,
-              isLoading: controller.isResolvingDrop.value,
-              onSuggestionTap: controller.selectDropSuggestion,
-              primaryText: 'Continue',
-              onPrimaryTap: controller.continueFromDrop,
-              isPrimaryEnabled: controller.canAttemptDrop,
-              secondaryText: 'Auto Detect Location',
-              onSecondaryTap: controller.useSuggestedDrop,
-              showSecondary:
-                  controller.packageOrderType.value == PackageOrderType.receive,
-              onBackTap: controller.goBackStep,
-            ),
+            controller.packageOrderType.value == PackageOrderType.receive
+                ? _ReceiveLocationStep(controller: controller)
+                : _MultiDropStep(controller: controller),
+          if (controller.currentStep.value == PackageStep.contact)
+            _ContactStep(controller: controller),
           if (controller.currentStep.value == PackageStep.type)
             _TypeStep(controller: controller),
           if (controller.currentStep.value == PackageStep.review)
@@ -281,7 +265,7 @@ class _FlowOption extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(16.rpx),
       decoration: BoxDecoration(
-        color: Color(0xFFF4F8FF),
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(18.rpx),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
       ),
@@ -291,7 +275,7 @@ class _FlowOption extends StatelessWidget {
             width: 68.wpx,
             height: 68.hpx,
             decoration: BoxDecoration(
-              color: Color(0xFFEEF4FF),
+              color: AppColors.inputFill,
               borderRadius: BorderRadius.circular(22.rpx),
             ),
             child: Icon(icon, size: 34, color: AppColors.primary),
@@ -318,8 +302,8 @@ class _FlowOption extends StatelessWidget {
             child: FilledButton(
               onPressed: onTap,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
+                backgroundColor: AppColors.buttonFill,
+                foregroundColor: AppColors.onButtonFill,
                 padding: EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14.rpx),
@@ -334,6 +318,534 @@ class _FlowOption extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _MultiDropStep extends StatelessWidget {
+  const _MultiDropStep({required this.controller});
+
+  final PackageController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      return _StepCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _BackChip(onTap: controller.goBackStep),
+            SizedBox(height: 12.hpx),
+            Center(
+              child: Container(
+                width: 74.wpx,
+                height: 74.hpx,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24.rpx),
+                ),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  size: 36,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            SizedBox(height: 18.hpx),
+            Center(
+              child: Text(
+                controller.packageOrderType.value == PackageOrderType.receive
+                    ? 'Drop-off Location'
+                    : 'Drop Locations',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            SizedBox(height: 8.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: Text(
+                controller.packageOrderType.value == PackageOrderType.receive
+                    ? 'Where should we deliver the package to you?'
+                    : 'Where should we deliver your packages?',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+            ),
+            SizedBox(height: 20.hpx),
+            ...controller.dropLocations.asMap().entries.map((entry) {
+              final index = entry.key;
+              final drop = entry.value;
+              return _buildDropField(context, index, drop);
+            }),
+            if (controller.canAddDrop) ...[
+              SizedBox(height: 10.hpx),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: controller.addDrop,
+                  icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.rpx),
+                    ),
+                  ),
+                  label: Text(
+                    'Add Another Drop (${controller.dropCount}/5)',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+            SizedBox(height: 16.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: !controller.canMoveFromDrop
+                    ? null
+                    : controller.continueFromDrop,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.buttonFill,
+                  disabledBackgroundColor: AppColors.buttonFill.withValues(
+                    alpha: 0.45,
+                  ),
+                  foregroundColor: AppColors.onButtonFill,
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14.rpx),
+                  ),
+                ),
+                child: Text(
+                  'Continue',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildDropField(
+    BuildContext context,
+    int index,
+    DropLocationData drop,
+  ) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 14.hpx),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: AppColors.buttonFill,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: AppColors.onButtonFill,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 8.wpx),
+              Text(
+                controller.packageOrderType.value == PackageOrderType.receive
+                    ? 'Drop-off Location'
+                    : 'Drop Location ${index + 1}',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.spx,
+                ),
+              ),
+              const Spacer(),
+              if (controller.dropCount > 1)
+                InkWell(
+                  onTap: () => controller.removeDropAt(index),
+                  borderRadius: BorderRadius.circular(14.rpx),
+                  child: Container(
+                    padding: EdgeInsets.all(6.rpx),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: 8.hpx),
+          TextField(
+            controller: drop.controller,
+            onChanged: (value) => controller.onDropChanged(index, value),
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Enter drop location ${index + 1}',
+              filled: true,
+              fillColor: AppColors.inputFill,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14.rpx),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14.rpx),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                ),
+              ),
+            ),
+          ),
+          if (drop.isResolving.value) ...[
+            SizedBox(height: 8.hpx),
+            Row(
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                ),
+                SizedBox(width: 8.wpx),
+                Text(
+                  'Resolving location...',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.spx,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (drop.suggestions.isNotEmpty) ...[
+            SizedBox(height: 8.hpx),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14.rpx),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Column(
+                children: drop.suggestions.take(5).map((s) {
+                  return InkWell(
+                    onTap: () => controller.selectDropSuggestion(index, s),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.wpx,
+                        vertical: 12.hpx,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 10.wpx),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s.primaryText.isNotEmpty
+                                      ? s.primaryText
+                                      : s.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.spx,
+                                  ),
+                                ),
+                                if (s.secondaryText.isNotEmpty)
+                                  Text(
+                                    s.secondaryText,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11.spx,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiveLocationStep extends StatelessWidget {
+  const _ReceiveLocationStep({required this.controller});
+
+  final PackageController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final drop = controller.dropLocations.first;
+      final isLoading = drop.isResolving.value;
+
+      return _StepCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _BackChip(onTap: controller.goBackStep),
+            SizedBox(height: 12.hpx),
+            Center(
+              child: Container(
+                width: 74.wpx,
+                height: 74.hpx,
+                decoration: BoxDecoration(
+                  color: AppColors.inputFill,
+                  borderRadius: BorderRadius.circular(24.rpx),
+                ),
+                child: Icon(
+                  Icons.my_location_rounded,
+                  size: 36,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            SizedBox(height: 18.hpx),
+            Center(
+              child: Text(
+                'Your Location',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            SizedBox(height: 8.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: Text(
+                'Enter or auto-detect where you want to receive this package.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+            ),
+            SizedBox(height: 20.hpx),
+            Text(
+              'Your location',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+                fontSize: 14.spx,
+              ),
+            ),
+            SizedBox(height: 8.hpx),
+            TextField(
+              controller: drop.controller,
+              onChanged: (value) => controller.onDropChanged(0, value),
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Enter your location',
+                filled: true,
+                fillColor: AppColors.inputFill,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14.rpx),
+                  borderSide: BorderSide(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14.rpx),
+                  borderSide: BorderSide(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
+            ),
+            if (isLoading) ...[
+              SizedBox(height: 10.hpx),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 16.wpx,
+                    height: 16.hpx,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  SizedBox(width: 8.wpx),
+                  Text(
+                    'Resolving location...',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (drop.suggestions.isNotEmpty) ...[
+              SizedBox(height: 10.hpx),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(14.rpx),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Column(
+                  children: drop.suggestions.take(5).map((item) {
+                    return InkWell(
+                      onTap: () => controller.selectDropSuggestion(0, item),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12.wpx,
+                          vertical: 12.hpx,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 18,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(width: 10.wpx),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.primaryText.isNotEmpty
+                                        ? item.primaryText
+                                        : item.description,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (item.secondaryText.isNotEmpty)
+                                    Text(
+                                      item.secondaryText,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12.spx,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+            SizedBox(height: 12.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isLoading
+                    ? null
+                    : () => controller.useSuggestedDrop(0),
+                icon: isLoading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : const Icon(Icons.my_location_rounded),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  backgroundColor: AppColors.muted,
+                  side: BorderSide(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14.rpx),
+                  ),
+                ),
+                label: Text(
+                  isLoading ? 'Detecting location...' : 'Auto Detect Location',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            SizedBox(height: 12.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: isLoading || !controller.canMoveFromDrop
+                    ? null
+                    : controller.continueFromDrop,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.buttonFill,
+                  disabledBackgroundColor: AppColors.buttonFill.withValues(
+                    alpha: 0.45,
+                  ),
+                  foregroundColor: AppColors.onButtonFill,
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14.rpx),
+                  ),
+                ),
+                child: const Text(
+                  'Continue',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -387,7 +899,7 @@ class _AddressStep extends StatelessWidget {
               width: 74.wpx,
               height: 74.hpx,
               decoration: BoxDecoration(
-                color: Color(0xFFEEF4FF),
+                color: AppColors.inputFill,
                 borderRadius: BorderRadius.circular(24.rpx),
               ),
               child: Icon(icon, size: 36, color: AppColors.primary),
@@ -423,7 +935,7 @@ class _AddressStep extends StatelessWidget {
             decoration: InputDecoration(
               hintText: hint,
               filled: true,
-              fillColor: AppColors.white,
+              fillColor: AppColors.inputFill,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14.rpx),
                 borderSide: BorderSide(
@@ -534,7 +1046,7 @@ class _AddressStep extends StatelessWidget {
                 icon: Icon(Icons.my_location_rounded),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
-                  backgroundColor: Color(0xFFEEF4FF),
+                  backgroundColor: AppColors.muted,
                   side: BorderSide(
                     color: AppColors.primary.withValues(alpha: 0.08),
                   ),
@@ -556,11 +1068,11 @@ class _AddressStep extends StatelessWidget {
             child: FilledButton(
               onPressed: isLoading || !isPrimaryEnabled ? null : onPrimaryTap,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                disabledBackgroundColor: AppColors.primary.withValues(
+                backgroundColor: AppColors.buttonFill,
+                disabledBackgroundColor: AppColors.buttonFill.withValues(
                   alpha: 0.45,
                 ),
-                foregroundColor: AppColors.white,
+                foregroundColor: AppColors.onButtonFill,
                 padding: EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14.rpx),
@@ -639,12 +1151,12 @@ class _TypeStep extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.primary
-                                : Color(0xFFF4F8FF),
+                                ? AppColors.buttonFill
+                                : AppColors.muted,
                             borderRadius: BorderRadius.circular(16.rpx),
                             border: Border.all(
                               color: isSelected
-                                  ? AppColors.primary
+                                  ? AppColors.buttonFill
                                   : AppColors.primary.withValues(alpha: 0.1),
                               width: 2,
                             ),
@@ -656,7 +1168,7 @@ class _TypeStep extends StatelessWidget {
                                 _packageTypeIcon(type),
                                 size: 28,
                                 color: isSelected
-                                    ? AppColors.white
+                                    ? AppColors.onButtonFill
                                     : AppColors.primary,
                               ),
                               SizedBox(height: 8.hpx),
@@ -668,7 +1180,7 @@ class _TypeStep extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: isSelected
-                                        ? AppColors.white
+                                        ? AppColors.onButtonFill
                                         : AppColors.primary,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -702,11 +1214,11 @@ class _TypeStep extends StatelessWidget {
                     ? controller.continueFromType
                     : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.primary.withValues(
+                  backgroundColor: AppColors.buttonFill,
+                  disabledBackgroundColor: AppColors.buttonFill.withValues(
                     alpha: 0.45,
                   ),
-                  foregroundColor: AppColors.white,
+                  foregroundColor: AppColors.onButtonFill,
                   padding: EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14.rpx),
@@ -741,6 +1253,217 @@ class _TypeStep extends StatelessWidget {
   }
 }
 
+class _ContactStep extends StatelessWidget {
+  const _ContactStep({required this.controller});
+
+  final PackageController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final isReceive =
+          controller.packageOrderType.value == PackageOrderType.receive;
+      return _StepCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _BackChip(onTap: controller.goBackStep),
+            SizedBox(height: 14.hpx),
+            Center(
+              child: Container(
+                width: 74.wpx,
+                height: 74.hpx,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24.rpx),
+                ),
+                child: Icon(
+                  isReceive
+                      ? Icons.person_pin_circle_outlined
+                      : Icons.person_add_alt_1_outlined,
+                  size: 35.spx,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            SizedBox(height: 18.hpx),
+            Center(
+              child: Text(
+                isReceive ? 'Sender Details' : 'Receiver Details',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            SizedBox(height: 8.hpx),
+            Text(
+              isReceive
+                  ? 'Enter the sender details so the delivery partner can verify pickup.'
+                  : 'Enter receiver details for each drop location.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+            SizedBox(height: 20.hpx),
+            if (isReceive) ...[
+              _ContactField(
+                controller: controller.senderNameController,
+                label: 'Sender Name',
+                icon: Icons.person_outline_rounded,
+                keyboardType: TextInputType.name,
+                onChanged: controller.onContactChanged,
+              ),
+              SizedBox(height: 12.hpx),
+              _ContactField(
+                controller: controller.senderPhoneController,
+                label: 'Sender Phone Number',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.number,
+                maxDigits: 10,
+                onChanged: controller.onSenderPhoneChanged,
+              ),
+            ] else ...[
+              ...controller.activeDropEntries.map((entry) {
+                final idx = entry.key;
+                final drop = entry.value;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 16.hpx),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10.wpx,
+                          vertical: 6.hpx,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6.rpx),
+                        ),
+                        child: Text(
+                          'Drop ${idx + 1}',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.spx,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 10.hpx),
+                      _ContactField(
+                        controller: drop.nameController,
+                        label: 'Receiver Name',
+                        icon: Icons.person_outline_rounded,
+                        keyboardType: TextInputType.name,
+                        onChanged: controller.onContactChanged,
+                      ),
+                      SizedBox(height: 10.hpx),
+                      _ContactField(
+                        controller: drop.phoneController,
+                        label: 'Receiver Phone Number',
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.number,
+                        maxDigits: 10,
+                        onChanged: (value) =>
+                            controller.onReceiverPhoneChanged(idx, value),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+            SizedBox(height: 18.hpx),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: controller.canMoveFromContact
+                    ? controller.continueFromContact
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.buttonFill,
+                  disabledBackgroundColor: AppColors.buttonFill.withValues(
+                    alpha: 0.45,
+                  ),
+                  foregroundColor: AppColors.onButtonFill,
+                  padding: EdgeInsets.symmetric(vertical: 14.hpx),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14.rpx),
+                  ),
+                ),
+                child: Text(
+                  'Continue',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _ContactField extends StatelessWidget {
+  const _ContactField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.keyboardType,
+    required this.onChanged,
+    this.maxDigits,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final TextInputType keyboardType;
+  final ValueChanged<String> onChanged;
+  final int? maxDigits;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      keyboardType: keyboardType,
+      maxLength: maxDigits,
+      maxLengthEnforcement: maxDigits == null
+          ? null
+          : MaxLengthEnforcement.enforced,
+      inputFormatters: [
+        if (maxDigits != null) FilteringTextInputFormatter.digitsOnly,
+        if (maxDigits != null) LengthLimitingTextInputFormatter(maxDigits),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        counterText: '',
+        prefixIcon: Icon(icon, color: AppColors.primary),
+        filled: true,
+        fillColor: AppColors.inputFill,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.rpx),
+          borderSide: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.1),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.rpx),
+          borderSide: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.1),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.rpx),
+          borderSide: BorderSide(color: AppColors.primary),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewStep extends StatelessWidget {
   const _ReviewStep({required this.controller});
 
@@ -768,7 +1491,7 @@ class _ReviewStep extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(18.rpx),
               decoration: BoxDecoration(
-                color: Color(0xFFEEF4FF),
+                color: AppColors.muted,
                 borderRadius: BorderRadius.circular(18.rpx),
                 border: Border.all(
                   color: AppColors.primary.withValues(alpha: 0.08),
@@ -782,17 +1505,43 @@ class _ReviewStep extends StatelessWidget {
                     label: 'Pickup',
                     value: controller.pickupController.text.trim(),
                   ),
-                  _ReviewTile(
-                    icon: Icons.location_on,
-                    label: 'Drop',
-                    value: controller.dropController.text.trim(),
-                  ),
+                  ...controller.activeDropEntries.map((entry) {
+                    final i = entry.key;
+                    final d = entry.value;
+                    return _ReviewTile(
+                      icon: Icons.location_on,
+                      label: 'Drop ${i + 1}',
+                      value: d.controller.text.trim().isNotEmpty
+                          ? d.controller.text.trim()
+                          : 'Not set',
+                    );
+                  }),
                   _ReviewTile(
                     icon: Icons.inventory_2_outlined,
                     label: 'Package Type',
                     value:
                         controller.selectedPackageType.value ?? 'Not selected',
                   ),
+                  if (controller.packageOrderType.value ==
+                      PackageOrderType.receive)
+                    _ReviewTile(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Sender',
+                      value:
+                          '${controller.senderNameController.text.trim()} | ${controller.senderPhoneController.text.trim()}',
+                    ),
+                  if (controller.packageOrderType.value !=
+                      PackageOrderType.receive)
+                    ...controller.activeDropEntries.map((entry) {
+                      final i = entry.key;
+                      final d = entry.value;
+                      return _ReviewTile(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Receiver (Drop ${i + 1})',
+                        value:
+                            '${d.nameController.text.trim()} | ${d.phoneController.text.trim()}',
+                      );
+                    }),
                   if (controller.isCalculatingRoute.value)
                     Padding(
                       padding: EdgeInsets.symmetric(vertical: 15.hpx),
@@ -922,7 +1671,7 @@ class _ReviewStep extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: controller.goBackStep,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.white,
+                  foregroundColor: AppColors.onButtonFill,
                   backgroundColor: AppColors.textSecondary,
                   padding: EdgeInsets.symmetric(vertical: 16.hpx),
                   shape: RoundedRectangleBorder(
@@ -950,11 +1699,11 @@ class _ReviewStep extends StatelessWidget {
                     ? controller.submitOrder
                     : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.primary.withValues(
+                  backgroundColor: AppColors.buttonFill,
+                  disabledBackgroundColor: AppColors.buttonFill.withValues(
                     alpha: 0.45,
                   ),
-                  foregroundColor: AppColors.white,
+                  foregroundColor: AppColors.onButtonFill,
                   padding: EdgeInsets.symmetric(vertical: 16.hpx),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14.rpx),
@@ -1000,19 +1749,26 @@ class _PackageMapPreview extends StatefulWidget {
 class _PackageMapPreviewState extends State<_PackageMapPreview> {
   maps.GoogleMapController? _mapController;
 
+  List<maps.LatLng> get _routePoints {
+    final pickupLat = widget.controller.pickupLatitude.value;
+    final pickupLng = widget.controller.pickupLongitude.value;
+    if (pickupLat == null || pickupLng == null) return const [];
+
+    final points = <maps.LatLng>[maps.LatLng(pickupLat, pickupLng)];
+    for (final drop in widget.controller.activeDropLocations) {
+      final lat = drop.latitude.value;
+      final lng = drop.longitude.value;
+      if (lat != null && lng != null) {
+        points.add(maps.LatLng(lat, lng));
+      }
+    }
+    return points;
+  }
+
   @override
   void didUpdateWidget(covariant _PackageMapPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller.pickupLatitude.value !=
-            widget.controller.pickupLatitude.value ||
-        oldWidget.controller.pickupLongitude.value !=
-            widget.controller.pickupLongitude.value ||
-        oldWidget.controller.dropLatitude.value !=
-            widget.controller.dropLatitude.value ||
-        oldWidget.controller.dropLongitude.value !=
-            widget.controller.dropLongitude.value) {
-      unawaited(_fitRoute());
-    }
+    unawaited(_fitRoute());
   }
 
   @override
@@ -1023,23 +1779,12 @@ class _PackageMapPreviewState extends State<_PackageMapPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final pickupLat = widget.controller.pickupLatitude.value;
-    final pickupLng = widget.controller.pickupLongitude.value;
-    final dropLat = widget.controller.dropLatitude.value;
-    final dropLng = widget.controller.dropLongitude.value;
-    if (pickupLat == null ||
-        pickupLng == null ||
-        dropLat == null ||
-        dropLng == null) {
+    final routePoints = _routePoints;
+    if (routePoints.length < 2) {
       return SizedBox.shrink();
     }
 
-    final pickup = maps.LatLng(pickupLat, pickupLng);
-    final drop = maps.LatLng(dropLat, dropLng);
-    final center = maps.LatLng(
-      (pickup.latitude + drop.latitude) / 2,
-      (pickup.longitude + drop.longitude) / 2,
-    );
+    final center = _centerFor(routePoints);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(18.rpx),
@@ -1059,25 +1804,26 @@ class _PackageMapPreviewState extends State<_PackageMapPreview> {
               markers: {
                 maps.Marker(
                   markerId: maps.MarkerId('pickup'),
-                  position: pickup,
+                  position: routePoints.first,
                   infoWindow: maps.InfoWindow(title: 'Pickup Location'),
                   icon: maps.BitmapDescriptor.defaultMarkerWithHue(
                     maps.BitmapDescriptor.hueYellow,
                   ),
                 ),
-                maps.Marker(
-                  markerId: maps.MarkerId('drop'),
-                  position: drop,
-                  infoWindow: maps.InfoWindow(title: 'Drop Location'),
-                  icon: maps.BitmapDescriptor.defaultMarkerWithHue(
-                    maps.BitmapDescriptor.hueAzure,
+                for (var i = 1; i < routePoints.length; i++)
+                  maps.Marker(
+                    markerId: maps.MarkerId('drop-$i'),
+                    position: routePoints[i],
+                    infoWindow: maps.InfoWindow(title: 'Drop Location #$i'),
+                    icon: maps.BitmapDescriptor.defaultMarkerWithHue(
+                      maps.BitmapDescriptor.hueAzure,
+                    ),
                   ),
-                ),
               },
               polylines: {
                 maps.Polyline(
                   polylineId: maps.PolylineId('package-route'),
-                  points: [pickup, drop],
+                  points: routePoints,
                   width: 4,
                   color: AppColors.primary,
                   geodesic: true,
@@ -1113,26 +1859,23 @@ class _PackageMapPreviewState extends State<_PackageMapPreview> {
 
     final pickupLat = widget.controller.pickupLatitude.value;
     final pickupLng = widget.controller.pickupLongitude.value;
-    final dropLat = widget.controller.dropLatitude.value;
-    final dropLng = widget.controller.dropLongitude.value;
-    if (pickupLat == null ||
-        pickupLng == null ||
-        dropLat == null ||
-        dropLng == null) {
-      return;
-    }
+    if (pickupLat == null || pickupLng == null) return;
+    final routePoints = _routePoints;
+    if (routePoints.length < 2) return;
 
     await Future<void>.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;
 
     await controller.animateCamera(
-      maps.CameraUpdate.newLatLngBounds(
-        _boundsFor([
-          maps.LatLng(pickupLat, pickupLng),
-          maps.LatLng(dropLat, dropLng),
-        ]),
-        52.rpx,
-      ),
+      maps.CameraUpdate.newLatLngBounds(_boundsFor(routePoints), 52.rpx),
+    );
+  }
+
+  maps.LatLng _centerFor(List<maps.LatLng> points) {
+    final bounds = _boundsFor(points);
+    return maps.LatLng(
+      (bounds.southwest.latitude + bounds.northeast.latitude) / 2,
+      (bounds.southwest.longitude + bounds.northeast.longitude) / 2,
     );
   }
 
@@ -1260,7 +2003,7 @@ class _MapPickerModal extends StatelessWidget {
                             width: 36.wpx,
                             height: 36.hpx,
                             decoration: BoxDecoration(
-                              color: Color(0xFFEEF4FF),
+                              color: AppColors.muted,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -1289,7 +2032,7 @@ class _MapPickerModal extends StatelessWidget {
                       child: Container(
                         height: mapHeight,
                         decoration: BoxDecoration(
-                          color: Color(0xFFF4F8FF),
+                          color: AppColors.muted,
                           border: Border.all(
                             color: AppColors.primary.withValues(alpha: 0.1),
                           ),
@@ -1517,8 +2260,8 @@ class _DistanceExceededModal extends StatelessWidget {
                   child: FilledButton(
                     onPressed: controller.closeDistanceExceededModal,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.white,
+                      backgroundColor: AppColors.buttonFill,
+                      foregroundColor: AppColors.onButtonFill,
                       padding: EdgeInsets.symmetric(vertical: 13.hpx),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14.rpx),
@@ -1668,7 +2411,9 @@ class _PackageOrderListCard extends StatelessWidget {
                               vertical: 2.hpx,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFF6D8),
+                              color: AppColors.accent.withValues(
+                                alpha: AppColors.isDarkMode ? 0.14 : 0.22,
+                              ),
                               borderRadius: BorderRadius.circular(999.rpx),
                             ),
                             child: Row(
@@ -1720,6 +2465,14 @@ class _PackageOrderListCard extends StatelessWidget {
                   text:
                       'Drop: ${order.dropAddress.isEmpty ? 'N/A' : order.dropAddress}',
                 ),
+                if (_packageContactLine(order).isNotEmpty) ...[
+                  SizedBox(height: 5.hpx),
+                  _PackageLocationLine(
+                    icon: Icons.person_outline_rounded,
+                    color: AppColors.secondaryBlue,
+                    text: _packageContactLine(order),
+                  ),
+                ],
                 if (order.distanceKm > 0) ...[
                   SizedBox(height: 8.hpx),
                   Text(
@@ -1929,6 +2682,18 @@ String _packagePartnerPhone(PackageOrderModel order) {
   ]);
 }
 
+String _packageContactLine(PackageOrderModel order) {
+  final isReceive = order.packageOrderType.trim().toLowerCase() == 'receive';
+  final label = isReceive ? 'Sender' : 'Receiver';
+  final name = isReceive ? order.senderName : order.receiverName;
+  final phone = isReceive ? order.senderPhone : order.receiverPhone;
+  final parts = [
+    name.trim(),
+    phone.trim(),
+  ].where((value) => value.isNotEmpty).join(' | ');
+  return parts.isEmpty ? '' : '$label: $parts';
+}
+
 Map<String, dynamic> _packageMapFrom(Object? value) {
   if (value is Map) return Map<String, dynamic>.from(value);
   if (value is String && value.trim().isNotEmpty) {
@@ -1991,7 +2756,7 @@ class _BackChip extends StatelessWidget {
         child: Ink(
           padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 8.hpx),
           decoration: BoxDecoration(
-            color: Color(0xFFEEF4FF),
+            color: AppColors.muted,
             borderRadius: BorderRadius.circular(999.rpx),
           ),
           child: Row(

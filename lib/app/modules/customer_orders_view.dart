@@ -30,11 +30,11 @@ class _CustomerOrdersViewState extends State<CustomerOrdersView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F8FF),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(title: Text('My Orders'), centerTitle: true),
       body: Obx(() {
         if (controller.orders.isEmpty && controller.isLoadingOrders.value) {
-          return const Center(
+          return Center(
             child: CircularProgressIndicator(color: AppColors.primary),
           );
         }
@@ -59,7 +59,7 @@ class _CustomerOrdersViewState extends State<CustomerOrdersView> {
                       width: 86.wpx,
                       height: 86.hpx,
                       decoration: BoxDecoration(
-                        color: Color(0xFFEEF4FF),
+                        color: AppColors.muted,
                         borderRadius: BorderRadius.circular(28.rpx),
                       ),
                       child: Icon(
@@ -358,7 +358,7 @@ class _OrderStatusMeta {
         label: 'In Progress',
         icon: Icons.local_shipping_outlined,
         backgroundColor: const Color(0xFFEAF1FF),
-        color: AppColors.primary,
+        color: AppColors.price,
       );
     }
 
@@ -369,7 +369,7 @@ class _OrderStatusMeta {
         label: 'On The Way',
         icon: Icons.delivery_dining_rounded,
         backgroundColor: const Color(0xFFEAF1FF),
-        color: AppColors.primary,
+        color: AppColors.price,
       );
     }
 
@@ -393,7 +393,7 @@ class _InfoPill extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.wpx, vertical: 8.hpx),
       decoration: BoxDecoration(
-        color: Color(0xFFEEF4FF),
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(14.rpx),
       ),
       child: Row(

@@ -20,6 +20,8 @@ class CategoriesBinding extends Bindings {
     }
     if (!Get.isRegistered<CategoriesController>()) {
       Get.put(CategoriesController(Get.find()));
+    } else {
+      Get.find<CategoriesController>().openFromRouteArguments(Get.arguments);
     }
   }
 }

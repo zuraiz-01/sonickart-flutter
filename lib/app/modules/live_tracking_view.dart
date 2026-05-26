@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../data/models/order_model.dart';
+import '../core/widgets/delivery_rating_dialog.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import 'order_controller.dart';
@@ -38,18 +39,74 @@ class _LiveTrackingScaffold extends StatefulWidget {
 
 class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
   bool _refreshing = false;
+  Timer? _trackingTimer;
+  Worker? _ratingWorker;
 
   @override
   void initState() {
     super.initState();
+    _setupRatingWorker();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshOrder());
+    _startTracking();
+  }
+
+  void _startTracking() {
+    _trackingTimer?.cancel();
+    _trackingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      final order =
+          widget.controller.activeProductOrder.value ??
+          widget.controller.selectedOrder.value;
+      if (order != null && !order.isInactive && mounted) {
+        unawaited(_refreshOrder());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ratingWorker?.dispose();
+    _trackingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _setupRatingWorker() {
+    _ratingWorker = ever(widget.controller.needsRatingForOrder, (order) {
+      if (order == null || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!widget.controller.beginDeliveryRatingPrompt(order)) return;
+        Get.dialog(
+          DeliveryRatingDialog(
+            orderId: order.id,
+            deliveryPartnerName: widget.controller.deliveryPartnerNameFor(
+              order,
+            ),
+            onSubmitRating:
+                ({required orderId, required rating, required feedback}) =>
+                    widget.controller.submitDeliveryRating(
+                      orderId: orderId,
+                      rating: rating,
+                      feedback: feedback,
+                    ),
+            onRatingFlowComplete: widget.controller.endDeliveryRatingPrompt,
+          ),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+        );
+      });
+    });
   }
 
   Future<void> _refreshOrder() async {
     if (_refreshing) return;
     setState(() => _refreshing = true);
     try {
-      await widget.controller.refreshTrackingOrder(widget.orderId);
+      final refreshed = await widget.controller.refreshTrackingOrder(
+        widget.orderId,
+      );
+      final nextOrder = refreshed ?? _resolveOrder();
+      if (nextOrder != null) {
+        widget.controller.requestDeliveryRatingIfNeeded(nextOrder);
+      }
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -60,7 +117,7 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
     return Obx(() {
       final order = _resolveOrder();
       return Scaffold(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.lightPrimary,
         body: SafeArea(
           child: Column(
             children: [
@@ -123,7 +180,7 @@ class _LiveTrackingHeader extends StatelessWidget {
               onPressed: () => Get.offNamed(AppRoutes.dashboard),
               icon: Icon(
                 Icons.chevron_left_rounded,
-                color: AppColors.white,
+                color: Colors.white,
                 size: 22.spx,
               ),
             ),
@@ -136,7 +193,7 @@ class _LiveTrackingHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.white,
+                  color: Colors.white,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.spx,
                 ),
@@ -149,7 +206,7 @@ class _LiveTrackingHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.white,
+                  color: Colors.white,
                   fontWeight: FontWeight.w900,
                   fontSize: 22.spx,
                 ),
@@ -162,9 +219,9 @@ class _LiveTrackingHeader extends StatelessWidget {
               child: SizedBox(
                 width: 18.rpx,
                 height: 18.rpx,
-                child: const CircularProgressIndicator(
+                child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.white,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -175,8 +232,8 @@ class _LiveTrackingHeader extends StatelessWidget {
 
   static String _headerTitle(String status) {
     final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Order Cancelled';
-    if (lower == 'delivered') return 'Order Delivered';
+    if (_isCancelled(lower)) return 'Order Cancelled';
+    if (_isCompleted(lower)) return 'Order Delivered';
     if (lower == 'confirmed' || lower == 'accepted' || lower == 'assigned') {
       return 'Arriving Soon';
     }
@@ -190,14 +247,26 @@ class _LiveTrackingHeader extends StatelessWidget {
 
   static String _headerSubtitle(String status, Object? etaValue) {
     final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Cancelled';
-    if (lower == 'delivered') return 'Fastest Delivery';
+    if (_isCancelled(lower)) return 'Cancelled';
+    if (_isCompleted(lower)) return 'Fastest Delivery';
     final eta = etaValue is num ? etaValue.toInt() : int.tryParse('$etaValue');
     if (eta == null || eta <= 0) {
       return lower == 'pending' ? 'Getting things ready' : 'Tracking live';
     }
     if (eta <= 1) return 'Arriving any moment';
     return 'Arriving in $eta minutes';
+  }
+
+  static bool _isCancelled(String status) {
+    return status == 'cancelled' || status == 'canceled';
+  }
+
+  static bool _isCompleted(String status) {
+    return status == 'delivered' ||
+        status == 'completed' ||
+        status == 'complete' ||
+        status == 'finished' ||
+        status == 'done';
   }
 }
 
@@ -221,8 +290,7 @@ class _TrackingBody extends StatelessWidget {
           ),
         ),
         SizedBox(height: 16.hpx),
-        if (order.status.toLowerCase() != 'cancelled' &&
-            order.status.toLowerCase() != 'delivered') ...[
+        if (!order.isInactive) ...[
           _LiveStatusCard(order: order),
           SizedBox(height: 16.hpx),
         ],
@@ -234,8 +302,7 @@ class _TrackingBody extends StatelessWidget {
         SizedBox(height: 16.hpx),
         _BillDetailsCard(order: order),
         SizedBox(height: 20.hpx),
-        if (order.status.toLowerCase() != 'cancelled' &&
-            order.status.toLowerCase() != 'delivered')
+        if (!order.isInactive)
           Container(
             margin: EdgeInsets.symmetric(vertical: 8.hpx),
             child: FilledButton.icon(
@@ -368,11 +435,7 @@ class _LiveStatusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.route_outlined,
-                size: 18.rpx,
-                color: AppColors.primary,
-              ),
+              Icon(Icons.route_outlined, size: 18.rpx, color: AppColors.price),
               SizedBox(width: 8.wpx),
               Text(
                 'Live Tracking',
@@ -610,7 +673,7 @@ class _OrderedItemTile extends StatelessWidget {
                 Text(
                   '₹${item.product.displayPrice}',
                   style: TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.price,
                     fontWeight: FontWeight.w700,
                     fontSize: 14.spx,
                   ),
@@ -830,7 +893,7 @@ class _RoundIcon extends StatelessWidget {
     return Container(
       width: 48.rpx,
       height: 48.rpx,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         shape: BoxShape.circle,
       ),
@@ -911,7 +974,7 @@ class _BillRowLine extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: AppColors.primary,
+            color: AppColors.price,
             fontWeight: FontWeight.w800,
             fontSize: 15.spx,
           ),
@@ -933,18 +996,88 @@ class _LiveMapCard extends StatefulWidget {
 
 class _LiveMapCardState extends State<_LiveMapCard> {
   GoogleMapController? _mapController;
+  LatLng? _displayedPartnerLoc;
+  LatLng? _targetPartnerLoc;
+  Timer? _glideTimer;
 
   @override
   void didUpdateWidget(covariant _LiveMapCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.order.raw != widget.order.raw ||
-        oldWidget.order.status != widget.order.status) {
-      unawaited(_fitMap());
+    final data = _TrackingMapData.fromOrder(widget.order);
+    final newLoc = data.deliveryPersonLocation;
+
+    if (newLoc != null &&
+        _displayedPartnerLoc != null &&
+        _targetPartnerLoc != null &&
+        newLoc != _targetPartnerLoc &&
+        _distanceKm(newLoc, _targetPartnerLoc!) > 0.01) {
+      _targetPartnerLoc = newLoc;
+      _startGlide();
+    } else if (data.deliveryPersonLocation != null &&
+        _displayedPartnerLoc == null) {
+      _displayedPartnerLoc = data.deliveryPersonLocation;
+      _targetPartnerLoc = data.deliveryPersonLocation;
     }
+  }
+
+  void _startGlide() {
+    _glideTimer?.cancel();
+    _glideTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      if (!mounted ||
+          _displayedPartnerLoc == null ||
+          _targetPartnerLoc == null) {
+        _glideTimer?.cancel();
+        return;
+      }
+      final from = _displayedPartnerLoc!;
+      final to = _targetPartnerLoc!;
+      final newLat = from.latitude + (to.latitude - from.latitude) * 0.1;
+      final newLng = from.longitude + (to.longitude - from.longitude) * 0.1;
+      _displayedPartnerLoc = LatLng(newLat, newLng);
+      if (_distanceKm(from, to) < 0.005) {
+        _displayedPartnerLoc = to;
+        _glideTimer?.cancel();
+      }
+      setState(() {});
+    });
+  }
+
+  Set<Marker> _animatedMarkers(_TrackingMapData data) {
+    final partnerPos = _displayedPartnerLoc ?? data.deliveryPersonLocation;
+    return {
+      if (data.deliveryLocation != null)
+        Marker(
+          markerId: const MarkerId('deliveryLocation'),
+          position: data.deliveryLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          ),
+          infoWindow: const InfoWindow(title: 'Delivery Address'),
+        ),
+      if (data.pickupLocation != null)
+        Marker(
+          markerId: const MarkerId('pickupLocation'),
+          position: data.pickupLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+          infoWindow: const InfoWindow(title: 'Pickup'),
+        ),
+      if (partnerPos != null)
+        Marker(
+          markerId: const MarkerId('deliveryPartner'),
+          position: partnerPos,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+          infoWindow: const InfoWindow(title: 'Delivery Partner'),
+        ),
+    };
   }
 
   @override
   void dispose() {
+    _glideTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -973,10 +1106,9 @@ class _LiveMapCardState extends State<_LiveMapCard> {
               ),
               onMapCreated: (controller) {
                 _mapController = controller;
-                unawaited(_fitMap());
               },
               style: _mapStyleJson,
-              markers: data.markers,
+              markers: _animatedMarkers(data),
               polylines: data.polylines,
               mapToolbarEnabled: false,
               myLocationButtonEnabled: false,
@@ -993,63 +1125,85 @@ class _LiveMapCardState extends State<_LiveMapCard> {
               top: 12.hpx,
               child: _MapStatusPill(label: widget.etaLabel),
             ),
+            if (data.deliveryPersonLocation != null)
+              Positioned(right: 12.wpx, bottom: 12.hpx, child: _LivePulseDot()),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _fitMap() async {
-    final controller = _mapController;
-    if (controller == null) return;
-    final data = _TrackingMapData.fromOrder(widget.order);
-    if (data.points.isEmpty) return;
-
-    await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (!mounted) return;
-
-    if (data.points.length == 1) {
-      await controller.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: data.points.first, zoom: 15),
-        ),
-      );
-      return;
-    }
-
-    await controller.animateCamera(
-      CameraUpdate.newLatLngBounds(_boundsFor(data.focusPoints), 52.rpx),
-    );
+  double _distanceKm(LatLng a, LatLng b) {
+    const r = 6371.0;
+    final dLat = _rad(b.latitude - a.latitude);
+    final dLon = _rad(b.longitude - a.longitude);
+    final x =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_rad(a.latitude)) *
+            cos(_rad(b.latitude)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    return r * 2 * atan2(sqrt(x), sqrt(1 - x));
   }
 
-  LatLngBounds _boundsFor(List<LatLng> points) {
-    final source = points.isEmpty
-        ? _TrackingMapData.fromOrder(widget.order).points
-        : points;
-    var minLat = source.first.latitude;
-    var maxLat = source.first.latitude;
-    var minLng = source.first.longitude;
-    var maxLng = source.first.longitude;
+  double _rad(double v) => v * pi / 180;
+}
 
-    for (final point in source.skip(1)) {
-      minLat = point.latitude < minLat ? point.latitude : minLat;
-      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
-      minLng = point.longitude < minLng ? point.longitude : minLng;
-      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
-    }
+class _LivePulseDot extends StatefulWidget {
+  const _LivePulseDot();
 
-    if (minLat == maxLat) {
-      minLat -= 0.005;
-      maxLat += 0.005;
-    }
-    if (minLng == maxLng) {
-      minLng -= 0.005;
-      maxLng += 0.005;
-    }
+  @override
+  State<_LivePulseDot> createState() => _LivePulseDotState();
+}
 
-    return LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
+class _LivePulseDotState extends State<_LivePulseDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _animation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: AppColors.success.withValues(alpha: 0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Container(
+              width: 8 + (6 * _animation.value),
+              height: 8 + (6 * _animation.value),
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1336,14 +1490,14 @@ class _MapFallback extends StatelessWidget {
       height: 285.hpx,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF4FF),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(15.rpx),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.map_outlined, size: 72.rpx, color: AppColors.primary),
+          Icon(Icons.map_outlined, size: 72.rpx, color: AppColors.price),
           SizedBox(height: 12.hpx),
           Text(
             'Live map preview',
@@ -1355,7 +1509,7 @@ class _MapFallback extends StatelessWidget {
           SizedBox(height: 6.hpx),
           Text(
             etaLabel,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
