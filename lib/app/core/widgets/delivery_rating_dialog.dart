@@ -59,7 +59,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(20.rpx),
         ),
         child: Column(
@@ -98,7 +98,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.primaryDark,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.rpx)),
       ),
       child: Column(
@@ -107,7 +107,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
             width: 56.rpx,
             height: 56.rpx,
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: AppColors.card,
               shape: BoxShape.circle,
               boxShadow: const [
                 BoxShadow(
@@ -127,7 +127,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           Text(
             'Order Delivered!',
             style: TextStyle(
-              color: AppColors.white,
+              color: AppColors.onColored,
               fontSize: 20.spx,
               fontWeight: FontWeight.w900,
             ),
@@ -137,7 +137,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
             'How was your delivery experience?',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.84),
+              color: AppColors.onColored.withValues(alpha: 0.84),
               fontSize: 13.spx,
               fontWeight: FontWeight.w600,
             ),
@@ -155,7 +155,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12.rpx),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -163,12 +163,12 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: AppColors.buttonFill.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(
               Icons.pedal_bike_rounded,
-              color: AppColors.primary,
+              color: AppColors.buttonFill,
               size: 18,
             ),
           ),
@@ -191,7 +191,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -203,13 +203,13 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: AppColors.buttonFill,
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               '#${widget.orderId.length > 8 ? widget.orderId.substring(0, 7) : widget.orderId}',
               style: TextStyle(
-                color: AppColors.white,
+                color: AppColors.onButtonFill,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
               ),
@@ -262,7 +262,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
             _ratingLabel,
             key: ValueKey(_rating),
             style: TextStyle(
-              color: AppColors.primary,
+              color: AppColors.textPrimary,
               fontSize: 13.spx,
               fontWeight: FontWeight.w800,
             ),
@@ -289,6 +289,11 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       maxLines: 3,
       maxLength: 200,
       textCapitalization: TextCapitalization.sentences,
+      style: TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 13.spx,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: InputDecoration(
         hintText: 'Share your experience (optional)',
         hintStyle: TextStyle(
@@ -297,7 +302,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           fontWeight: FontWeight.w500,
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFF),
+        fillColor: AppColors.inputFill,
         counterStyle: TextStyle(
           color: AppColors.textSecondary.withValues(alpha: 0.5),
           fontSize: 10.spx,
@@ -312,7 +317,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.rpx),
-          borderSide: BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: AppColors.buttonFill),
         ),
         contentPadding: EdgeInsets.symmetric(
           horizontal: 14.wpx,
@@ -328,9 +333,9 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       child: FilledButton(
         onPressed: _rating == 0 || _isSubmitting ? null : _submitRating,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
-          foregroundColor: AppColors.white,
+          backgroundColor: AppColors.buttonFill,
+          disabledBackgroundColor: AppColors.buttonFill.withValues(alpha: 0.45),
+          foregroundColor: AppColors.onButtonFill,
           minimumSize: Size.fromHeight(48.hpx),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.rpx),
@@ -343,7 +348,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
                 height: 20.hpx,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
-                  color: AppColors.white,
+                  color: AppColors.onButtonFill,
                 ),
               )
             : Text(_rating < 4 ? 'Submit Feedback' : 'Submit Rating'),
@@ -445,7 +450,7 @@ class _ThankYouDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(20.rpx),
         ),
         child: Column(
@@ -468,7 +473,7 @@ class _ThankYouDialog extends StatelessWidget {
             Text(
               'Thank You!',
               style: TextStyle(
-                color: AppColors.primary,
+                color: AppColors.textPrimary,
                 fontSize: 18.spx,
                 fontWeight: FontWeight.w900,
               ),
@@ -493,8 +498,8 @@ class _ThankYouDialog extends StatelessWidget {
                   Get.offAllNamed(AppRoutes.dashboard);
                 },
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
+                  backgroundColor: AppColors.buttonFill,
+                  foregroundColor: AppColors.onButtonFill,
                   minimumSize: Size.fromHeight(44.hpx),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.rpx),

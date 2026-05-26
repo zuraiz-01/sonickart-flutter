@@ -392,7 +392,7 @@ class _PhoneField extends StatelessWidget {
         }
       },
       style: TextStyle(
-        color: AppColors.primary,
+        color: AppColors.textPrimary,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.4,
         fontSize: 14.spx,
@@ -400,9 +400,9 @@ class _PhoneField extends StatelessWidget {
       decoration: InputDecoration(
         counterText: '',
         hintText: 'Enter 10-Digit Mobile Number',
-        hintStyle: TextStyle(color: Color(0xFF999999), fontSize: 15.spx),
+        hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 15.spx),
         filled: true,
-        fillColor: const Color(0xFFFAFBFF),
+        fillColor: AppColors.inputFill,
         contentPadding: EdgeInsets.symmetric(
           horizontal: 12.wpx,
           vertical: 13.hpx,
@@ -415,7 +415,7 @@ class _PhoneField extends StatelessWidget {
             child: Text(
               AuthController.dialCode,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.primary,
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.2,
                 fontSize: 15.spx,
@@ -497,7 +497,7 @@ class _OtpSection extends StatelessWidget {
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: TextStyle(
-            color: AppColors.primary,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w900,
             letterSpacing: 2.2,
             fontSize: 15.spx,
@@ -506,12 +506,12 @@ class _OtpSection extends StatelessWidget {
             counterText: '',
             hintText: 'Enter 6-Digit OTP',
             hintStyle: TextStyle(
-              color: Color(0xFF999999),
+              color: AppColors.textSecondary,
               fontSize: 14.spx,
               fontWeight: FontWeight.w500,
             ),
             filled: true,
-            fillColor: const Color(0xFFFAFBFF),
+            fillColor: AppColors.inputFill,
             contentPadding: EdgeInsets.symmetric(
               horizontal: 12.wpx,
               vertical: 11.hpx,
@@ -523,7 +523,7 @@ class _OtpSection extends StatelessWidget {
                 child: Text(
                   'OTP',
                   style: TextStyle(
-                    color: AppColors.primary,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
                     fontSize: 14.spx,
