@@ -39,9 +39,13 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
   final _feedbackController = TextEditingController();
   bool _isSubmitting = false;
   String? _submitError;
+  bool _submitted = false;
 
   @override
   void dispose() {
+    if (!_submitted) {
+      widget.onRatingFlowComplete?.call();
+    }
     _feedbackController.dispose();
     super.dispose();
   }
@@ -412,12 +416,14 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
 
   void _showThankYou() {
     if (!mounted) return;
+    _submitted = true;
+    final onComplete = widget.onRatingFlowComplete;
     Navigator.of(context).pop();
     Get.dialog(
       const _ThankYouDialog(),
       barrierColor: Colors.black.withValues(alpha: 0.45),
     ).whenComplete(() {
-      widget.onRatingFlowComplete?.call();
+      onComplete?.call();
     });
   }
 }
