@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../../core/network/api_service.dart' show ApiException;
 import '../../modules/order_controller.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_colors.dart';
@@ -377,6 +378,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
       _isSubmitting = true;
       _submitError = null;
     });
+    bool ratingSubmitted = false;
     try {
       if (widget.onSubmitRating != null) {
         await widget.onSubmitRating!(
@@ -391,9 +393,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           feedback: _feedbackController.text.trim(),
         );
       }
-      if (mounted) {
-        _showThankYou();
-      }
+      ratingSubmitted = true;
     } catch (error) {
       if (mounted) {
         setState(() => _submitError = _ratingErrorMessage(error));
@@ -401,14 +401,20 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+    if (ratingSubmitted && mounted) {
+      _showThankYou();
+    }
   }
 
   String _ratingErrorMessage(Object error) {
-    final message = error.toString().replaceFirst(RegExp(r'^Exception: '), '');
-    if (message.contains('already') && message.contains('rated')) {
+    final message = error is ApiException
+        ? error.message
+        : error.toString();
+    final lower = message.toLowerCase();
+    if (lower.contains('already') && lower.contains('rated')) {
       return 'This order has already been rated.';
     }
-    if (message.contains('delivered')) {
+    if (lower.contains('delivered')) {
       return 'Rating will be available once the order is marked delivered.';
     }
     return 'Unable to submit rating. Please try again.';

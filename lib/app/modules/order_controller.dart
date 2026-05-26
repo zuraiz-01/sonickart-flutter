@@ -1552,6 +1552,17 @@ class OrderController extends GetxController {
         .toList();
   }
 
+  String _ratingRequestOrderId(OrderModel? order, String fallback) {
+    return _firstNonEmpty([
+          order?.raw['orderNumber'],
+          order?.raw['orderId'],
+          order?.raw['_id'],
+          order?.id,
+          fallback,
+        ]) ??
+        fallback;
+  }
+
   Future<OrderModel> _upsertOrder(
     OrderModel order, {
     bool notifyStatusChange = true,
@@ -1977,6 +1988,7 @@ class OrderController extends GetxController {
     final identifiers = localOrder == null
         ? <String>[normalizedOrderId]
         : _orderIdentifiers(localOrder);
+    final requestOrderId = _ratingRequestOrderId(localOrder, normalizedOrderId);
     if (localOrder?.hasDeliveryRating == true) {
       _ratedOrderIds.addAll(identifiers);
       _dismissedRatingOrderIds.removeAll(identifiers);
@@ -1993,9 +2005,9 @@ class OrderController extends GetxController {
     }
     try {
       final response = await _api.post(
-        endpoint: ApiConstants.orderRating(normalizedOrderId),
+        endpoint: ApiConstants.orderRating(requestOrderId),
         data: {
-          'orderId': normalizedOrderId,
+          'orderId': requestOrderId,
           'rating': normalizedRating,
           if (feedback.isNotEmpty) 'feedback': feedback,
         },
@@ -2017,8 +2029,10 @@ class OrderController extends GetxController {
         final refreshed = await refreshTrackingOrder(normalizedOrderId);
         if (refreshed != null && refreshed.hasDeliveryRating) {
           _ratedOrderIds.addAll(_orderIdentifiers(refreshed));
-          return;
+        } else {
+          _ratedOrderIds.add(normalizedOrderId);
         }
+        return;
       }
       rethrow;
     } finally {
@@ -2209,8 +2223,7 @@ class OrderController extends GetxController {
 
     final wasDelivered =
         previousStatus == 'delivered' || previousStatus == 'completed';
-    if (!wasDelivered &&
-        (status == 'delivered' || status == 'completed')) {
+    if (!wasDelivered && (status == 'delivered' || status == 'completed')) {
       requestDeliveryRatingIfNeeded(order);
     }
   }

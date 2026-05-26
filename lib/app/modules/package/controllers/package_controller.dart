@@ -3900,6 +3900,13 @@ class PackageController extends GetxController {
       needsRatingForOrder.value = null;
     } catch (error) {
       debugPrint('PackageController.submitDeliveryRating failed: $error');
+      final message = error is ApiException ? error.message : error.toString();
+      if (message.toLowerCase().contains('already') &&
+          message.toLowerCase().contains('rated')) {
+        _ratedOrderIds.add(orderId);
+        needsRatingForOrder.value = null;
+        return;
+      }
       rethrow;
     }
   }
