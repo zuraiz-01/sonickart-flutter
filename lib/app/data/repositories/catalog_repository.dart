@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,6 +19,9 @@ class CatalogRepository {
 
   static const _defaultProductRadiusKm = 5.0;
   static const _defaultFeaturedProductsLimit = 8;
+  static const _lastKnownLocationTimeout = Duration(milliseconds: 800);
+  static const _deviceLocationTimeout = Duration(seconds: 8);
+  static const _featuredCategoryFetchTimeout = Duration(seconds: 8);
 
   final ApiService _apiService;
   final GetStorage _storage;
@@ -201,6 +205,7 @@ class CatalogRepository {
     if (categories.isEmpty) return const [];
 
     final context = await _resolveProductContext();
+    if (context.vendorIds.isEmpty) return const [];
 
     final random = Random();
     final target = max(1, _featuredProductsLimit);
@@ -208,34 +213,99 @@ class CatalogRepository {
     final categoryPool = [...categories]..shuffle(random);
     final productMap = <String, ProductModel>{};
 
-    Future<void> appendFromCategories(List<CategoryModel> batch) async {
-      final lists = await Future.wait(
-        batch.map(
-          (category) =>
-              _fetchProductsByCategoryWithContext(category.id, context),
-        ),
-      );
-      final randomized = lists.expand((items) => items).toList()
-        ..shuffle(random);
-      for (final product in randomized) {
-        if (productMap.length >= target) break;
-        productMap.putIfAbsent(product.id, () => product);
+    Future<List<ProductModel>> loadCategoryProducts(
+      CategoryModel category,
+    ) async {
+      try {
+        return await _fetchProductsByCategoryWithContext(
+          category.id,
+          context,
+        ).timeout(
+          _featuredCategoryFetchTimeout,
+          onTimeout: () {
+            debugPrint(
+              'CatalogRepository.fetchFeaturedProducts: timed out for ${category.id}',
+            );
+            return const <ProductModel>[];
+          },
+        );
+      } catch (error) {
+        debugPrint(
+          'CatalogRepository.fetchFeaturedProducts: failed for ${category.id} after $error',
+        );
+        return const [];
       }
     }
 
-    const batchSize = 4;
-    for (
-      var start = 0;
-      start < categoryPool.length && productMap.length < target;
-      start += batchSize
+    void appendUniqueProducts(
+      CategoryModel category,
+      List<ProductModel> products,
     ) {
-      await appendFromCategories(
-        categoryPool.skip(start).take(batchSize).toList(growable: false),
-      );
+      final randomized = [...products]..shuffle(random);
+      for (final product in randomized) {
+        if (productMap.length >= target) break;
+        if (product.id.isEmpty || productMap.containsKey(product.id)) {
+          continue;
+        }
+        if (_isRemovedProduct(product.raw)) continue;
+        productMap[product.id] = _withCategoryMeta(product, category);
+      }
+    }
+
+    final firstPassCategories = categoryPool
+        .take(min(categoryPool.length, target))
+        .toList(growable: false);
+    for (final category in firstPassCategories) {
+      if (productMap.length >= target) break;
+      appendUniqueProducts(category, await loadCategoryProducts(category));
+    }
+
+    if (productMap.length < target) {
+      final fallbackCategories = [...categories]..shuffle(random);
+      for (final category in fallbackCategories) {
+        if (productMap.length >= target) break;
+        appendUniqueProducts(category, await loadCategoryProducts(category));
+      }
     }
 
     final result = productMap.values.toList()..shuffle(random);
     return result.take(target).toList();
+  }
+
+  ProductModel _withCategoryMeta(ProductModel product, CategoryModel category) {
+    if (product.categoryId.isNotEmpty &&
+        (product.raw['categoryName'] ?? product.raw['category_name']) != null) {
+      return product;
+    }
+
+    final nextRaw = Map<String, dynamic>.from(product.raw);
+    void fillIfBlank(String key, String value) {
+      final current = nextRaw[key]?.toString().trim() ?? '';
+      if (current.isEmpty) nextRaw[key] = value;
+    }
+
+    fillIfBlank('categoryId', category.id);
+    fillIfBlank('category_id', category.id);
+    fillIfBlank('categoryName', category.name);
+    fillIfBlank('category_name', category.name);
+
+    return ProductModel(
+      id: product.id,
+      categoryId: product.categoryId.isNotEmpty
+          ? product.categoryId
+          : category.id,
+      name: product.name,
+      description: product.description,
+      unit: product.unit,
+      price: product.price,
+      mrp: product.mrp,
+      emoji: product.emoji,
+      imageUrl: product.imageUrl,
+      featuredImageUrl: product.featuredImageUrl,
+      vendorId: product.vendorId,
+      branchId: product.branchId,
+      raw: nextRaw,
+    );
   }
 
   Future<ProductCatalogSettings> loadDeliverySettings({
@@ -380,6 +450,7 @@ class CatalogRepository {
               _normalizeProductJson(
                 Map<String, dynamic>.from(item),
                 fallbackVendorId: vendorId,
+                useFallbackVendorId: false,
               ),
             ),
           )
@@ -438,15 +509,11 @@ class CatalogRepository {
     final selectedAddress = _selectedAddress;
     var scopedLatitude = latitude ?? selectedAddress?.latitude;
     var scopedLongitude = longitude ?? selectedAddress?.longitude;
-    final storedVendorIds = _uniqueVendorIds(
-      _selectedVendorId?.split(',') ?? const [],
-    );
+    final storedVendorIds = _uniqueVendorIds([
+      ...(_selectedVendorId?.split(',') ?? const []),
+      selectedAddress?.vendorId,
+    ]);
     if (storedVendorIds.isNotEmpty) {
-      if (!_hasValidCoordinates(scopedLatitude, scopedLongitude)) {
-        final deviceCoordinate = await _readDeviceCoordinate();
-        scopedLatitude = deviceCoordinate?.latitude;
-        scopedLongitude = deviceCoordinate?.longitude;
-      }
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
         latitude: scopedLatitude,
@@ -521,20 +588,22 @@ class CatalogRepository {
           permission == LocationPermission.deniedForever) {
         return null;
       }
-      for (final accuracy in [LocationAccuracy.low, LocationAccuracy.medium]) {
-        try {
-          final position = await Geolocator.getCurrentPosition(
-            locationSettings: LocationSettings(
-              accuracy: accuracy,
-              timeLimit: const Duration(seconds: 12),
-            ),
-          );
-          return (latitude: position.latitude, longitude: position.longitude);
-        } catch (_) {
-          continue;
-        }
+
+      final lastKnown = await Geolocator.getLastKnownPosition().timeout(
+        _lastKnownLocationTimeout,
+        onTimeout: () => null,
+      );
+      if (lastKnown != null) {
+        return (latitude: lastKnown.latitude, longitude: lastKnown.longitude);
       }
-      return null;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: _deviceLocationTimeout,
+        ),
+      ).timeout(_deviceLocationTimeout);
+      return (latitude: position.latitude, longitude: position.longitude);
     } catch (error) {
       debugPrint('CatalogRepository._readDeviceCoordinate: failed $error');
       return null;
@@ -560,6 +629,7 @@ class CatalogRepository {
     Map<String, dynamic> json, {
     String? categoryId,
     String? fallbackVendorId,
+    bool useFallbackVendorId = true,
   }) {
     final next = Map<String, dynamic>.from(json);
     if ((next['categoryId'] ?? next['category_id']) == null &&
@@ -567,7 +637,8 @@ class CatalogRepository {
       next['categoryId'] = categoryId;
       next['category_id'] = categoryId;
     }
-    if ((next['vendorId'] ?? next['vendor_id']) == null &&
+    if (useFallbackVendorId &&
+        (next['vendorId'] ?? next['vendor_id']) == null &&
         fallbackVendorId != null) {
       next['vendorId'] = fallbackVendorId;
       next['vendor_id'] = fallbackVendorId;

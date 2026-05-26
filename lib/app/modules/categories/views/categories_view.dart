@@ -57,9 +57,14 @@ class CategoriesView extends GetView<CategoriesController> {
                         right: BorderSide(color: AppColors.border, width: 0.8),
                       ),
                     ),
-                    child: controller.isCategoriesLoading.value
+                    child:
+                        controller.isCategoriesLoading.value &&
+                            controller.categories.isEmpty
                         ? Center(child: CircularProgressIndicator())
                         : ListView.builder(
+                            controller: controller.categoryListScrollController,
+                            itemExtent:
+                                CategoriesController.categoryListItemExtent,
                             itemCount: controller.categories.length,
                             itemBuilder: (context, index) {
                               final category = controller.categories[index];
@@ -67,8 +72,14 @@ class CategoriesView extends GetView<CategoriesController> {
                                   controller.selectedCategory.value?.id ==
                                   category.id;
                               return InkWell(
-                                onTap: () =>
-                                    controller.selectCategory(category),
+                                onTap: () {
+                                  if (controller.shouldIgnoreCategoryTap(
+                                    category,
+                                  )) {
+                                    return;
+                                  }
+                                  controller.selectCategory(category);
+                                },
                                 child: Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -133,6 +144,8 @@ class CategoriesView extends GetView<CategoriesController> {
                               ),
                             )
                           : GridView.builder(
+                              controller:
+                                  controller.productGridScrollController,
                               padding: EdgeInsets.fromLTRB(
                                 8.wpx,
                                 8.hpx,

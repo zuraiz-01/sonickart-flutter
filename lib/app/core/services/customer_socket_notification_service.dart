@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -5,6 +7,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../modules/auth/controllers/auth_controller.dart';
 import '../constants/api_constants.dart';
 import 'local_notification_service.dart';
+import 'status_notification_copy.dart';
 
 class CustomerSocketNotificationService extends GetxService {
   io.Socket? _socket;
@@ -74,35 +77,69 @@ class CustomerSocketNotificationService extends GetxService {
 
   void _showStatusNotification(Object? payload) {
     if (!Get.isRegistered<LocalNotificationService>()) return;
-    final map = _asMap(payload);
+    final map = _notificationData(_asMap(payload));
     final status = _firstText(map, [
       'status',
       'deliveryStatus',
       'delivery_status',
+      'orderStatus',
+      'order_status',
+      'packageStatus',
       'package_status',
     ]);
-    final type = _firstText(map, ['type']);
+    final type = _firstText(map, ['type', 'notificationType']);
     final isPackage =
         type?.toLowerCase().contains('package') == true ||
-        map?['package_id'] != null;
+        _isPackagePayload(map);
+    final copy = status == null
+        ? null
+        : orderStatusNotificationCopy(
+            status: status,
+            orderNumber: _trackingNumber(map, package: isPackage),
+            package: isPackage,
+          );
     final title =
-        _firstText(map, ['title']) ??
+        copy?.title ??
+        _firstText(map, ['title', 'notificationTitle']) ??
         (isPackage ? 'Package update' : 'Order update');
     final body =
-        _firstText(map, ['message', 'body']) ??
-        (status == null
-            ? 'Your ${isPackage ? 'package' : 'order'} has a new update.'
-            : 'Your ${isPackage ? 'package' : 'order'} is ${_statusLabel(status)}.');
+        copy?.body ??
+        _firstText(map, ['message', 'body', 'notificationBody']) ??
+        'Your ${isPackage ? 'package' : 'order'} has a new update.';
 
     Get.find<LocalNotificationService>().show(title: title, body: body);
   }
 
   Map<String, dynamic>? _asMap(Object? value) {
     if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return null;
+      }
+    }
     if (value is List && value.isNotEmpty && value.first is Map) {
       return Map<String, dynamic>.from(value.first as Map);
     }
     return null;
+  }
+
+  Map<String, dynamic>? _notificationData(Map<String, dynamic>? map) {
+    if (map == null) return null;
+    final merged = Map<String, dynamic>.from(map);
+    for (final key in const [
+      'data',
+      'payload',
+      'order',
+      'package',
+      'packageOrder',
+    ]) {
+      final child = _asMap(map[key]);
+      if (child != null) merged.addAll(child);
+    }
+    return merged;
   }
 
   String? _firstText(Map<String, dynamic>? map, List<String> keys) {
@@ -114,24 +151,39 @@ class CustomerSocketNotificationService extends GetxService {
     return null;
   }
 
-  String _statusLabel(String value) {
-    final normalized = value.trim().toLowerCase().replaceAll(
-      RegExp(r'[-\s]+'),
-      '_',
-    );
-    final compact = normalized.replaceAll('_', '');
-    if (compact == 'picked' ||
-        compact == 'pickup' ||
-        compact == 'pickedup' ||
-        compact == 'orderpickedup') {
-      return 'Picked up';
-    }
-    if (compact == 'intransit' ||
-        compact == 'transit' ||
-        compact == 'orderintransit') {
-      return 'In transit';
-    }
-    return normalized.replaceAll('_', ' ').capitalizeFirst ?? value;
+  bool _isPackagePayload(Map<String, dynamic>? map) {
+    if (map == null) return false;
+    return const [
+      'packageOrderId',
+      'package_order_id',
+      'packageId',
+      'package_id',
+      'packageStatus',
+      'package_status',
+    ].any((key) => map[key] != null);
+  }
+
+  String _trackingNumber(Map<String, dynamic>? map, {required bool package}) {
+    const packageKeys = [
+      'packageOrderId',
+      'package_order_id',
+      'packageId',
+      'package_id',
+      'delivery_code',
+    ];
+    const orderKeys = [
+      'orderNumber',
+      'order_number',
+      'orderId',
+      'order_id',
+      'id',
+      '_id',
+    ];
+    return _firstText(
+          map,
+          package ? [...packageKeys, ...orderKeys] : orderKeys,
+        ) ??
+        '';
   }
 
   void disconnect() {

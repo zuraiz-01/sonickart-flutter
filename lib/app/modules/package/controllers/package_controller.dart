@@ -3886,8 +3886,6 @@ class PackageController extends GetxController {
     required int rating,
     String feedback = '',
   }) async {
-    _ratedOrderIds.add(orderId);
-    needsRatingForOrder.value = null;
     if (!Get.isRegistered<ApiService>()) return;
     try {
       await Get.find<ApiService>().post(
@@ -3898,8 +3896,11 @@ class PackageController extends GetxController {
           if (feedback.isNotEmpty) 'feedback': feedback,
         },
       );
+      _ratedOrderIds.add(orderId);
+      needsRatingForOrder.value = null;
     } catch (error) {
       debugPrint('PackageController.submitDeliveryRating failed: $error');
+      rethrow;
     }
   }
 

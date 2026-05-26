@@ -27,6 +27,69 @@ class OrderModel {
   final DateTime createdAt;
   final Map<String, dynamic> raw;
 
+  OrderModel copyWith({
+    String? id,
+    List<CartItemModel>? items,
+    String? customerName,
+    String? customerPhone,
+    String? deliveryAddress,
+    String? paymentMode,
+    double? totalPrice,
+    String? status,
+    DateTime? createdAt,
+    Map<String, dynamic>? raw,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      items: items ?? this.items,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      paymentMode: paymentMode ?? this.paymentMode,
+      totalPrice: totalPrice ?? this.totalPrice,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      raw: raw ?? this.raw,
+    );
+  }
+
+  int? get deliveryRating {
+    final value = _firstValue([
+      raw['rating'],
+      raw['deliveryRating'],
+      raw['delivery_rating'],
+    ]);
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed < 1 || parsed > 5) return null;
+    return parsed;
+  }
+
+  String get deliveryRatingFeedback {
+    return _firstString([
+          raw['ratingFeedback'],
+          raw['rating_feedback'],
+          raw['deliveryFeedback'],
+          raw['delivery_feedback'],
+          raw['feedback'],
+        ]) ??
+        '';
+  }
+
+  DateTime? get deliveryRatedAt {
+    final value = _firstValue([
+      raw['ratedAt'],
+      raw['rated_at'],
+      raw['deliveryRatedAt'],
+      raw['delivery_rated_at'],
+    ]);
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value?.toString() ?? '');
+  }
+
+  bool get hasDeliveryRating => deliveryRating != null;
+
   bool get isProductOrder {
     final orderType = (raw['orderType'] ?? raw['order_type'] ?? '')
         .toString()
@@ -41,8 +104,12 @@ class OrderModel {
   bool get isInactive {
     final normalized = status.trim().toLowerCase();
     return normalized == 'delivered' ||
+        normalized == 'complete' ||
         normalized == 'completed' ||
-        normalized == 'cancelled';
+        normalized == 'finished' ||
+        normalized == 'done' ||
+        normalized == 'cancelled' ||
+        normalized == 'canceled';
   }
 
   int get resolvedItemCount {
@@ -314,5 +381,19 @@ class OrderModel {
     if (value is num && value.isFinite && value > 0) return value.toInt();
     final parsed = int.tryParse(value?.toString() ?? '');
     return parsed != null && parsed > 0 ? parsed : 0;
+  }
+
+  static Object? _firstValue(List<Object?> values) {
+    for (final value in values) {
+      if (value == null) continue;
+      if (value is String && value.trim().isEmpty) continue;
+      return value;
+    }
+    return null;
+  }
+
+  static String? _firstString(List<Object?> values) {
+    final value = _firstValue(values)?.toString().trim();
+    return value == null || value.isEmpty ? null : value;
   }
 }

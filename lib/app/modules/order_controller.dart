@@ -65,6 +65,10 @@ class OrderController extends GetxController {
   final selectingCheckoutAddressId = RxnString();
   final needsRatingForOrder = Rxn<OrderModel>();
   final _ratedOrderIds = <String>{};
+  final _dismissedRatingOrderIds = <String>{};
+  final _ratingSubmissionOrderIds = <String>{};
+  bool _isRatingPromptVisible = false;
+  String? _ratingPromptOrderId;
 
   bool _hasManualCheckoutAddress = false;
 
@@ -617,9 +621,9 @@ class OrderController extends GetxController {
     for (final id in identifiers.where((item) => item.isNotEmpty)) {
       final detailed = await _tryFetchOrderById(id);
       if (detailed != null) {
-        await _upsertOrder(detailed);
-        selectedOrder.value = detailed;
-        return detailed;
+        final updated = await _upsertOrder(detailed);
+        selectedOrder.value = updated;
+        return updated;
       }
     }
 
@@ -633,8 +637,7 @@ class OrderController extends GetxController {
     for (final id in _orderIdentifiers(order)) {
       final detailed = await _tryFetchOrderById(id);
       if (detailed != null) {
-        await _upsertOrder(detailed);
-        return detailed;
+        return _upsertOrder(detailed);
       }
     }
     return null;
@@ -777,10 +780,14 @@ class OrderController extends GetxController {
       couponCodeController.clear();
       deliveryNoteController.clear();
       couponFeedback.value = null;
-      await _notifyAction(
-        'Order Placed',
-        'Your order  has been placed successfully.',
-        category: 'order',
+      unawaited(
+        _notifyAction(
+          'Order Placed',
+          'Your order has been placed successfully.',
+          category: 'order',
+        ).catchError((error) {
+          debugPrint('OrderController.placeOrder notification failed: $error');
+        }),
       );
       await cart.clearCart(notify: false);
       Get.offNamed(
@@ -799,7 +806,7 @@ class OrderController extends GetxController {
 
   int? etaFor(OrderModel order) {
     final status = order.status.toLowerCase();
-    if (status == 'delivered' || status == 'cancelled') return 0;
+    if (order.isInactive) return 0;
 
     final destination =
         _coordinateFrom(order.raw['deliveryLocation']) ??
@@ -1400,10 +1407,7 @@ class OrderController extends GetxController {
     final userId = _authController?.currentUser?.id ?? '';
     final allOrders = await _tryFetchOrders(userIdOverride: userId);
     final source = allOrders.isNotEmpty ? allOrders : orders;
-    return source.any((order) {
-      final status = order.status.toLowerCase();
-      return status != 'delivered' && status != 'cancelled';
-    });
+    return source.any((order) => order.isProductOrder && !order.isInactive);
   }
 
   Future<List<OrderModel>> _tryFetchOrders({String? userIdOverride}) async {
@@ -1548,16 +1552,22 @@ class OrderController extends GetxController {
         .toList();
   }
 
-  Future<void> _upsertOrder(OrderModel order) async {
+  Future<OrderModel> _upsertOrder(
+    OrderModel order, {
+    bool notifyStatusChange = true,
+  }) async {
     final incomingIds = _orderIdentifiers(order).toSet();
     final index = orders.indexWhere(
       (item) => _orderIdentifiers(item).any(incomingIds.contains),
     );
     final existing = index >= 0 ? orders[index] : null;
+    final nextOrder = existing == null
+        ? order
+        : _mergeOrderForList(existing, order);
     if (index >= 0) {
-      orders[index] = order;
+      orders[index] = nextOrder;
     } else {
-      orders.insert(0, order);
+      orders.insert(0, nextOrder);
     }
 
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -1567,11 +1577,14 @@ class OrderController extends GetxController {
     final selected = selectedOrder.value;
     if (selected != null &&
         _orderIdentifiers(selected).any(incomingIds.contains)) {
-      selectedOrder.value = order;
+      selectedOrder.value = nextOrder;
     }
 
     await _persistOrders();
-    _notifyProductStatusChange(existing, order);
+    if (notifyStatusChange) {
+      _notifyProductStatusChange(existing, nextOrder);
+    }
+    return nextOrder;
   }
 
   ({double latitude, double longitude})? _coordinateFrom(Object? source) {
@@ -1955,21 +1968,176 @@ class OrderController extends GetxController {
     required int rating,
     String feedback = '',
   }) async {
-    _ratedOrderIds.add(orderId);
+    final normalizedOrderId = orderId.trim();
+    if (normalizedOrderId.isEmpty) {
+      throw StateError('Order ID is required for rating.');
+    }
+    final normalizedRating = rating.clamp(1, 5).toInt();
+    final localOrder = findOrderById(normalizedOrderId) ?? selectedOrder.value;
+    final identifiers = localOrder == null
+        ? <String>[normalizedOrderId]
+        : _orderIdentifiers(localOrder);
+    if (localOrder?.hasDeliveryRating == true) {
+      _ratedOrderIds.addAll(identifiers);
+      _dismissedRatingOrderIds.removeAll(identifiers);
+      needsRatingForOrder.value = null;
+      return;
+    }
+    if (identifiers.any(_ratingSubmissionOrderIds.contains)) return;
+
+    _ratingSubmissionOrderIds.addAll(identifiers);
     needsRatingForOrder.value = null;
-    if (!Get.isRegistered<ApiService>()) return;
+    if (!Get.isRegistered<ApiService>()) {
+      _ratingSubmissionOrderIds.removeAll(identifiers);
+      throw StateError('Rating service is not available.');
+    }
     try {
-      await _api.post(
-        endpoint: ApiConstants.orderRating(orderId),
+      final response = await _api.post(
+        endpoint: ApiConstants.orderRating(normalizedOrderId),
         data: {
-          'orderId': orderId,
-          'rating': rating.clamp(1, 5),
+          'orderId': normalizedOrderId,
+          'rating': normalizedRating,
           if (feedback.isNotEmpty) 'feedback': feedback,
         },
       );
+      final submittedRating = _ratingFromResponse(response) ?? normalizedRating;
+      final submittedFeedback = _stringFromResponse(response, [
+        'feedback',
+        'ratingFeedback',
+        'rating_feedback',
+      ]);
+      await _markOrderRated(
+        normalizedOrderId,
+        rating: submittedRating,
+        feedback: submittedFeedback ?? feedback,
+      );
     } catch (error) {
       debugPrint('OrderController.submitDeliveryRating failed: $error');
+      if (_isAlreadyRatedError(error)) {
+        final refreshed = await refreshTrackingOrder(normalizedOrderId);
+        if (refreshed != null && refreshed.hasDeliveryRating) {
+          _ratedOrderIds.addAll(_orderIdentifiers(refreshed));
+          return;
+        }
+      }
+      rethrow;
+    } finally {
+      _ratingSubmissionOrderIds.removeAll(identifiers);
     }
+  }
+
+  bool canRequestDeliveryRating(OrderModel order) {
+    if (!order.isProductOrder) return false;
+    final status = _normalizeLocalStatus(order.status);
+    if (!{
+      'delivered',
+      'completed',
+      'complete',
+      'finished',
+      'done',
+    }.contains(status)) {
+      return false;
+    }
+    if (order.hasDeliveryRating) return false;
+    final identifiers = _orderIdentifiers(order);
+    if (identifiers.isEmpty) return false;
+    if (identifiers.any(_ratedOrderIds.contains)) return false;
+    if (identifiers.any(_ratingSubmissionOrderIds.contains)) return false;
+    return true;
+  }
+
+  void requestDeliveryRatingIfNeeded(OrderModel order, {bool force = false}) {
+    if (!force && _isRatingPromptVisible) return;
+    if (!canRequestDeliveryRating(order)) return;
+    if (!force &&
+        _orderIdentifiers(order).any(_dismissedRatingOrderIds.contains)) {
+      return;
+    }
+    needsRatingForOrder.value = null;
+    needsRatingForOrder.value = order;
+  }
+
+  bool beginDeliveryRatingPrompt(OrderModel order) {
+    if (!canRequestDeliveryRating(order)) return false;
+    final identifiers = _orderIdentifiers(order);
+    final promptId = identifiers.firstOrNull ?? order.id;
+    if (_isRatingPromptVisible &&
+        _ratingPromptOrderId != null &&
+        _ratingPromptOrderId == promptId) {
+      return false;
+    }
+    if (_isRatingPromptVisible) return false;
+    _isRatingPromptVisible = true;
+    _ratingPromptOrderId = promptId;
+    return true;
+  }
+
+  void endDeliveryRatingPrompt() {
+    final promptId = _ratingPromptOrderId;
+    if (promptId != null && !_ratedOrderIds.contains(promptId)) {
+      _dismissedRatingOrderIds.add(promptId);
+    }
+    _isRatingPromptVisible = false;
+    _ratingPromptOrderId = null;
+  }
+
+  Future<void> _markOrderRated(
+    String orderId, {
+    required int rating,
+    required String feedback,
+  }) async {
+    final localOrder = findOrderById(orderId) ?? selectedOrder.value;
+    if (localOrder == null) {
+      _ratedOrderIds.add(orderId);
+      return;
+    }
+    final identifiers = _orderIdentifiers(localOrder);
+    final ratedAt = DateTime.now().toIso8601String();
+    final updated = localOrder.copyWith(
+      raw: {
+        ...localOrder.raw,
+        'rating': rating,
+        'ratingFeedback': feedback,
+        'rating_feedback': feedback,
+        'ratedAt': ratedAt,
+        'rated_at': ratedAt,
+        'deliveryRating': rating,
+        'delivery_rating': rating,
+        'deliveryFeedback': feedback,
+        'delivery_feedback': feedback,
+      },
+    );
+    await _upsertOrder(updated, notifyStatusChange: false);
+    _ratedOrderIds.addAll(identifiers);
+    _dismissedRatingOrderIds.removeAll(identifiers);
+  }
+
+  int? _ratingFromResponse(Map<String, dynamic> response) {
+    for (final key in ['rating', 'deliveryRating', 'delivery_rating']) {
+      final value = response[key];
+      final parsed = value is num
+          ? value.toInt()
+          : int.tryParse(value?.toString() ?? '');
+      if (parsed != null && parsed >= 1 && parsed <= 5) return parsed;
+    }
+    return null;
+  }
+
+  String? _stringFromResponse(
+    Map<String, dynamic> response,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = response[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  bool _isAlreadyRatedError(Object error) {
+    final message = error is ApiException ? error.message : error.toString();
+    return message.toLowerCase().contains('already') &&
+        message.toLowerCase().contains('rated');
   }
 
   String deliveryPartnerNameFor(OrderModel order) {
@@ -1979,6 +2147,9 @@ class OrderController extends GetxController {
     return _firstNonEmpty([
           partner['name'],
           partner['fullName'],
+          partner['full_name'],
+          partner['firstName'],
+          partner['lastName'],
           order.raw['deliveryPersonName'],
           order.raw['riderName'],
           order.raw['driverName'],
@@ -2039,11 +2210,8 @@ class OrderController extends GetxController {
     final wasDelivered =
         previousStatus == 'delivered' || previousStatus == 'completed';
     if (!wasDelivered &&
-        existing != null &&
-        (status == 'delivered' || status == 'completed') &&
-        !_ratedOrderIds.contains(order.id) &&
-        !_ratedOrderIds.containsAll(_orderIdentifiers(order))) {
-      needsRatingForOrder.value = order;
+        (status == 'delivered' || status == 'completed')) {
+      requestDeliveryRatingIfNeeded(order);
     }
   }
 

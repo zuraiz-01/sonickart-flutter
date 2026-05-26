@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../data/models/order_model.dart';
+import '../core/widgets/delivery_rating_dialog.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import 'order_controller.dart';
@@ -39,10 +40,12 @@ class _LiveTrackingScaffold extends StatefulWidget {
 class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
   bool _refreshing = false;
   Timer? _trackingTimer;
+  Worker? _ratingWorker;
 
   @override
   void initState() {
     super.initState();
+    _setupRatingWorker();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshOrder());
     _startTracking();
   }
@@ -50,7 +53,8 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
   void _startTracking() {
     _trackingTimer?.cancel();
     _trackingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      final order = widget.controller.activeProductOrder.value ??
+      final order =
+          widget.controller.activeProductOrder.value ??
           widget.controller.selectedOrder.value;
       if (order != null && !order.isInactive && mounted) {
         unawaited(_refreshOrder());
@@ -60,15 +64,49 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
 
   @override
   void dispose() {
+    _ratingWorker?.dispose();
     _trackingTimer?.cancel();
     super.dispose();
+  }
+
+  void _setupRatingWorker() {
+    _ratingWorker = ever(widget.controller.needsRatingForOrder, (order) {
+      if (order == null || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!widget.controller.beginDeliveryRatingPrompt(order)) return;
+        Get.dialog(
+          DeliveryRatingDialog(
+            orderId: order.id,
+            deliveryPartnerName: widget.controller.deliveryPartnerNameFor(
+              order,
+            ),
+            onSubmitRating:
+                ({required orderId, required rating, required feedback}) =>
+                    widget.controller.submitDeliveryRating(
+                      orderId: orderId,
+                      rating: rating,
+                      feedback: feedback,
+                    ),
+            onRatingFlowComplete: widget.controller.endDeliveryRatingPrompt,
+          ),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+        );
+      });
+    });
   }
 
   Future<void> _refreshOrder() async {
     if (_refreshing) return;
     setState(() => _refreshing = true);
     try {
-      await widget.controller.refreshTrackingOrder(widget.orderId);
+      final refreshed = await widget.controller.refreshTrackingOrder(
+        widget.orderId,
+      );
+      final nextOrder = refreshed ?? _resolveOrder();
+      if (nextOrder != null) {
+        widget.controller.requestDeliveryRatingIfNeeded(nextOrder);
+      }
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -194,8 +232,8 @@ class _LiveTrackingHeader extends StatelessWidget {
 
   static String _headerTitle(String status) {
     final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Order Cancelled';
-    if (lower == 'delivered') return 'Order Delivered';
+    if (_isCancelled(lower)) return 'Order Cancelled';
+    if (_isCompleted(lower)) return 'Order Delivered';
     if (lower == 'confirmed' || lower == 'accepted' || lower == 'assigned') {
       return 'Arriving Soon';
     }
@@ -209,14 +247,26 @@ class _LiveTrackingHeader extends StatelessWidget {
 
   static String _headerSubtitle(String status, Object? etaValue) {
     final lower = status.toLowerCase();
-    if (lower == 'cancelled') return 'Cancelled';
-    if (lower == 'delivered') return 'Fastest Delivery';
+    if (_isCancelled(lower)) return 'Cancelled';
+    if (_isCompleted(lower)) return 'Fastest Delivery';
     final eta = etaValue is num ? etaValue.toInt() : int.tryParse('$etaValue');
     if (eta == null || eta <= 0) {
       return lower == 'pending' ? 'Getting things ready' : 'Tracking live';
     }
     if (eta <= 1) return 'Arriving any moment';
     return 'Arriving in $eta minutes';
+  }
+
+  static bool _isCancelled(String status) {
+    return status == 'cancelled' || status == 'canceled';
+  }
+
+  static bool _isCompleted(String status) {
+    return status == 'delivered' ||
+        status == 'completed' ||
+        status == 'complete' ||
+        status == 'finished' ||
+        status == 'done';
   }
 }
 
@@ -240,8 +290,7 @@ class _TrackingBody extends StatelessWidget {
           ),
         ),
         SizedBox(height: 16.hpx),
-        if (order.status.toLowerCase() != 'cancelled' &&
-            order.status.toLowerCase() != 'delivered') ...[
+        if (!order.isInactive) ...[
           _LiveStatusCard(order: order),
           SizedBox(height: 16.hpx),
         ],
@@ -253,8 +302,7 @@ class _TrackingBody extends StatelessWidget {
         SizedBox(height: 16.hpx),
         _BillDetailsCard(order: order),
         SizedBox(height: 20.hpx),
-        if (order.status.toLowerCase() != 'cancelled' &&
-            order.status.toLowerCase() != 'delivered')
+        if (!order.isInactive)
           Container(
             margin: EdgeInsets.symmetric(vertical: 8.hpx),
             child: FilledButton.icon(
@@ -387,11 +435,7 @@ class _LiveStatusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.route_outlined,
-                size: 18.rpx,
-                color: AppColors.price,
-              ),
+              Icon(Icons.route_outlined, size: 18.rpx, color: AppColors.price),
               SizedBox(width: 8.wpx),
               Text(
                 'Live Tracking',
@@ -979,7 +1023,9 @@ class _LiveMapCardState extends State<_LiveMapCard> {
   void _startGlide() {
     _glideTimer?.cancel();
     _glideTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
-      if (!mounted || _displayedPartnerLoc == null || _targetPartnerLoc == null) {
+      if (!mounted ||
+          _displayedPartnerLoc == null ||
+          _targetPartnerLoc == null) {
         _glideTimer?.cancel();
         return;
       }
@@ -1003,21 +1049,27 @@ class _LiveMapCardState extends State<_LiveMapCard> {
         Marker(
           markerId: const MarkerId('deliveryLocation'),
           position: data.deliveryLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          ),
           infoWindow: const InfoWindow(title: 'Delivery Address'),
         ),
       if (data.pickupLocation != null)
         Marker(
           markerId: const MarkerId('pickupLocation'),
           position: data.pickupLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
           infoWindow: const InfoWindow(title: 'Pickup'),
         ),
       if (partnerPos != null)
         Marker(
           markerId: const MarkerId('deliveryPartner'),
           position: partnerPos,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
           infoWindow: const InfoWindow(title: 'Delivery Partner'),
         ),
     };
@@ -1074,11 +1126,7 @@ class _LiveMapCardState extends State<_LiveMapCard> {
               child: _MapStatusPill(label: widget.etaLabel),
             ),
             if (data.deliveryPersonLocation != null)
-              Positioned(
-                right: 12.wpx,
-                bottom: 12.hpx,
-                child: _LivePulseDot(),
-              ),
+              Positioned(right: 12.wpx, bottom: 12.hpx, child: _LivePulseDot()),
           ],
         ),
       ),
@@ -1089,9 +1137,12 @@ class _LiveMapCardState extends State<_LiveMapCard> {
     const r = 6371.0;
     final dLat = _rad(b.latitude - a.latitude);
     final dLon = _rad(b.longitude - a.longitude);
-    final x = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_rad(a.latitude)) * cos(_rad(b.latitude)) *
-        sin(dLon / 2) * sin(dLon / 2);
+    final x =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_rad(a.latitude)) *
+            cos(_rad(b.latitude)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
     return r * 2 * atan2(sqrt(x), sqrt(1 - x));
   }
 
@@ -1117,9 +1168,10 @@ class _LivePulseDotState extends State<_LivePulseDot>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat();
-    _animation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _animation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override

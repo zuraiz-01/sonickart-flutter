@@ -17,6 +17,7 @@ import 'app/theme/theme_controller.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await FirebaseBootstrap.initialize();
+  await LocalNotificationService.showRemoteMessageFromBackground(message);
 }
 
 Future<void> main() async {

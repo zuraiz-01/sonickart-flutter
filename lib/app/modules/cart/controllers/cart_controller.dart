@@ -143,7 +143,7 @@ class CartController extends GetxController {
     try {
       items.clear();
       await _persistCart();
-      await _tryClearServerCart();
+      unawaited(_tryClearServerCart());
       if (notify) {
         _notifyAction('Cart Cleared', 'All items were removed from your cart.');
       }

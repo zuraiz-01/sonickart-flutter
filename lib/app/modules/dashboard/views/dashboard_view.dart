@@ -107,16 +107,7 @@ class DashboardView extends GetView<DashboardController> {
         ),
         bottomNavigationBar: serviceGateController.isBlocked
             ? null
-            : _BottomNav(
-                index: currentIndex,
-                onTap: (value) {
-                  if (value == currentIndex) {
-                    controller.refreshCurrentTab();
-                  } else {
-                    controller.changeTab(value);
-                  }
-                },
-              ),
+            : _BottomNav(index: currentIndex, onTap: controller.changeTab),
       );
     });
   }
@@ -153,7 +144,7 @@ class _HomeTab extends StatelessWidget {
         Obx(
           () => _ProductGrid(
             products: controller.featuredProducts,
-            loading: controller.isCatalogLoading.value,
+            loading: controller.isFeaturedLoading.value,
           ),
         ),
         SizedBox(height: 12.hpx),
@@ -613,7 +604,7 @@ class _ProductGrid extends StatelessWidget {
         return Wrap(
           spacing: 6.wpx,
           runSpacing: 8.hpx,
-          children: products.take(8).map((product) {
+          children: products.map((product) {
             return SizedBox(
               width: width,
               child: _FeaturedProductCard(product: product),
@@ -634,8 +625,16 @@ class _FeaturedProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final unit = product.unit == '1 pc' ? '' : product.unit;
     return InkWell(
-      onTap: () =>
-          Get.toNamed(AppRoutes.productDetail, arguments: {'product': product}),
+      onTap: () => Get.toNamed(
+        AppRoutes.categories,
+        arguments: {
+          'categoryId': product.categoryId,
+          'categoryName':
+              product.raw['categoryName'] ?? product.raw['category_name'],
+          'productId': product.id,
+          'preferredVendorId': product.vendorId,
+        },
+      ),
       borderRadius: BorderRadius.circular(10.rpx),
       child: Container(
         height: 110.hpx,
@@ -1177,7 +1176,14 @@ class _DashboardCategoriesTab extends StatelessWidget {
                                 controller.selectedCategory.value?.id ==
                                 category.id;
                             return InkWell(
-                              onTap: () => controller.selectCategory(category),
+                              onTap: () {
+                                if (controller.shouldIgnoreCategoryTap(
+                                  category,
+                                )) {
+                                  return;
+                                }
+                                controller.selectCategory(category);
+                              },
                               child: Container(
                                 padding: EdgeInsets.symmetric(
                                   horizontal: 10.wpx,

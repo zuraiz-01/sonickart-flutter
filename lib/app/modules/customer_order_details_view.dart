@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
 import '../core/utils/phone_dialer.dart';
+import '../core/widgets/delivery_rating_dialog.dart';
 import '../data/models/cart_item_model.dart';
 import '../data/models/order_model.dart';
 import '../theme/app_colors.dart';
@@ -20,13 +21,46 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
   late final OrderController controller;
   late final String orderId;
   bool _isRefreshing = false;
+  Worker? _ratingWorker;
 
   @override
   void initState() {
     super.initState();
     controller = Get.find<OrderController>();
     orderId = Get.arguments?['orderId']?.toString() ?? '';
+    _setupRatingWorker();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshDetails());
+  }
+
+  @override
+  void dispose() {
+    _ratingWorker?.dispose();
+    super.dispose();
+  }
+
+  void _setupRatingWorker() {
+    _ratingWorker = ever(controller.needsRatingForOrder, (order) {
+      if (order == null || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!controller.beginDeliveryRatingPrompt(order)) return;
+        Get.dialog(
+          DeliveryRatingDialog(
+            orderId: order.id,
+            deliveryPartnerName: controller.deliveryPartnerNameFor(order),
+            onSubmitRating:
+                ({required orderId, required rating, required feedback}) =>
+                    controller.submitDeliveryRating(
+                      orderId: orderId,
+                      rating: rating,
+                      feedback: feedback,
+                    ),
+            onRatingFlowComplete: controller.endDeliveryRatingPrompt,
+          ),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+        );
+      });
+    });
   }
 
   Future<void> _refreshDetails() async {
@@ -34,10 +68,15 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
     if (localOrder == null && orderId.trim().isEmpty) return;
     setState(() => _isRefreshing = true);
     try {
+      OrderModel? refreshed;
       if (localOrder != null) {
-        await controller.refreshOrderDetails(localOrder);
+        refreshed = await controller.refreshOrderDetails(localOrder);
       } else {
-        await controller.refreshTrackingOrder(orderId);
+        refreshed = await controller.refreshTrackingOrder(orderId);
+      }
+      final nextOrder = refreshed ?? _resolveOrder();
+      if (nextOrder != null) {
+        controller.requestDeliveryRatingIfNeeded(nextOrder);
       }
     } finally {
       if (mounted) {
@@ -143,7 +182,11 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
                           ),
                         if (status != 'cancelled' && status != 'delivered')
                           _LiveStatusCard(order: order, status: status),
-                        _PartnerCard(order: order, status: status),
+                        _PartnerCard(
+                          order: order,
+                          status: status,
+                          controller: controller,
+                        ),
                         _OrderSummaryCard(order: order, status: status),
                         if (order.items.isNotEmpty)
                           _OrderedItemsCard(
@@ -295,10 +338,15 @@ class _LiveStatusCard extends StatelessWidget {
 }
 
 class _PartnerCard extends StatelessWidget {
-  const _PartnerCard({required this.order, required this.status});
+  const _PartnerCard({
+    required this.order,
+    required this.status,
+    required this.controller,
+  });
 
   final OrderModel order;
   final String status;
+  final OrderController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -307,20 +355,40 @@ class _PartnerCard extends StatelessWidget {
       partner['name'] ??
           partner['fullName'] ??
           partner['full_name'] ??
-          partner['driverName'],
+          partner['driverName'] ??
+          order.raw['deliveryPersonName'] ??
+          order.raw['riderName'] ??
+          order.raw['driverName'] ??
+          order.raw['deliveryPartnerName'],
     );
     final partnerPhone = _string(
-      partner['phone'] ?? partner['contactNumber'] ?? partner['mobile'],
+      partner['phone'] ??
+          partner['contactNumber'] ??
+          partner['mobile'] ??
+          partner['phoneNumber'] ??
+          order.raw['deliveryPartnerPhone'] ??
+          order.raw['deliveryPersonPhone'] ??
+          order.raw['riderPhone'] ??
+          order.raw['driverPhone'],
     );
     final assigned = partnerName.isNotEmpty;
+    final rating = order.deliveryRating;
+    final feedback = order.deliveryRatingFeedback;
+    final canRate = controller.canRequestDeliveryRating(order);
 
-    return _IconInfoCard(
+    return _PartnerInfoCard(
       icon: assigned ? Icons.phone : Icons.shopping_bag_outlined,
       title: assigned ? partnerName : 'We Will Soon Assign Delivery Partner',
       subtitle: assigned
           ? 'For Delivery instructions you can contact here'
           : _partnerMessage(status),
-      linkText: partnerPhone,
+      phone: partnerPhone,
+      rating: rating,
+      feedback: feedback,
+      canRate: canRate,
+      onRate: canRate
+          ? () => controller.requestDeliveryRatingIfNeeded(order, force: true)
+          : null,
       margin: EdgeInsets.only(top: 15.hpx),
     );
   }
@@ -748,19 +816,176 @@ class _BillDetailsCard extends StatelessWidget {
   }
 }
 
-class _IconInfoCard extends StatelessWidget {
-  const _IconInfoCard({
+class _PartnerInfoCard extends StatelessWidget {
+  const _PartnerInfoCard({
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.linkText = '',
+    required this.phone,
+    required this.rating,
+    required this.feedback,
+    required this.canRate,
+    required this.onRate,
     this.margin,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final String linkText;
+  final String phone;
+  final int? rating;
+  final String feedback;
+  final bool canRate;
+  final VoidCallback? onRate;
+  final EdgeInsetsGeometry? margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      margin: margin,
+      padding: EdgeInsets.all(10.rpx),
+      bottomBorder: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CircleIcon(icon: icon),
+          SizedBox(width: 10.rpx),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.rpx,
+                  ),
+                ),
+                if (phone.trim().isNotEmpty) ...[
+                  SizedBox(height: 2.hpx),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => PhoneDialer.open(phone),
+                    child: Text(
+                      phone.trim(),
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.rpx,
+                      ),
+                    ),
+                  ),
+                ],
+                SizedBox(height: 3.hpx),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.black.withValues(alpha: 0.72),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11.rpx,
+                    height: 1.35,
+                  ),
+                ),
+                if (rating != null) ...[
+                  SizedBox(height: 8.hpx),
+                  Row(
+                    children: [
+                      _RatingStars(rating: rating!),
+                      SizedBox(width: 7.rpx),
+                      Text(
+                        '$rating/5',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.rpx,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (feedback.trim().isNotEmpty) ...[
+                    SizedBox(height: 4.hpx),
+                    Text(
+                      feedback.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.black.withValues(alpha: 0.68),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.rpx,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ] else if (canRate && onRate != null) ...[
+                  SizedBox(height: 8.hpx),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: onRate,
+                      icon: Icon(Icons.star_rounded, size: 16.rpx),
+                      label: const Text('Rate Delivery'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: BorderSide(color: AppColors.primary),
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10.rpx,
+                          vertical: 4.hpx,
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 11.rpx,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RatingStars extends StatelessWidget {
+  const _RatingStars({required this.rating});
+
+  final int rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final filled = index < rating;
+        return Icon(
+          filled ? Icons.star_rounded : Icons.star_border_rounded,
+          color: filled ? AppColors.accent : AppColors.border,
+          size: 15.rpx,
+        );
+      }),
+    );
+  }
+}
+
+class _IconInfoCard extends StatelessWidget {
+  const _IconInfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.margin,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
   final EdgeInsetsGeometry? margin;
 
   @override
@@ -786,22 +1011,6 @@ class _IconInfoCard extends StatelessWidget {
                     fontSize: 14.rpx,
                   ),
                 ),
-                if (linkText.trim().isNotEmpty) ...[
-                  SizedBox(height: 2.hpx),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => PhoneDialer.open(linkText),
-                    child: Text(
-                      linkText.trim(),
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        decoration: TextDecoration.underline,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.rpx,
-                      ),
-                    ),
-                  ),
-                ],
                 SizedBox(height: 3.hpx),
                 Text(
                   subtitle,

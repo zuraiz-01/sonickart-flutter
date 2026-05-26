@@ -14,9 +14,11 @@ import '../../package/controllers/package_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
 bool _dashboardTabNavigationQueued = false;
+int? _queuedDashboardTabIndex;
 
 void openDashboardTab(int index) {
   final targetIndex = _normalizeDashboardIndex(index);
+
   debugPrint(
     'openDashboardTab: target=$targetIndex currentRoute=${Get.currentRoute} registered=${Get.isRegistered<DashboardController>()}',
   );
@@ -30,15 +32,31 @@ void openDashboardTab(int index) {
     }
   }
 
+  _queuedDashboardTabIndex = targetIndex;
   if (_dashboardTabNavigationQueued) return;
+
   _dashboardTabNavigationQueued = true;
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final queuedTarget = _queuedDashboardTabIndex ?? targetIndex;
+    _queuedDashboardTabIndex = null;
     try {
-      Get.offAllNamed(
+      await Get.offAllNamed(
         AppRoutes.dashboard,
-        arguments: {'tabIndex': targetIndex},
+        arguments: {'tabIndex': queuedTarget},
       );
+      final latestQueuedTarget = _queuedDashboardTabIndex;
+      if (latestQueuedTarget != null &&
+          latestQueuedTarget != queuedTarget &&
+          Get.isRegistered<DashboardController>()) {
+        Get.find<DashboardController>().setTabFromNavigation(
+          latestQueuedTarget,
+        );
+      }
+    } catch (error) {
+      debugPrint('openDashboardTab: navigation failed $error');
     } finally {
+      _queuedDashboardTabIndex = null;
       _dashboardTabNavigationQueued = false;
     }
   });
@@ -51,11 +69,17 @@ class DashboardController extends GetxController {
   final currentPromoIndex = 0.obs;
   final currentSearchHintIndex = 0.obs;
   final isCatalogLoading = false.obs;
+  final isFeaturedLoading = false.obs;
   final featuredProducts = <ProductModel>[].obs;
   final categories = <CategoryModel>[].obs;
 
+  static const _featuredLoadTimeout = Duration(seconds: 20);
+
   Timer? _searchHintTimer;
   Worker? _ratingWorker;
+  int _catalogLoadRequestId = 0;
+
+  bool _isChangingTab = false;
 
   final searchHints = const [
     'Search "sweets"',
@@ -72,19 +96,36 @@ class DashboardController extends GetxController {
 
   void changeTab(int index) {
     final targetIndex = _normalizeDashboardIndex(index);
+    final current = _normalizeDashboardIndex(currentIndex.value);
+
     debugPrint(
-      'DashboardController.changeTab: switching to index $targetIndex',
+      'DashboardController.changeTab: current=$current target=$targetIndex',
     );
-    _prepareForTabChange(targetIndex, allowSameTabRefresh: false);
-    currentIndex.value = targetIndex;
-    _afterTabSelected(targetIndex);
+
+    if (current == targetIndex) {
+      return;
+    }
+
+    if (_isChangingTab) return;
+
+    _isChangingTab = true;
+
+    try {
+      _prepareForTabChange(targetIndex, allowSameTabRefresh: false);
+      currentIndex.value = targetIndex;
+      _afterTabSelected(targetIndex);
+    } finally {
+      _isChangingTab = false;
+    }
   }
 
   void setTabFromNavigation(int index) {
     final targetIndex = _normalizeDashboardIndex(index);
+
     debugPrint(
       'DashboardController.setTabFromNavigation: requested tab $targetIndex',
     );
+
     _prepareForTabChange(targetIndex, allowSameTabRefresh: true);
     currentIndex.value = targetIndex;
     _afterTabSelected(targetIndex);
@@ -102,11 +143,13 @@ class DashboardController extends GetxController {
   }) {
     final current = _normalizeDashboardIndex(currentIndex.value);
     final isSameTab = current == nextIndex;
+
     if (isSameTab && !allowSameTabRefresh) return;
 
     if (Get.isRegistered<ProfileController>()) {
       Get.find<ProfileController>().clearTransientOverlays();
     }
+
     if (Get.isRegistered<PackageController>()) {
       Get.find<PackageController>().closeTransientOverlays();
     }
@@ -116,12 +159,15 @@ class DashboardController extends GetxController {
     if (index == 0) {
       unawaited(syncActiveProductOrder());
     }
+
     if (index == 2 && Get.isRegistered<CartController>()) {
       unawaited(Get.find<CartController>().syncCartFromStorage());
     }
+
     if (index == 3 && Get.isRegistered<PackageController>()) {
       unawaited(Get.find<PackageController>().loadOrders());
     }
+
     if (index == 4 && Get.isRegistered<ProfileController>()) {
       unawaited(Get.find<ProfileController>().loadProfileSummary());
     }
@@ -129,72 +175,136 @@ class DashboardController extends GetxController {
 
   void nextPromo() {
     if (promoCards.isEmpty) return;
+
     currentPromoIndex.value = (currentPromoIndex.value + 1) % promoCards.length;
   }
 
   Future<void> loadCatalog({bool force = false}) async {
-    if (isCatalogLoading.value && !force) return;
+    if ((isCatalogLoading.value || isFeaturedLoading.value) && !force) return;
+
+    final requestId = ++_catalogLoadRequestId;
+
     isCatalogLoading.value = true;
+    isFeaturedLoading.value = true;
+
     try {
       final repo = Get.find<CatalogRepository>();
+
       if (force) {
         repo.invalidateProductScope();
         featuredProducts.clear();
       }
+
       await repo.loadDeliverySettings(force: force);
+
+      if (!_isCurrentCatalogLoad(requestId)) return;
+
       final loadedCategories = await repo.fetchCategories();
+
+      if (!_isCurrentCatalogLoad(requestId)) return;
+
       categories.assignAll(loadedCategories);
-      featuredProducts.assignAll(
-        await repo.fetchFeaturedProducts(loadedCategories),
-      );
       isCatalogLoading.value = false;
+
+      if (loadedCategories.isEmpty) {
+        featuredProducts.clear();
+        return;
+      }
+
+      final loadedFeatured = await repo
+          .fetchFeaturedProducts(loadedCategories)
+          .timeout(
+            _featuredLoadTimeout,
+            onTimeout: () {
+              debugPrint('DashboardController.loadCatalog: featured timeout');
+              return const <ProductModel>[];
+            },
+          );
+
+      if (!_isCurrentCatalogLoad(requestId)) return;
+
+      featuredProducts.assignAll(loadedFeatured);
     } catch (error) {
-      debugPrint('DashboardController.loadCatalog: failed $error');
+      if (_isCurrentCatalogLoad(requestId)) {
+        debugPrint('DashboardController.loadCatalog: failed $error');
+      }
     } finally {
-      isCatalogLoading.value = false;
+      if (_isCurrentCatalogLoad(requestId)) {
+        isCatalogLoading.value = false;
+        isFeaturedLoading.value = false;
+      }
     }
+  }
+
+  bool _isCurrentCatalogLoad(int requestId) {
+    return requestId == _catalogLoadRequestId;
   }
 
   Future<void> syncActiveProductOrder() async {
     if (!Get.isRegistered<OrderController>()) return;
+
     await Get.find<OrderController>().syncActiveProductOrder();
   }
 
   @override
   void onInit() {
     super.onInit();
+
     final requestedIndex = (Get.arguments?['tabIndex'] as num?)?.toInt();
+
     if (requestedIndex != null && requestedIndex >= 0 && requestedIndex <= 4) {
-      setTabFromNavigation(requestedIndex);
+      currentIndex.value = requestedIndex;
+      _afterTabSelected(requestedIndex);
     }
-    loadCatalog();
+
+    unawaited(loadCatalog());
     unawaited(syncActiveProductOrder());
+
     _searchHintTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (searchHints.isEmpty) return;
+
       currentSearchHintIndex.value =
           (currentSearchHintIndex.value + 1) % searchHints.length;
     });
-    _ratingWorker = ever(Get.find<OrderController>().needsRatingForOrder, (
-      order,
-    ) {
-      if (order == null) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (Get.overlayContext == null && Get.context == null) return;
-        Get.dialog(
-          DeliveryRatingDialog(
-            orderId: order.id,
-            deliveryPartnerName: Get.find<OrderController>()
-                .deliveryPartnerNameFor(order),
-          ),
-          barrierColor: Colors.black.withValues(alpha: 0.5),
-        );
+
+    if (Get.isRegistered<OrderController>()) {
+      _ratingWorker = ever(Get.find<OrderController>().needsRatingForOrder, (
+        order,
+      ) {
+        if (order == null) return;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (Get.overlayContext == null && Get.context == null) return;
+          final orderController = Get.find<OrderController>();
+          if (!orderController.beginDeliveryRatingPrompt(order)) return;
+
+          Get.dialog(
+            DeliveryRatingDialog(
+              orderId: order.id,
+              deliveryPartnerName: orderController.deliveryPartnerNameFor(
+                order,
+              ),
+              onSubmitRating:
+                  ({required orderId, required rating, required feedback}) =>
+                      orderController.submitDeliveryRating(
+                        orderId: orderId,
+                        rating: rating,
+                        feedback: feedback,
+                      ),
+              onRatingFlowComplete: orderController.endDeliveryRatingPrompt,
+            ),
+            barrierColor: Colors.black.withValues(alpha: 0.5),
+          );
+        });
       });
-    });
+    }
   }
 
   @override
   void onClose() {
     _searchHintTimer?.cancel();
     _ratingWorker?.dispose();
+
     super.onClose();
   }
 }

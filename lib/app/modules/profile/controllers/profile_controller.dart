@@ -929,14 +929,49 @@ class ProfileController extends GetxController {
         latitude: position.latitude,
         longitude: position.longitude,
       );
-      if (resolved != null && resolved.trim().isNotEmpty) {
-        liveLocationAddress.value = resolved.trim();
-      }
+      final locationLabel = resolved?.trim().isNotEmpty == true
+          ? resolved!.trim()
+          : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      liveLocationAddress.value = locationLabel;
+      await _applyLiveLocationCatalogContext(
+        address: locationLabel,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
     } catch (error) {
       debugPrint('ProfileController._resolveHomeLocationPreview: $error');
     } finally {
       isResolvingLocation.value = false;
     }
+  }
+
+  Future<void> _applyLiveLocationCatalogContext({
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final user = currentUser;
+    final liveAddress = AddressModel(
+      id: 'live-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : 'Customer',
+      contactNumber: user?.phone ?? '',
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
+      isSelected: true,
+    );
+
+    selectedAddressId.value = liveAddress.id;
+    await _storage.remove(_selectedVendorIdStorageKey);
+    await _persistSelectedAddress(liveAddress);
+    await _updateUserLocation(liveAddress);
+    final vendorId = await _tryResolveVendor(liveAddress);
+    if (vendorId == null) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
+    await _refreshCatalogAfterAddressChange();
   }
 
   Future<void> _persistSelectedAddress(AddressModel address) async {

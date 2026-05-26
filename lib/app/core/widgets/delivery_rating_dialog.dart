@@ -13,12 +13,21 @@ class DeliveryRatingDialog extends StatefulWidget {
     required this.deliveryPartnerName,
     this.orderRatingId,
     this.onSubmitRating,
+    this.onRatingFlowComplete,
   });
 
   final String orderId;
   final String deliveryPartnerName;
   final String? orderRatingId;
-  final Future<void> Function({required String orderId, required int rating, required String feedback})? onSubmitRating;
+  final Future<void> Function({
+    required String orderId,
+    required int rating,
+    required String feedback,
+  })?
+  onSubmitRating;
+
+  /// Called after the entire rating flow (including thank-you dialog) completes.
+  final VoidCallback? onRatingFlowComplete;
 
   @override
   State<DeliveryRatingDialog> createState() => _DeliveryRatingDialogState();
@@ -29,6 +38,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
   int _hoverRating = 0;
   final _feedbackController = TextEditingController();
   bool _isSubmitting = false;
+  String? _submitError;
 
   @override
   void dispose() {
@@ -62,6 +72,10 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
                     _buildStars(),
                     SizedBox(height: 16.hpx),
                     _buildFeedbackField(),
+                    if (_submitError != null) ...[
+                      SizedBox(height: 10.hpx),
+                      _buildSubmitError(),
+                    ],
                     SizedBox(height: 14.hpx),
                     _buildSubmitButton(),
                   ],
@@ -211,7 +225,8 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(5, (index) {
                 final starIndex = index + 1;
-                final isFilled = starIndex <= (_hoverRating > 0 ? _hoverRating : _rating);
+                final isFilled =
+                    starIndex <= (_hoverRating > 0 ? _hoverRating : _rating);
                 return GestureDetector(
                   onTap: () => setState(() => _rating = starIndex),
                   child: MouseRegion(
@@ -222,7 +237,9 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
                       duration: const Duration(milliseconds: 150),
                       margin: EdgeInsets.symmetric(horizontal: 4.wpx),
                       child: Icon(
-                        isFilled ? Icons.star_rounded : Icons.star_outline_rounded,
+                        isFilled
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
                         size: starSize.clamp(24, 44),
                         color: isFilled ? AppColors.accent : AppColors.border,
                       ),
@@ -313,10 +330,7 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.rpx),
           ),
-          textStyle: TextStyle(
-            fontSize: 15.spx,
-            fontWeight: FontWeight.w800,
-          ),
+          textStyle: TextStyle(fontSize: 15.spx, fontWeight: FontWeight.w800),
         ),
         child: _isSubmitting
             ? SizedBox(
@@ -332,9 +346,33 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
     );
   }
 
+  Widget _buildSubmitError() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 9.hpx),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10.rpx),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        _submitError!,
+        style: TextStyle(
+          color: AppColors.error,
+          fontSize: 12.spx,
+          fontWeight: FontWeight.w700,
+          height: 1.3,
+        ),
+      ),
+    );
+  }
+
   Future<void> _submitRating() async {
     if (_rating == 0) return;
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
     try {
       if (widget.onSubmitRating != null) {
         await widget.onSubmitRating!(
@@ -349,12 +387,27 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
           feedback: _feedbackController.text.trim(),
         );
       }
+      if (mounted) {
+        _showThankYou();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _submitError = _ratingErrorMessage(error));
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
-    if (mounted) {
-      _showThankYou();
+  }
+
+  String _ratingErrorMessage(Object error) {
+    final message = error.toString().replaceFirst(RegExp(r'^Exception: '), '');
+    if (message.contains('already') && message.contains('rated')) {
+      return 'This order has already been rated.';
     }
+    if (message.contains('delivered')) {
+      return 'Rating will be available once the order is marked delivered.';
+    }
+    return 'Unable to submit rating. Please try again.';
   }
 
   void _showThankYou() {
@@ -363,7 +416,9 @@ class _DeliveryRatingDialogState extends State<DeliveryRatingDialog> {
     Get.dialog(
       const _ThankYouDialog(),
       barrierColor: Colors.black.withValues(alpha: 0.45),
-    );
+    ).whenComplete(() {
+      widget.onRatingFlowComplete?.call();
+    });
   }
 }
 
