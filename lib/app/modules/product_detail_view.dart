@@ -522,12 +522,14 @@ class _MoreProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final unit = product.unit == '1 pc' ? '' : product.unit;
     final imageUrl = product.resolvedFeaturedImageUrl;
-    return InkWell(
-      onTap: () => Get.toNamed(
-        AppRoutes.productDetail,
-        arguments: {'product': product},
-      ),
-      borderRadius: BorderRadius.circular(10.rpx),
+    return GestureDetector(
+      onTap: () {
+        debugPrint('[PRODUCT][MORE_CARD] Tapped product id=${product.id} name="${product.name}"');
+        Get.toNamed(
+          AppRoutes.productDetail,
+          arguments: {'product': product},
+        );
+      },
       child: Container(
         width: 140.wpx,
         padding: EdgeInsets.all(8.rpx),
