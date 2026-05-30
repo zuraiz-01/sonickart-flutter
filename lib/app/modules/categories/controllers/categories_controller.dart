@@ -45,50 +45,54 @@ class CategoriesController extends GetxController {
 
     debugPrint('CategoriesController.onInit: starting category flow');
 
-    _applyRouteArguments(Get.arguments);
-    unawaited(loadCategories());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyRouteArguments(Get.arguments);
+      unawaited(loadCategories());
+    });
   }
 
   void openFromRouteArguments(Object? arguments) {
     if (arguments is! Map) return;
     if (!_hasCategoryRouteArguments(arguments)) return;
 
-    _applyRouteArguments(arguments);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyRouteArguments(arguments);
 
-    final categoryId = _pendingCategoryId;
-    if (categoryId == null || categoryId.isEmpty) return;
+      final categoryId = _pendingCategoryId;
+      if (categoryId == null || categoryId.isEmpty) return;
 
-    if (categories.isEmpty) {
-      unawaited(loadCategories());
-      return;
-    }
-
-    final target = categories.firstWhereOrNull(
-      (category) => category.id == categoryId,
-    );
-
-    if (target == null) return;
-
-    if (selectedCategory.value?.id == target.id) {
-      _scrollToSelectedCategory();
-
-      final cacheKey = _productCacheKey(target.id);
-
-      if (_lastResolvedProductCacheKey == cacheKey && productsResolved.value) {
-        _scrollToTargetProduct();
+      if (categories.isEmpty) {
+        unawaited(loadCategories());
         return;
       }
 
-      if (_currentlyLoadingProductCacheKey == cacheKey &&
-          isProductsLoading.value) {
+      final target = categories.firstWhereOrNull(
+        (category) => category.id == categoryId,
+      );
+
+      if (target == null) return;
+
+      if (selectedCategory.value?.id == target.id) {
+        _scrollToSelectedCategory();
+
+        final cacheKey = _productCacheKey(target.id);
+
+        if (_lastResolvedProductCacheKey == cacheKey && productsResolved.value) {
+          _scrollToTargetProduct();
+          return;
+        }
+
+        if (_currentlyLoadingProductCacheKey == cacheKey &&
+            isProductsLoading.value) {
+          return;
+        }
+
+        unawaited(loadProducts(target.id));
         return;
       }
 
-      unawaited(loadProducts(target.id));
-      return;
-    }
-
-    unawaited(selectCategory(target));
+      unawaited(selectCategory(target));
+    });
   }
 
   Future<void> loadCategories() {
