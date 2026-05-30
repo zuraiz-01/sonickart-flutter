@@ -1150,6 +1150,10 @@ class ProfileController extends GetxController {
     if (address.latitude == null || address.longitude == null) return null;
     try {
       final radiusKm = await _productRadiusKm();
+      final token = _storage.read<String>('accessToken');
+      final headers = (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Bearer $token'}
+          : null;
       final response = await Get.find<ApiService>().get(
         endpoint: ApiConstants.resolveVendor,
         query: {
@@ -1157,6 +1161,8 @@ class ProfileController extends GetxController {
           'longitude': address.longitude,
           'radiusKm': radiusKm,
         },
+        authenticated: false,
+        headers: headers,
       );
       final vendorIds = _resolveNearbyVendorIds(response, radiusKm);
       if (vendorIds.isNotEmpty) {

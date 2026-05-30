@@ -622,6 +622,10 @@ class CatalogRepository {
       debugPrint(
         'CatalogRepository._resolveVendorIds: querying lat=$latitude lng=$longitude radius=$_productRadiusKm',
       );
+      final token = _storage.read<String>('accessToken');
+      final headers = (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Bearer $token'}
+          : null;
       final response = await _apiService.get(
         endpoint: ApiConstants.resolveVendor,
         query: {
@@ -630,6 +634,7 @@ class CatalogRepository {
           'radiusKm': _productRadiusKm,
         },
         authenticated: false,
+        headers: headers,
       );
       debugPrint(
         'CatalogRepository._resolveVendorIds: response keys=${response.keys.join(',')}',
