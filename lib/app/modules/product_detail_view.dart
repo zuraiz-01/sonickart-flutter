@@ -522,30 +522,30 @@ class _MoreProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final unit = product.unit == '1 pc' ? '' : product.unit;
     final imageUrl = product.resolvedFeaturedImageUrl;
-    return GestureDetector(
-      onTap: () {
-        debugPrint('[PRODUCT][MORE_CARD] Tapped product id=${product.id} name="${product.name}"');
-        Get.toNamed(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Get.toNamed(
           AppRoutes.productDetail,
           arguments: {'product': product},
-        );
-      },
-      child: Container(
-        width: 140.wpx,
-        padding: EdgeInsets.all(8.rpx),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(10.rpx),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.cardShadow,
-              blurRadius: 3,
-              offset: Offset(0, 2),
-            ),
-          ],
         ),
-        child: Column(
+        borderRadius: BorderRadius.circular(10.rpx),
+        child: Container(
+          width: 140.wpx,
+          padding: EdgeInsets.all(8.rpx),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(10.rpx),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.cardShadow,
+                blurRadius: 3,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
@@ -614,6 +614,7 @@ class _MoreProductCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }
