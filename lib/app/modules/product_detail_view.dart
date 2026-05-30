@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../core/utils/auth_guard.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../data/models/product_model.dart';
 import '../routes/app_routes.dart';
@@ -378,7 +379,10 @@ class _DetailCartActions extends StatelessWidget {
             SizedBox(width: 10.wpx),
             Expanded(
               child: FilledButton(
-                onPressed: () => Get.toNamed(AppRoutes.checkout),
+                onPressed: () {
+                  if (!requireAuth()) return;
+                  Get.toNamed(AppRoutes.checkout);
+                },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.buttonFill,
                   foregroundColor: AppColors.onButtonFill,
@@ -425,6 +429,7 @@ class _DetailCartActions extends StatelessWidget {
   }
 
   Future<void> _buyNow() async {
+    if (!requireAuth()) return;
     debugPrint(
       '[CART][BUY_NOW] ProductDetail buy now tapped id=${product.id} name="${product.name}"',
     );

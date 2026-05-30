@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../../../core/utils/auth_guard.dart';
 import '../../../data/models/product_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
@@ -188,6 +189,7 @@ class UniversalAdd extends StatelessWidget {
                 SizedBox(height: 12.hpx),
                 OutlinedButton(
                   onPressed: () async {
+                    if (!requireAuth()) return;
                     Get.back<void>();
                     await cart.addItem(product);
                     Get.toNamed(AppRoutes.checkout);

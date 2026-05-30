@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../../../core/utils/auth_guard.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../controllers/cart_controller.dart';
@@ -502,6 +503,7 @@ class _ActionSection extends StatelessWidget {
             onPressed: controller.isEmpty
                 ? null
                 : () {
+                    if (!requireAuth()) return;
                     debugPrint(
                       'CartView.checkout: checkout tapped with ${controller.totalItems} items',
                     );

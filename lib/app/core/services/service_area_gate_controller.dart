@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
-
 import '../../modules/profile/controllers/profile_controller.dart';
 import 'location_lookup_service.dart';
 import 'service_area_gate_service.dart';
@@ -13,15 +11,12 @@ class ServiceAreaGateController extends GetxController {
   ServiceAreaGateController({
     required ServiceAreaGateService serviceAreaGateService,
     LocationLookupService? locationLookupService,
-    GetStorage? storage,
   }) : _serviceAreaGateService = serviceAreaGateService,
        _locationLookupService =
-           locationLookupService ?? LocationLookupService(),
-       _storage = storage ?? GetStorage();
+           locationLookupService ?? LocationLookupService();
 
   final ServiceAreaGateService _serviceAreaGateService;
   final LocationLookupService _locationLookupService;
-  final GetStorage _storage;
 
   final blockedResult = Rxn<ServiceAreaGateResult>();
   final isChecking = false.obs;
@@ -44,11 +39,6 @@ class ServiceAreaGateController extends GetxController {
   }
 
   Future<void> ensureChecked({bool force = false}) async {
-    if (_storage.read('isLoggedIn') != true) {
-      blockedResult.value = null;
-      _checkedForSession = false;
-      return;
-    }
     if (_checkedForSession && !force) return;
     _checkedForSession = true;
     await checkCurrentLocation();

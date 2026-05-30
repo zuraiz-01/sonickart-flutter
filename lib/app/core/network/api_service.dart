@@ -350,10 +350,13 @@ class ApiService {
   }
 
   Future<void> _clearAuthTokens() async {
-    await _storage.remove('accessToken');
-    await _storage.remove('refreshToken');
     if (Get.isRegistered<SessionController>()) {
-      await Get.find<SessionController>().showExpiredSession();
+      await Get.find<SessionController>().clearSessionSilently();
+    } else {
+      await _storage.remove('accessToken');
+      await _storage.remove('refreshToken');
+      await _storage.remove('currentUser');
+      await _storage.remove('isLoggedIn');
     }
   }
 }

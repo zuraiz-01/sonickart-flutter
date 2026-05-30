@@ -23,6 +23,10 @@ class SessionController extends GetxController {
     Get.offAllNamed(AppRoutes.login);
   }
 
+  Future<void> clearSessionSilently() async {
+    await _clearSession();
+  }
+
   Future<void> _clearSession() async {
     try {
       await FirebaseAuth.instance.signOut();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get_storage/get_storage.dart';
@@ -9,6 +10,7 @@ import 'package:get_storage/get_storage.dart';
 import '../../../firebase_options.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_service.dart';
+import '../../core/services/firebase_bootstrap.dart';
 import '../models/address_model.dart';
 import '../models/category_model.dart';
 import '../models/product_model.dart';
@@ -17,7 +19,7 @@ class CatalogRepository {
   CatalogRepository(this._apiService, {GetStorage? storage})
     : _storage = storage ?? GetStorage();
 
-  static const _defaultProductRadiusKm = 5.0;
+  static const _defaultProductRadiusKm = 50.0;
   static const _defaultFeaturedProductsLimit = 8;
   static const _lastKnownLocationTimeout = Duration(milliseconds: 800);
   static const _deviceLocationTimeout = Duration(seconds: 8);
@@ -28,7 +30,7 @@ class CatalogRepository {
   double _productRadiusKm = _defaultProductRadiusKm;
   int _featuredProductsLimit = _defaultFeaturedProductsLimit;
   bool _settingsLoaded = false;
-  Future<ProductCatalogSettings>? _settingsLoadFuture;
+  bool _isFetchingSettings = false;
   Future<List<CategoryModel>>? _categoriesLoadFuture;
   List<CategoryModel>? _cachedCategories;
   DateTime? _categoriesCachedAt;
@@ -202,10 +204,21 @@ class CatalogRepository {
   Future<List<ProductModel>> fetchFeaturedProducts(
     List<CategoryModel> categories,
   ) async {
-    if (categories.isEmpty) return const [];
+    if (categories.isEmpty) {
+      debugPrint('CatalogRepository.fetchFeaturedProducts: no categories');
+      return const [];
+    }
 
     final context = await _resolveProductContext();
-    if (context.vendorIds.isEmpty) return const [];
+    if (context.vendorIds.isEmpty) {
+      debugPrint(
+        'CatalogRepository.fetchFeaturedProducts: no vendorIds in context, returning empty',
+      );
+      return const [];
+    }
+    debugPrint(
+      'CatalogRepository.fetchFeaturedProducts: context has ${context.vendorIds.length} vendorIds, radius=${context.radiusKm}, categories=${categories.length}',
+    );
 
     final random = Random();
     final target = max(1, _featuredProductsLimit);
@@ -311,19 +324,29 @@ class CatalogRepository {
   Future<ProductCatalogSettings> loadDeliverySettings({
     bool force = false,
   }) async {
-    if (_settingsLoaded && !force) {
-      return ProductCatalogSettings(
-        productRadiusKm: _productRadiusKm,
-        featuredProductsLimit: _featuredProductsLimit,
+    if (force || (!_settingsLoaded && !_isFetchingSettings)) {
+      _isFetchingSettings = true;
+      unawaited(
+        _fetchDeliverySettingsFromFirestore().then((_) {
+          _isFetchingSettings = false;
+        }).catchError((_) {
+          _isFetchingSettings = false;
+        }),
       );
     }
-    if (!force && _settingsLoadFuture != null) {
-      return _settingsLoadFuture!;
-    }
+    return ProductCatalogSettings(
+      productRadiusKm: _productRadiusKm,
+      featuredProductsLimit: _featuredProductsLimit,
+    );
+  }
 
-    final future = () async {
+  Future<ProductCatalogSettings> _fetchDeliverySettingsFromFirestore() async {
+    try {
       final firebaseHeaders = await _firebaseAuthHeaders();
       if (firebaseHeaders == null) {
+        debugPrint(
+          'CatalogRepository._fetchDeliverySettingsFromFirestore: firebaseHeaders is null',
+        );
         _settingsLoaded = true;
         return ProductCatalogSettings(
           productRadiusKm: _productRadiusKm,
@@ -339,6 +362,9 @@ class CatalogRepository {
         headers: firebaseHeaders,
       );
       final fields = _decodeFirestoreFields(response['fields']);
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: raw Firestore fields keys=${fields.keys.join(',')}, values=$fields',
+      );
       _productRadiusKm = max(
         1,
         _readNumber(fields, const [
@@ -360,22 +386,22 @@ class CatalogRepository {
         ], _defaultFeaturedProductsLimit.toDouble()).round(),
       );
       _settingsLoaded = true;
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: final radius=$_productRadiusKm, featuredLimit=$_featuredProductsLimit',
+      );
       return ProductCatalogSettings(
         productRadiusKm: _productRadiusKm,
         featuredProductsLimit: _featuredProductsLimit,
       );
-    }();
-    _settingsLoadFuture = future;
-    try {
-      return await future;
-    } catch (_) {
+    } catch (error) {
       _settingsLoaded = true;
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: failed after $error, using default radius=$_productRadiusKm',
+      );
       return ProductCatalogSettings(
         productRadiusKm: _productRadiusKm,
         featuredProductsLimit: _featuredProductsLimit,
       );
-    } finally {
-      _settingsLoadFuture = null;
     }
   }
 
@@ -394,12 +420,22 @@ class CatalogRepository {
       if (vendorId != null && vendorId.trim().isNotEmpty) {
         query['vendorId'] = vendorId;
       }
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'category=$categoryId vendor=$vendorId radius=${context.radiusKm} '
+        'lat=${context.latitude} lng=${context.longitude}',
+      );
       final response = await _apiService.get(
         endpoint: ApiConstants.productsByCategory(categoryId),
         query: query,
         authenticated: false,
       );
-      final products = _extractList(response)
+      final rawList = _extractList(response);
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'response has ${rawList.length} raw items',
+      );
+      final products = rawList
           .whereType<Map>()
           .map(
             (item) => ProductModel.fromJson(
@@ -412,6 +448,10 @@ class CatalogRepository {
           )
           .where((item) => item.id.isNotEmpty && !_isRemovedProduct(item.raw))
           .toList();
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'parsed ${products.length} valid products',
+      );
       _rememberVisibleProducts(products);
       return products;
     } catch (error) {
@@ -498,6 +538,9 @@ class CatalogRepository {
     await loadDeliverySettings();
     final directVendorIds = _uniqueVendorIds(vendorIds ?? const []);
     if (directVendorIds.isNotEmpty) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: using direct vendorIds=$directVendorIds',
+      );
       return ProductCatalogContext(
         vendorIds: directVendorIds,
         latitude: latitude,
@@ -507,12 +550,19 @@ class CatalogRepository {
     }
 
     final selectedAddress = _selectedAddress;
+    debugPrint(
+      'CatalogRepository._resolveProductContext: selectedAddress=$selectedAddress',
+    );
     var scopedLatitude = latitude ?? selectedAddress?.latitude;
     var scopedLongitude = longitude ?? selectedAddress?.longitude;
+    final storedVendorIdRaw = _selectedVendorId;
     final storedVendorIds = _uniqueVendorIds([
-      ...(_selectedVendorId?.split(',') ?? const []),
+      ...(storedVendorIdRaw?.split(',') ?? const []),
       selectedAddress?.vendorId,
     ]);
+    debugPrint(
+      'CatalogRepository._resolveProductContext: storedVendorIds=$storedVendorIds, scopedLat=$scopedLatitude, scopedLng=$scopedLongitude',
+    );
     if (storedVendorIds.isNotEmpty) {
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
@@ -525,12 +575,21 @@ class CatalogRepository {
     var lat = scopedLatitude;
     var lng = scopedLongitude;
     if (!_hasValidCoordinates(lat, lng)) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: no address coords, reading device location',
+      );
       final deviceCoordinate = await _readDeviceCoordinate();
       lat = deviceCoordinate?.latitude;
       lng = deviceCoordinate?.longitude;
+      debugPrint(
+        'CatalogRepository._resolveProductContext: device coords lat=$lat lng=$lng',
+      );
     }
 
     final resolvedVendorIds = await _resolveVendorIds(lat, lng);
+    debugPrint(
+      'CatalogRepository._resolveProductContext: resolved vendorIds=$resolvedVendorIds',
+    );
     return ProductCatalogContext(
       vendorIds: resolvedVendorIds,
       latitude: lat,
@@ -553,8 +612,16 @@ class CatalogRepository {
     double? latitude,
     double? longitude,
   ) async {
-    if (!_hasValidCoordinates(latitude, longitude)) return const [];
+    if (!_hasValidCoordinates(latitude, longitude)) {
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: invalid coords lat=$latitude lng=$longitude',
+      );
+      return const [];
+    }
     try {
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: querying lat=$latitude lng=$longitude radius=$_productRadiusKm',
+      );
       final response = await _apiService.get(
         endpoint: ApiConstants.resolveVendor,
         query: {
@@ -564,7 +631,13 @@ class CatalogRepository {
         },
         authenticated: false,
       );
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: response keys=${response.keys.join(',')}',
+      );
       final vendorIds = _resolveNearbyVendorIds(response, _productRadiusKm);
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: resolved vendorIds=$vendorIds',
+      );
       if (vendorIds.isNotEmpty) {
         await _storage.write('selectedVendorId', vendorIds.join(','));
       } else {
@@ -838,8 +911,25 @@ class CatalogRepository {
 
   Future<Map<String, String>?> _firebaseAuthHeaders() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      if (Firebase.apps.isEmpty) {
+        debugPrint(
+          'CatalogRepository._firebaseAuthHeaders: Firebase not initialized, initializing',
+        );
+        await FirebaseBootstrap.initialize();
+        if (Firebase.apps.isEmpty) {
+          debugPrint(
+            'CatalogRepository._firebaseAuthHeaders: Firebase still not initialized',
+          );
+          return null;
+        }
+      }
+      var user = FirebaseAuth.instance.currentUser;
+      final wasAnonymous = user == null;
+      user ??= (await FirebaseAuth.instance.signInAnonymously()).user;
       if (user == null) return null;
+      debugPrint(
+        'CatalogRepository._firebaseAuthHeaders: user=${user.uid}, wasAnonymous=$wasAnonymous',
+      );
       final token = await user.getIdToken();
       if (token == null || token.trim().isEmpty) return null;
       return {'Authorization': 'Bearer $token'};

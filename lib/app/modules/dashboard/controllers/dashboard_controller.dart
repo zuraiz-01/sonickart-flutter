@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/utils/auth_guard.dart';
 import '../../../core/widgets/delivery_rating_dialog.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
@@ -18,6 +19,8 @@ int? _queuedDashboardTabIndex;
 
 void openDashboardTab(int index) {
   final targetIndex = _normalizeDashboardIndex(index);
+
+  if (targetIndex == 4 && !requireAuth()) return;
 
   debugPrint(
     'openDashboardTab: target=$targetIndex currentRoute=${Get.currentRoute} registered=${Get.isRegistered<DashboardController>()}',
@@ -106,6 +109,8 @@ class DashboardController extends GetxController {
       return;
     }
 
+    if (targetIndex == 4 && !requireAuth()) return;
+
     if (_isChangingTab) return;
 
     _isChangingTab = true;
@@ -125,6 +130,8 @@ class DashboardController extends GetxController {
     debugPrint(
       'DashboardController.setTabFromNavigation: requested tab $targetIndex',
     );
+
+    if (targetIndex == 4 && !requireAuth()) return;
 
     _prepareForTabChange(targetIndex, allowSameTabRefresh: true);
     currentIndex.value = targetIndex;
@@ -223,6 +230,9 @@ class DashboardController extends GetxController {
 
       if (!_isCurrentCatalogLoad(requestId)) return;
 
+      debugPrint(
+        'DashboardController.loadCatalog: featuredProducts=${loadedFeatured.length}',
+      );
       featuredProducts.assignAll(loadedFeatured);
     } catch (error) {
       if (_isCurrentCatalogLoad(requestId)) {
@@ -232,6 +242,10 @@ class DashboardController extends GetxController {
       if (_isCurrentCatalogLoad(requestId)) {
         isCatalogLoading.value = false;
         isFeaturedLoading.value = false;
+        debugPrint(
+          'DashboardController.loadCatalog: complete requestId=$requestId '
+          'categories=${categories.length} featured=${featuredProducts.length}',
+        );
       }
     }
   }

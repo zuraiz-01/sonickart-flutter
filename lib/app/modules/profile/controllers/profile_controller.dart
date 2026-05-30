@@ -161,7 +161,6 @@ class ProfileController extends GetxController {
     await _clearStartupSelectedAddressContext();
     await loadAddresses();
     await loadProfileSummary();
-    await _resolveHomeLocationPreview(forceRefresh: true);
   }
 
   Future<void> refreshForAuthenticatedSession() async {

@@ -1954,6 +1954,7 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/package_order_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../../core/utils/auth_guard.dart';
 
 enum PackageViewMode { send, orders }
 
@@ -2387,6 +2388,7 @@ class PackageController extends GetxController {
   }
 
   void continueFromContact() {
+    if (!requireAuth()) return;
     if (!canMoveFromContact) {
       _showSnack(
         'Contact Required',
