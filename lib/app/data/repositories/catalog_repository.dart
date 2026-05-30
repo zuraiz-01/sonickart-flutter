@@ -136,9 +136,9 @@ class CatalogRepository {
     );
     if (scopedVendorIds.isEmpty) {
       debugPrint(
-        'CatalogRepository.fetchProductsByCategory: no matching vendors in active scope',
+        'CatalogRepository.fetchProductsByCategory: no vendorIds, fetching without vendor filter',
       );
-      return const [];
+      return _fetchProductsByCategoryForVendor(categoryId, null, context);
     }
 
     final lists = await Future.wait(
@@ -210,12 +210,6 @@ class CatalogRepository {
     }
 
     final context = await _resolveProductContext();
-    if (context.vendorIds.isEmpty) {
-      debugPrint(
-        'CatalogRepository.fetchFeaturedProducts: no vendorIds in context, returning empty',
-      );
-      return const [];
-    }
     debugPrint(
       'CatalogRepository.fetchFeaturedProducts: context has ${context.vendorIds.length} vendorIds, radius=${context.radiusKm}, categories=${categories.length}',
     );
