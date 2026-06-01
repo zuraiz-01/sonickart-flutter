@@ -53,7 +53,6 @@ class CategoriesController extends GetxController {
     if (selected == null) return const [];
 
     final options = subcategories.toList(growable: true);
-    if (options.isEmpty) return const [];
     if (_mixedProducts(categoryProducts).isNotEmpty) {
       options.add(ProductSubcategoryModel.mixed(categoryId: selected.id));
     }
@@ -481,7 +480,10 @@ class CategoriesController extends GetxController {
   }) {
     categoryProducts.assignAll(loadedProducts);
     subcategories.assignAll(
-      loadedSubcategories.where((item) => item.isActive).toList(),
+      _mergeSubcategoriesWithProductMetadata(
+        loadedSubcategories,
+        loadedProducts,
+      ),
     );
 
     final initialSubcategory = _initialSubcategoryForTargetProduct();
@@ -502,6 +504,55 @@ class CategoriesController extends GetxController {
     products.assignAll(loadedProducts);
   }
 
+  List<ProductSubcategoryModel> _mergeSubcategoriesWithProductMetadata(
+    List<ProductSubcategoryModel> loadedSubcategories,
+    List<ProductModel> loadedProducts,
+  ) {
+    final categoryId = selectedCategory.value?.id ?? '';
+    final result = loadedSubcategories
+        .where((item) => item.isActive)
+        .toList(growable: true);
+    final knownIds = result
+        .map((item) => item.id.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    final knownNames = result
+        .map((item) => item.name.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+
+    for (final product in loadedProducts) {
+      if (!_hasSubcategory(product)) continue;
+
+      final id = _subcategoryValue(product.subcategoryId);
+      final name = _subcategoryValue(product.subcategoryName);
+      final normalizedId = id.toLowerCase();
+      final normalizedName = name.toLowerCase();
+
+      if (normalizedId.isNotEmpty && knownIds.contains(normalizedId)) {
+        continue;
+      }
+      if (normalizedName.isNotEmpty && knownNames.contains(normalizedName)) {
+        continue;
+      }
+
+      result.add(
+        ProductSubcategoryModel(
+          id: id.isNotEmpty ? id : name,
+          categoryId: product.categoryId.isNotEmpty
+              ? product.categoryId
+              : categoryId,
+          name: name.isNotEmpty ? name : 'Subcategory $id',
+        ),
+      );
+
+      if (normalizedId.isNotEmpty) knownIds.add(normalizedId);
+      if (normalizedName.isNotEmpty) knownNames.add(normalizedName);
+    }
+
+    return result;
+  }
+
   ProductSubcategoryModel? _initialSubcategoryForTargetProduct() {
     final productId = targetProductId.value;
     if (productId == null || productId.isEmpty) return null;
@@ -517,10 +568,11 @@ class CategoriesController extends GetxController {
 
     return visibleSubcategoryOptions.firstWhereOrNull((item) {
       if (item.isMixed) return false;
-      if (product.subcategoryId.isNotEmpty) {
-        return item.id == product.subcategoryId;
+      final subcategoryId = _subcategoryValue(product.subcategoryId);
+      if (subcategoryId.isNotEmpty) {
+        return item.id == subcategoryId;
       }
-      return _sameName(item.name, product.subcategoryName);
+      return _sameName(item.name, _subcategoryValue(product.subcategoryName));
     });
   }
 
@@ -530,10 +582,14 @@ class CategoriesController extends GetxController {
   ) {
     if (subcategory.isMixed) return _mixedProducts(source);
     return source.where((product) {
-      if (product.subcategoryId.isNotEmpty) {
-        return product.subcategoryId == subcategory.id;
+      final subcategoryId = _subcategoryValue(product.subcategoryId);
+      if (subcategoryId.isNotEmpty) {
+        return subcategoryId == subcategory.id;
       }
-      return _sameName(product.subcategoryName, subcategory.name);
+      return _sameName(
+        _subcategoryValue(product.subcategoryName),
+        subcategory.name,
+      );
     }).toList();
   }
 
@@ -542,8 +598,20 @@ class CategoriesController extends GetxController {
   }
 
   bool _hasSubcategory(ProductModel product) {
-    return product.subcategoryId.trim().isNotEmpty ||
-        product.subcategoryName.trim().isNotEmpty;
+    return _subcategoryValue(product.subcategoryId).isNotEmpty ||
+        _subcategoryValue(product.subcategoryName).isNotEmpty;
+  }
+
+  String _subcategoryValue(String value) {
+    final normalized = value.trim();
+    final lower = normalized.toLowerCase();
+    if (normalized.isEmpty ||
+        lower == '0' ||
+        lower == 'null' ||
+        lower == 'undefined') {
+      return '';
+    }
+    return normalized;
   }
 
   bool _sameName(String first, String second) {

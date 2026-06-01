@@ -14,8 +14,8 @@ import '../../cart/controllers/cart_controller.dart';
 import '../../package/controllers/package_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
-bool _dashboardTabNavigationQueued = false;
-int? _queuedDashboardTabIndex;
+bool _isDashboardTabNavigationRunning = false;
+int? _pendingDashboardTabIndex;
 
 void openDashboardTab(int index) {
   final targetIndex = _normalizeDashboardIndex(index);
@@ -26,43 +26,57 @@ void openDashboardTab(int index) {
     'openDashboardTab: target=$targetIndex currentRoute=${Get.currentRoute} registered=${Get.isRegistered<DashboardController>()}',
   );
 
-  if (Get.isRegistered<DashboardController>()) {
-    final controller = Get.find<DashboardController>();
-    controller.setTabFromNavigation(targetIndex);
-
-    if (Get.currentRoute == AppRoutes.dashboard) {
-      return;
-    }
+  if (Get.currentRoute == AppRoutes.dashboard) {
+    _pendingDashboardTabIndex = null;
+    _setDashboardTabIfReady(targetIndex);
+    return;
   }
 
-  _queuedDashboardTabIndex = targetIndex;
-  if (_dashboardTabNavigationQueued) return;
+  _pendingDashboardTabIndex = targetIndex;
+  if (_isDashboardTabNavigationRunning) return;
 
-  _dashboardTabNavigationQueued = true;
+  _isDashboardTabNavigationRunning = true;
+  unawaited(_runDashboardTabNavigation());
+}
 
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    final queuedTarget = _queuedDashboardTabIndex ?? targetIndex;
-    _queuedDashboardTabIndex = null;
-    try {
-      await Get.offAllNamed(
-        AppRoutes.dashboard,
-        arguments: {'tabIndex': queuedTarget},
-      );
-      final latestQueuedTarget = _queuedDashboardTabIndex;
-      if (latestQueuedTarget != null &&
-          latestQueuedTarget != queuedTarget &&
-          Get.isRegistered<DashboardController>()) {
-        Get.find<DashboardController>().setTabFromNavigation(
-          latestQueuedTarget,
+Future<void> _runDashboardTabNavigation() async {
+  await Future<void>.delayed(Duration.zero);
+  try {
+    while (_pendingDashboardTabIndex != null) {
+      final targetIndex = _pendingDashboardTabIndex!;
+      _pendingDashboardTabIndex = null;
+
+      if (Get.currentRoute != AppRoutes.dashboard) {
+        await Get.offAllNamed(
+          AppRoutes.dashboard,
+          arguments: {'tabIndex': targetIndex},
         );
       }
-    } catch (error) {
-      debugPrint('openDashboardTab: navigation failed $error');
-    } finally {
-      _queuedDashboardTabIndex = null;
-      _dashboardTabNavigationQueued = false;
+
+      _setDashboardTabIfReady(targetIndex);
     }
-  });
+  } catch (error) {
+    debugPrint('openDashboardTab: navigation failed $error');
+  } finally {
+    _isDashboardTabNavigationRunning = false;
+    final pendingTarget = _pendingDashboardTabIndex;
+    if (pendingTarget != null) {
+      openDashboardTab(pendingTarget);
+    }
+  }
+}
+
+void _setDashboardTabIfReady(int targetIndex) {
+  if (!Get.isRegistered<DashboardController>() &&
+      !Get.isPrepared<DashboardController>()) {
+    return;
+  }
+
+  try {
+    Get.find<DashboardController>().setTabFromNavigation(targetIndex);
+  } catch (error) {
+    debugPrint('openDashboardTab: controller not ready $error');
+  }
 }
 
 int _normalizeDashboardIndex(int index) => index.clamp(0, 4);

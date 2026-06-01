@@ -19,6 +19,7 @@ import '../../cart/widgets/cart_summary_bar.dart';
 import '../../cart/widgets/universal_add.dart';
 import '../../cart/views/cart_view.dart';
 import '../../categories/controllers/categories_controller.dart';
+import '../../categories/widgets/subcategory_grid.dart';
 import '../../order_controller.dart';
 import '../../package/package_view.dart';
 import '../../profile/controllers/profile_controller.dart';
@@ -624,6 +625,12 @@ class _FeaturedProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unit = product.unit == '1 pc' ? '' : product.unit;
+    final isDark = AppColors.isDarkMode;
+    final cardColor = isDark ? const Color(0xFF06225B) : AppColors.card;
+    final borderColor = isDark
+        ? AppColors.accent.withValues(alpha: 0.72)
+        : AppColors.border;
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.activeNav;
     return InkWell(
       onTap: () => Get.toNamed(
         AppRoutes.categories,
@@ -640,14 +647,16 @@ class _FeaturedProductCard extends StatelessWidget {
         height: 110.hpx,
         padding: EdgeInsets.symmetric(horizontal: 5.wpx, vertical: 5.hpx),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: cardColor,
           borderRadius: BorderRadius.circular(8.rpx),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: borderColor, width: isDark ? 1.1.rpx : 1),
           boxShadow: [
             BoxShadow(
-              color: AppColors.cardShadow,
-              blurRadius: 3,
-              offset: Offset(0, 2),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.32)
+                  : AppColors.cardShadow,
+              blurRadius: isDark ? 8.rpx : 3,
+              offset: Offset(0, isDark ? 4.hpx : 2),
             ),
           ],
         ),
@@ -662,7 +671,7 @@ class _FeaturedProductCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: AppColors.activeNav,
+                  color: titleColor,
                   fontSize: 14.spx,
                   height: 1.15,
                   fontWeight: FontWeight.w700,
@@ -845,6 +854,11 @@ class _HomeCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDarkMode;
+    final cardColor = isDark ? const Color(0xFF06225B) : AppColors.card;
+    final borderColor = isDark
+        ? AppColors.accent.withValues(alpha: 0.72)
+        : AppColors.border;
     return InkWell(
       onTap: () => Get.toNamed(
         AppRoutes.categories,
@@ -855,14 +869,16 @@ class _HomeCategoryCard extends StatelessWidget {
         height: 130.hpx,
         padding: EdgeInsets.fromLTRB(8.wpx, 8.hpx, 8.wpx, 10.hpx),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: cardColor,
           borderRadius: BorderRadius.circular(12.rpx),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: borderColor, width: isDark ? 1.1.rpx : 1),
           boxShadow: [
             BoxShadow(
-              color: AppColors.cardShadow,
-              blurRadius: 3,
-              offset: Offset(0, 2),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.32)
+                  : AppColors.cardShadow,
+              blurRadius: isDark ? 8.rpx : 3,
+              offset: Offset(0, isDark ? 4.hpx : 2),
             ),
           ],
         ),
@@ -876,6 +892,12 @@ class _HomeCategoryCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.productImageFill,
                 borderRadius: BorderRadius.circular(8.rpx),
+                border: Border.all(
+                  color: isDark
+                      ? AppColors.accent.withValues(alpha: 0.38)
+                      : Colors.transparent,
+                  width: isDark ? 1.rpx : 0,
+                ),
               ),
               child: _CategoryImageBox(category: category, height: 70.hpx),
             ),
@@ -887,10 +909,10 @@ class _HomeCategoryCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: isDark ? AppColors.textPrimary : AppColors.primary,
                   fontSize: 11.spx,
                   height: 1.2,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: isDark ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
             ),
@@ -910,6 +932,7 @@ class _DashboardImageBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = product.resolvedFeaturedImageUrl;
+    final isDark = AppColors.isDarkMode;
     return Container(
       height: height,
       width: double.infinity,
@@ -918,6 +941,12 @@ class _DashboardImageBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.productImageFill,
         borderRadius: BorderRadius.circular(8.rpx),
+        border: Border.all(
+          color: isDark
+              ? AppColors.accent.withValues(alpha: 0.38)
+              : Colors.transparent,
+          width: isDark ? 1.rpx : 0,
+        ),
       ),
       child: imageUrl.isNotEmpty
           ? Image.network(
@@ -1238,19 +1267,54 @@ class _DashboardCategoriesTab extends StatelessWidget {
                 Expanded(
                   child: Container(
                     color: AppColors.surface,
-                    child: controller.isProductsLoading.value
+                    child: controller.shouldShowSubcategoryOptions
+                        ? SubcategoryGrid(
+                            subcategories: controller.visibleSubcategoryOptions,
+                            onTap: controller.selectSubcategory,
+                          )
+                        : controller.isProductsLoading.value ||
+                              controller.isSubcategoriesLoading.value
                         ? Center(child: CircularProgressIndicator())
                         : controller.products.isEmpty
                         ? Center(
                             child: Padding(
                               padding: EdgeInsets.all(20.rpx),
-                              child: Text(
-                                'New categories will be available soon.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    controller.selectedSubcategory.value == null
+                                        ? 'New categories will be available soon.'
+                                        : 'No products found in this subcategory.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (controller.selectedSubcategory.value !=
+                                          null &&
+                                      controller
+                                          .visibleSubcategoryOptions
+                                          .isNotEmpty) ...[
+                                    SizedBox(height: 14.hpx),
+                                    TextButton.icon(
+                                      onPressed:
+                                          controller.showSubcategoryOptions,
+                                      icon: Icon(
+                                        Icons.apps_rounded,
+                                        size: 18.spx,
+                                      ),
+                                      label: Text(
+                                        'Subcategories',
+                                        style: TextStyle(
+                                          fontSize: 12.spx,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           )
@@ -1268,9 +1332,28 @@ class _DashboardCategoriesTab extends StatelessWidget {
                                   mainAxisSpacing: 10.hpx,
                                   childAspectRatio: 0.50,
                                 ),
-                            itemCount: controller.products.length,
+                            itemCount:
+                                controller.products.length +
+                                (controller.selectedSubcategory.value != null &&
+                                        controller
+                                            .visibleSubcategoryOptions
+                                            .isNotEmpty
+                                    ? 1
+                                    : 0),
                             itemBuilder: (context, index) {
-                              final product = controller.products[index];
+                              final hasBackCard =
+                                  controller.selectedSubcategory.value !=
+                                      null &&
+                                  controller
+                                      .visibleSubcategoryOptions
+                                      .isNotEmpty;
+                              if (hasBackCard && index == 0) {
+                                return BackToSubcategoriesCard(
+                                  onTap: controller.showSubcategoryOptions,
+                                );
+                              }
+                              final product = controller
+                                  .products[hasBackCard ? index - 1 : index];
                               return _DashboardCategoryProductCard(
                                 product: product,
                               );

@@ -37,7 +37,7 @@ class ProductSubcategoryModel {
     return ProductSubcategoryModel(
       id: mixedId,
       categoryId: categoryId,
-      name: 'Mixed Products',
+      name: 'Other Products',
       description: 'Products without a subcategory',
       isMixed: true,
     );
