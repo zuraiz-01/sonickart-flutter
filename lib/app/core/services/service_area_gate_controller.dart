@@ -207,6 +207,15 @@ class ServiceAreaGateController extends GetxController {
       }
       return;
     }
+    final latitude = result.latitude;
+    final longitude = result.longitude;
+    if (latitude != null && longitude != null) {
+      await _applyBlockedLocation(
+        address: result.locationLabel,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
     blockedResult.value = result;
   }
 
@@ -218,6 +227,23 @@ class ServiceAreaGateController extends GetxController {
   }) async {
     if (!Get.isRegistered<ProfileController>()) return;
     await Get.find<ProfileController>().applyServiceAreaLocation(
+      address: address.trim().isNotEmpty
+          ? address.trim()
+          : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}',
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId,
+    );
+  }
+
+  Future<void> _applyBlockedLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String placeId = '',
+  }) async {
+    if (!Get.isRegistered<ProfileController>()) return;
+    await Get.find<ProfileController>().applyBlockedServiceAreaLocation(
       address: address.trim().isNotEmpty
           ? address.trim()
           : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}',

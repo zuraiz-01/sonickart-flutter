@@ -528,6 +528,7 @@ class _MoreProductCard extends StatelessWidget {
         onTap: () => Get.toNamed(
           AppRoutes.productDetail,
           arguments: {'product': product},
+          preventDuplicates: false,
         ),
         borderRadius: BorderRadius.circular(10.rpx),
         child: Container(

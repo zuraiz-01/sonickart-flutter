@@ -136,9 +136,9 @@ class CatalogRepository {
     );
     if (scopedVendorIds.isEmpty) {
       debugPrint(
-        'CatalogRepository.fetchProductsByCategory: no vendorIds, fetching without vendor filter',
+        'CatalogRepository.fetchProductsByCategory: no vendorIds in active location scope',
       );
-      return _fetchProductsByCategoryForVendor(categoryId, null, context);
+      return const <ProductModel>[];
     }
 
     final lists = await Future.wait(
@@ -321,11 +321,13 @@ class CatalogRepository {
     if (force || (!_settingsLoaded && !_isFetchingSettings)) {
       _isFetchingSettings = true;
       unawaited(
-        _fetchDeliverySettingsFromFirestore().then((_) {
-          _isFetchingSettings = false;
-        }).catchError((_) {
-          _isFetchingSettings = false;
-        }),
+        _fetchDeliverySettingsFromFirestore()
+            .then((_) {
+              _isFetchingSettings = false;
+            })
+            .catchError((_) {
+              _isFetchingSettings = false;
+            }),
       );
     }
     return ProductCatalogSettings(

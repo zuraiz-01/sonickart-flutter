@@ -724,6 +724,47 @@ class ProfileController extends GetxController {
     await _refreshCatalogAfterAddressChange();
   }
 
+  Future<void> applyBlockedServiceAreaLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String placeId = '',
+  }) async {
+    final normalizedAddress = address.trim().isNotEmpty
+        ? address.trim()
+        : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+      await _refreshCatalogAfterAddressChange();
+      return;
+    }
+
+    final user = currentUser;
+    final blockedAddress = AddressModel(
+      id: 'blocked-service-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : 'Customer',
+      contactNumber: user?.phone ?? '',
+      address: normalizedAddress,
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId.trim(),
+      isSelected: true,
+    );
+
+    selectedAddressId.value = blockedAddress.id;
+    liveLocationAddress.value = normalizedAddress;
+    await _storage.remove(_selectedVendorIdStorageKey);
+    await _persistSelectedAddress(blockedAddress);
+    await _refreshCatalogAfterAddressChange();
+  }
+
   Future<void> deleteAddress(AddressModel address) async {
     if (!_ensureAddressSession()) return;
     debugPrint('ProfileController.deleteAddress: deleting ${address.id}');
