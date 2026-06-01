@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
+import '../../data/models/address_model.dart';
 import '../../modules/profile/controllers/profile_controller.dart';
 import 'location_lookup_service.dart';
 import 'service_area_gate_service.dart';
@@ -29,6 +31,12 @@ class ServiceAreaGateController extends GetxController {
   Timer? _suggestionDebounce;
   bool _checkedForSession = false;
   Future<void>? _activeCheck;
+  final GetStorage _storage = GetStorage();
+
+  static const _selectedAddressStorageKey = 'selectedAddress';
+  static const _selectedVendorIdStorageKey = 'selectedVendorId';
+  static const _selectedLocationServiceableStorageKey =
+      'selectedLocationServiceable';
 
   bool get isBlocked => blockedResult.value != null;
 
@@ -225,7 +233,17 @@ class ServiceAreaGateController extends GetxController {
     required double longitude,
     String placeId = '',
   }) async {
-    if (!Get.isRegistered<ProfileController>()) return;
+    if (!Get.isRegistered<ProfileController>()) {
+      await _persistCatalogLocation(
+        id: 'service-location',
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        placeId: placeId,
+        serviceable: true,
+      );
+      return;
+    }
     await Get.find<ProfileController>().applyServiceAreaLocation(
       address: address.trim().isNotEmpty
           ? address.trim()
@@ -242,7 +260,17 @@ class ServiceAreaGateController extends GetxController {
     required double longitude,
     String placeId = '',
   }) async {
-    if (!Get.isRegistered<ProfileController>()) return;
+    if (!Get.isRegistered<ProfileController>()) {
+      await _persistCatalogLocation(
+        id: 'blocked-service-location',
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        placeId: placeId,
+        serviceable: false,
+      );
+      return;
+    }
     await Get.find<ProfileController>().applyBlockedServiceAreaLocation(
       address: address.trim().isNotEmpty
           ? address.trim()
@@ -251,6 +279,34 @@ class ServiceAreaGateController extends GetxController {
       longitude: longitude,
       placeId: placeId,
     );
+  }
+
+  Future<void> _persistCatalogLocation({
+    required String id,
+    required String address,
+    required double latitude,
+    required double longitude,
+    required bool serviceable,
+    String placeId = '',
+  }) async {
+    final label = address.trim().isNotEmpty
+        ? address.trim()
+        : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+    final catalogAddress = AddressModel(
+      id: id,
+      fullName: 'Customer',
+      contactNumber: '',
+      address: label,
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId.trim(),
+      isSelected: true,
+    );
+    await _storage.write(_selectedAddressStorageKey, catalogAddress.toJson());
+    await _storage.write(_selectedLocationServiceableStorageKey, serviceable);
+    if (!serviceable) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
   }
 
   Future<({double latitude, double longitude})?> _currentCoordinate() async {

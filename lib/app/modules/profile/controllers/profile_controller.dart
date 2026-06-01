@@ -27,6 +27,8 @@ class ProfileController extends GetxController {
   static const _currentUserStorageKey = 'currentUser';
   static const _selectedAddressStorageKey = 'selectedAddress';
   static const _selectedVendorIdStorageKey = 'selectedVendorId';
+  static const _selectedLocationServiceableStorageKey =
+      'selectedLocationServiceable';
 
   final GetStorage _storage;
   final LocationLookupService _locationLookupService = LocationLookupService();
@@ -158,6 +160,13 @@ class ProfileController extends GetxController {
 
   Future<void> _bootstrapProfile() async {
     _syncProfileForm();
+    if (!hasBackendSession) {
+      _restoreGuestCatalogContext();
+      await loadAddresses();
+      await _resolveHomeLocationPreview(forceRefresh: true);
+      return;
+    }
+
     await _clearStartupSelectedAddressContext();
     await loadAddresses();
     await loadProfileSummary();
@@ -171,6 +180,7 @@ class ProfileController extends GetxController {
     addressLoadError.value = null;
     requiresAddressRelogin.value = false;
     _syncProfileForm();
+    await _clearStartupSelectedAddressContext();
     await loadProfileSummary();
     await loadAddresses();
     if (activeAddress == null) {
@@ -488,6 +498,15 @@ class ProfileController extends GetxController {
     }
   }
 
+  void _restoreGuestCatalogContext() {
+    final stored = _storedSelectedAddress;
+    if (stored == null) return;
+    selectedAddressId.value = stored.id;
+    if (stored.address.trim().isNotEmpty) {
+      liveLocationAddress.value = stored.address.trim();
+    }
+  }
+
   bool startAddAddress() {
     if (!_ensureAddressSession()) return false;
     debugPrint('ProfileController.startAddAddress: opening add address flow');
@@ -714,12 +733,18 @@ class ProfileController extends GetxController {
 
     selectedAddressId.value = temporaryAddress.id;
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(temporaryAddress);
     liveLocationAddress.value = normalizedAddress;
     await _updateUserLocation(temporaryAddress);
     final vendorId = await _tryResolveVendor(temporaryAddress);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(temporaryAddress.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _persistSelectedAddress(
+        temporaryAddress.copyWith(vendorId: vendorId),
+      );
     }
     await _refreshCatalogAfterAddressChange();
   }
@@ -740,6 +765,7 @@ class ProfileController extends GetxController {
         longitude < -180 ||
         longitude > 180) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.write(_selectedLocationServiceableStorageKey, false);
       await _refreshCatalogAfterAddressChange();
       return;
     }
@@ -761,6 +787,7 @@ class ProfileController extends GetxController {
     selectedAddressId.value = blockedAddress.id;
     liveLocationAddress.value = normalizedAddress;
     await _storage.remove(_selectedVendorIdStorageKey);
+    await _storage.write(_selectedLocationServiceableStorageKey, false);
     await _persistSelectedAddress(blockedAddress);
     await _refreshCatalogAfterAddressChange();
   }
@@ -775,6 +802,7 @@ class ProfileController extends GetxController {
         selectedAddressId.value = null;
         await _storage.remove(_selectedAddressStorageKey);
         await _storage.remove(_selectedVendorIdStorageKey);
+        await _storage.remove(_selectedLocationServiceableStorageKey);
         await _resolveHomeLocationPreview(forceRefresh: true);
       }
       await _persistAddresses();
@@ -922,6 +950,7 @@ class ProfileController extends GetxController {
     selectedAddressId.value = null;
     await _storage.remove(_selectedAddressStorageKey);
     await _storage.remove(_selectedVendorIdStorageKey);
+    await _storage.remove(_selectedLocationServiceableStorageKey);
 
     final rawList =
         _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
@@ -1005,11 +1034,15 @@ class ProfileController extends GetxController {
 
     selectedAddressId.value = liveAddress.id;
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(liveAddress);
     await _updateUserLocation(liveAddress);
     final vendorId = await _tryResolveVendor(liveAddress);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(liveAddress.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _persistSelectedAddress(liveAddress.copyWith(vendorId: vendorId));
     }
     await _refreshCatalogAfterAddressChange();
   }
@@ -1021,13 +1054,17 @@ class ProfileController extends GetxController {
   Future<String?> _applySelectedAddressContext(AddressModel address) async {
     selectedAddressId.value = address.id;
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(address);
     liveLocationAddress.value = address.address;
     await _updateUserLocation(address);
 
     final vendorId = await _tryResolveVendor(address);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(address.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _persistSelectedAddress(address.copyWith(vendorId: vendorId));
     }
 
     await _refreshCatalogAfterAddressChange();

@@ -43,6 +43,9 @@ class ApiConstants {
   static String productsByCategory(String categoryId) =>
       '/products/$categoryId';
 
+  static String categorySubcategories(String categoryId) =>
+      '/categories/$categoryId/subcategories';
+
   static String orderById(String id) => '/order/$id';
 
   static String orderRating(String id) => '/order/$id/rate';

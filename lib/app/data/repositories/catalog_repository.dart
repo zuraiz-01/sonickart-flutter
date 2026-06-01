@@ -14,6 +14,7 @@ import '../../core/services/firebase_bootstrap.dart';
 import '../models/address_model.dart';
 import '../models/category_model.dart';
 import '../models/product_model.dart';
+import '../models/product_subcategory_model.dart';
 
 class CatalogRepository {
   CatalogRepository(this._apiService, {GetStorage? storage})
@@ -24,6 +25,7 @@ class CatalogRepository {
   static const _lastKnownLocationTimeout = Duration(milliseconds: 800);
   static const _deviceLocationTimeout = Duration(seconds: 8);
   static const _featuredCategoryFetchTimeout = Duration(seconds: 8);
+  static const _selectedLocationServiceableKey = 'selectedLocationServiceable';
 
   final ApiService _apiService;
   final GetStorage _storage;
@@ -36,6 +38,10 @@ class CatalogRepository {
   DateTime? _categoriesCachedAt;
   final _productCache = <String, _TimedCache<List<ProductModel>>>{};
   final _productLoadFutures = <String, Future<List<ProductModel>>>{};
+  final _subcategoryCache =
+      <String, _TimedCache<List<ProductSubcategoryModel>>>{};
+  final _subcategoryLoadFutures =
+      <String, Future<List<ProductSubcategoryModel>>>{};
   final _visibleProductsById = <String, ProductModel>{};
 
   static const _catalogCacheTtl = Duration(minutes: 2);
@@ -46,6 +52,8 @@ class CatalogRepository {
   void invalidateProductScope() {
     _productCache.clear();
     _productLoadFutures.clear();
+    _subcategoryCache.clear();
+    _subcategoryLoadFutures.clear();
     _visibleProductsById.clear();
   }
 
@@ -82,6 +90,58 @@ class CatalogRepository {
       return const [];
     } finally {
       _categoriesLoadFuture = null;
+    }
+  }
+
+  Future<List<ProductSubcategoryModel>> fetchSubcategories(
+    String categoryId,
+  ) async {
+    final cachedCategories = _cachedCategories;
+    if (cachedCategories != null) {
+      for (final category in cachedCategories) {
+        if (category.id == categoryId && category.subcategories.isNotEmpty) {
+          return category.subcategories;
+        }
+      }
+    }
+
+    final cached = _subcategoryCache[categoryId];
+    if (cached != null && !_isExpired(cached.cachedAt)) {
+      return cached.value;
+    }
+    final inFlight = _subcategoryLoadFutures[categoryId];
+    if (inFlight != null) return inFlight;
+
+    debugPrint(
+      'CatalogRepository.fetchSubcategories: request started for $categoryId',
+    );
+    final future = () async {
+      final response = await _apiService.get(
+        endpoint: ApiConstants.categorySubcategories(categoryId),
+        query: {'status': 'active'},
+        authenticated: false,
+      );
+      final subcategories = _extractSubcategoryList(response)
+          .whereType<Map>()
+          .map(
+            (item) => ProductSubcategoryModel.fromJson(
+              Map<String, dynamic>.from(item),
+              fallbackCategoryId: categoryId,
+            ),
+          )
+          .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+          .toList();
+      _subcategoryCache[categoryId] = _TimedCache(subcategories);
+      return subcategories;
+    }();
+    _subcategoryLoadFutures[categoryId] = future;
+    try {
+      return await future;
+    } catch (error) {
+      debugPrint('CatalogRepository.fetchSubcategories: failed $error');
+      return const [];
+    } finally {
+      _subcategoryLoadFutures.remove(categoryId);
     }
   }
 
@@ -311,6 +371,8 @@ class CatalogRepository {
       featuredImageUrl: product.featuredImageUrl,
       vendorId: product.vendorId,
       branchId: product.branchId,
+      subcategoryId: product.subcategoryId,
+      subcategoryName: product.subcategoryName,
       raw: nextRaw,
     );
   }
@@ -526,6 +588,34 @@ class CatalogRepository {
     return const [];
   }
 
+  List _extractSubcategoryList(Map<String, dynamic> response) {
+    final candidates = [
+      response['subcategories'],
+      response['sub_categories'],
+      response['data'],
+      response['items'],
+      response['result'],
+      response['results'],
+    ];
+    for (final value in candidates) {
+      if (value is List) return value;
+      if (value is Map) {
+        for (final nested in [
+          'subcategories',
+          'sub_categories',
+          'data',
+          'items',
+          'result',
+          'results',
+        ]) {
+          final nestedValue = value[nested];
+          if (nestedValue is List) return nestedValue;
+        }
+      }
+    }
+    return const [];
+  }
+
   Future<ProductCatalogContext> _resolveProductContext({
     List<String>? vendorIds,
     double? latitude,
@@ -551,6 +641,18 @@ class CatalogRepository {
     );
     var scopedLatitude = latitude ?? selectedAddress?.latitude;
     var scopedLongitude = longitude ?? selectedAddress?.longitude;
+    if (selectedAddress != null && _isSelectedLocationBlocked) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: selected location is blocked, returning empty vendor scope',
+      );
+      return ProductCatalogContext(
+        vendorIds: const [],
+        latitude: scopedLatitude,
+        longitude: scopedLongitude,
+        radiusKm: _productRadiusKm,
+      );
+    }
+
     final storedVendorIdRaw = _selectedVendorId;
     final storedVendorIds = _uniqueVendorIds([
       ...(storedVendorIdRaw?.split(',') ?? const []),
@@ -559,7 +661,11 @@ class CatalogRepository {
     debugPrint(
       'CatalogRepository._resolveProductContext: storedVendorIds=$storedVendorIds, scopedLat=$scopedLatitude, scopedLng=$scopedLongitude',
     );
-    if (storedVendorIds.isNotEmpty) {
+    final canTrustStoredVendorIds =
+        storedVendorIds.isNotEmpty &&
+        (_hasBackendSession ||
+            !_hasValidCoordinates(scopedLatitude, scopedLongitude));
+    if (canTrustStoredVendorIds) {
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
         latitude: scopedLatitude,
@@ -697,6 +803,15 @@ class CatalogRepository {
     if (value == null) return null;
     final normalized = value.toString().trim();
     return normalized.isEmpty ? null : normalized;
+  }
+
+  bool get _hasBackendSession {
+    final token = _storage.read<String>('accessToken');
+    return token != null && token.trim().isNotEmpty;
+  }
+
+  bool get _isSelectedLocationBlocked {
+    return _storage.read(_selectedLocationServiceableKey) == false;
   }
 
   Map<String, dynamic> _normalizeProductJson(

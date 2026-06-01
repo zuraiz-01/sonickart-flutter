@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
+import '../../../data/models/product_subcategory_model.dart';
 import '../../../data/repositories/catalog_repository.dart';
 
 class CategoriesController extends GetxController {
@@ -14,9 +15,13 @@ class CategoriesController extends GetxController {
 
   final categories = <CategoryModel>[].obs;
   final products = <ProductModel>[].obs;
+  final categoryProducts = <ProductModel>[].obs;
+  final subcategories = <ProductSubcategoryModel>[].obs;
   final selectedCategory = Rxn<CategoryModel>();
+  final selectedSubcategory = Rxn<ProductSubcategoryModel>();
   final isCategoriesLoading = false.obs;
   final isProductsLoading = false.obs;
+  final isSubcategoriesLoading = false.obs;
   final productsResolved = false.obs;
   final targetProductId = RxnString();
 
@@ -25,9 +30,13 @@ class CategoriesController extends GetxController {
 
   static const categoryListItemExtent = 124.0;
   static const _productLoadTimeout = Duration(seconds: 24);
+  static const _subcategoryLoadTimeout = Duration(seconds: 10);
 
   final _productCache = <String, List<ProductModel>>{};
   final _productLoadFutures = <String, Future<List<ProductModel>>>{};
+  final _subcategoryCache = <String, List<ProductSubcategoryModel>>{};
+  final _subcategoryLoadFutures =
+      <String, Future<List<ProductSubcategoryModel>>>{};
 
   Future<void>? _categoriesLoadFuture;
 
@@ -38,6 +47,27 @@ class CategoriesController extends GetxController {
   int _productCacheGeneration = 0;
   String? _lastResolvedProductCacheKey;
   String? _currentlyLoadingProductCacheKey;
+
+  List<ProductSubcategoryModel> get visibleSubcategoryOptions {
+    final selected = selectedCategory.value;
+    if (selected == null) return const [];
+
+    final options = subcategories.toList(growable: true);
+    if (options.isEmpty) return const [];
+    if (_mixedProducts(categoryProducts).isNotEmpty) {
+      options.add(ProductSubcategoryModel.mixed(categoryId: selected.id));
+    }
+    return options;
+  }
+
+  bool get shouldShowSubcategoryOptions =>
+      selectedSubcategory.value == null && visibleSubcategoryOptions.isNotEmpty;
+
+  String get activeContentTitle {
+    final subcategory = selectedSubcategory.value;
+    if (subcategory != null) return subcategory.name;
+    return selectedCategory.value?.name ?? 'Products';
+  }
 
   @override
   void onInit() {
@@ -77,7 +107,8 @@ class CategoriesController extends GetxController {
 
         final cacheKey = _productCacheKey(target.id);
 
-        if (_lastResolvedProductCacheKey == cacheKey && productsResolved.value) {
+        if (_lastResolvedProductCacheKey == cacheKey &&
+            productsResolved.value) {
           _scrollToTargetProduct();
           return;
         }
@@ -165,7 +196,11 @@ class CategoriesController extends GetxController {
       _lastResolvedProductCacheKey = null;
       _currentlyLoadingProductCacheKey = null;
       _productsRequestId++;
+      categoryProducts.clear();
+      subcategories.clear();
+      selectedSubcategory.value = null;
       isProductsLoading.value = false;
+      isSubcategoriesLoading.value = false;
       productsResolved.value = false;
     }
 
@@ -185,7 +220,20 @@ class CategoriesController extends GetxController {
     final isSameCategory = selectedCategory.value?.id == category.id;
 
     selectedCategory.value = category;
+    if (!isSameCategory) {
+      selectedSubcategory.value = null;
+      products.clear();
+      categoryProducts.clear();
+      subcategories.clear();
+    }
     _scrollToSelectedCategory();
+
+    if (isSameCategory &&
+        selectedSubcategory.value != null &&
+        visibleSubcategoryOptions.isNotEmpty) {
+      showSubcategoryOptions();
+      return;
+    }
 
     if (isSameCategory &&
         _lastResolvedProductCacheKey == cacheKey &&
@@ -203,7 +251,9 @@ class CategoriesController extends GetxController {
   }
 
   bool shouldIgnoreCategoryTap(CategoryModel category) {
-    if (selectedCategory.value?.id == category.id) return true;
+    if (selectedCategory.value?.id == category.id) {
+      return selectedSubcategory.value == null;
+    }
 
     final cacheKey = _productCacheKey(category.id);
     return _currentlyLoadingProductCacheKey == cacheKey &&
@@ -217,9 +267,12 @@ class CategoriesController extends GetxController {
     if (force) {
       _productCache.clear();
       _productLoadFutures.clear();
+      _subcategoryCache.clear();
+      _subcategoryLoadFutures.clear();
       _productCacheGeneration++;
       _lastResolvedProductCacheKey = null;
       _currentlyLoadingProductCacheKey = null;
+      selectedSubcategory.value = null;
       productsResolved.value = false;
     }
 
@@ -230,7 +283,7 @@ class CategoriesController extends GetxController {
     final cacheKey = _productCacheKey(categoryId);
 
     debugPrint(
-      'CategoriesController.loadProducts: loading products for $categoryId',
+      'CategoriesController.loadProducts: loading category content for $categoryId',
     );
 
     if (!force &&
@@ -249,9 +302,17 @@ class CategoriesController extends GetxController {
     final cached = force ? null : _productCache[cacheKey];
 
     if (cached != null) {
-      products.assignAll(cached);
+      final cachedSubcategories =
+          _subcategoryCache[categoryId] ??
+          selectedCategory.value?.subcategories;
+      _applyLoadedCategoryContent(
+        loadedProducts: cached,
+        loadedSubcategories:
+            cachedSubcategories ?? const <ProductSubcategoryModel>[],
+      );
       productsResolved.value = true;
       isProductsLoading.value = false;
+      isSubcategoriesLoading.value = false;
       _lastResolvedProductCacheKey = cacheKey;
       _currentlyLoadingProductCacheKey = null;
       _scrollToTargetProduct();
@@ -262,10 +323,11 @@ class CategoriesController extends GetxController {
 
     productsResolved.value = false;
     isProductsLoading.value = true;
+    isSubcategoriesLoading.value = true;
     _currentlyLoadingProductCacheKey = cacheKey;
 
     try {
-      final result = await _loadProductsForCategory(categoryId, force: force)
+      final productsFuture = _loadProductsForCategory(categoryId, force: force)
           .timeout(
             _productLoadTimeout,
             onTimeout: () {
@@ -275,10 +337,26 @@ class CategoriesController extends GetxController {
               return const <ProductModel>[];
             },
           );
+      final subcategoriesFuture =
+          _loadSubcategoriesForCategory(categoryId, force: force).timeout(
+            _subcategoryLoadTimeout,
+            onTimeout: () {
+              debugPrint(
+                'CategoriesController.loadProducts: subcategories timed out for $categoryId',
+              );
+              return const <ProductSubcategoryModel>[];
+            },
+          );
+
+      final result = await productsFuture;
+      final loadedSubcategories = await subcategoriesFuture;
 
       if (!_isCurrentProductRequest(requestId, categoryId)) return;
 
-      products.assignAll(result);
+      _applyLoadedCategoryContent(
+        loadedProducts: result,
+        loadedSubcategories: loadedSubcategories,
+      );
       productsResolved.value = true;
       _lastResolvedProductCacheKey = cacheKey;
       _scrollToTargetProduct();
@@ -287,12 +365,16 @@ class CategoriesController extends GetxController {
 
       if (_isCurrentProductRequest(requestId, categoryId)) {
         products.clear();
+        categoryProducts.clear();
+        subcategories.clear();
+        selectedSubcategory.value = null;
         productsResolved.value = true;
         _lastResolvedProductCacheKey = cacheKey;
       }
     } finally {
       if (_isCurrentProductRequest(requestId, categoryId)) {
         isProductsLoading.value = false;
+        isSubcategoriesLoading.value = false;
 
         if (_currentlyLoadingProductCacheKey == cacheKey) {
           _currentlyLoadingProductCacheKey = null;
@@ -341,6 +423,133 @@ class CategoriesController extends GetxController {
     });
   }
 
+  Future<List<ProductSubcategoryModel>> _loadSubcategoriesForCategory(
+    String categoryId, {
+    bool force = false,
+  }) {
+    if (force) {
+      _subcategoryCache.remove(categoryId);
+      _subcategoryLoadFutures.remove(categoryId);
+    }
+
+    final embedded = selectedCategory.value?.id == categoryId
+        ? selectedCategory.value?.subcategories
+        : null;
+    if (!force && embedded != null && embedded.isNotEmpty) {
+      _subcategoryCache[categoryId] = embedded;
+      return Future.value(embedded);
+    }
+
+    final cached = _subcategoryCache[categoryId];
+    if (!force && cached != null) return Future.value(cached);
+
+    final inFlight = _subcategoryLoadFutures[categoryId];
+    if (!force && inFlight != null) return inFlight;
+
+    final future = _repository.fetchSubcategories(categoryId).then((result) {
+      _subcategoryCache[categoryId] = result;
+      return result;
+    });
+
+    _subcategoryLoadFutures[categoryId] = future;
+
+    return future.whenComplete(() {
+      if (identical(_subcategoryLoadFutures[categoryId], future)) {
+        _subcategoryLoadFutures.remove(categoryId);
+      }
+    });
+  }
+
+  void selectSubcategory(ProductSubcategoryModel subcategory) {
+    selectedSubcategory.value = subcategory;
+    products.assignAll(_productsForSubcategory(subcategory, categoryProducts));
+    productsResolved.value = true;
+    _scrollProductsToTop();
+    _scrollToTargetProduct();
+  }
+
+  void showSubcategoryOptions() {
+    selectedSubcategory.value = null;
+    products.clear();
+    productsResolved.value = true;
+    _scrollProductsToTop();
+  }
+
+  void _applyLoadedCategoryContent({
+    required List<ProductModel> loadedProducts,
+    required List<ProductSubcategoryModel> loadedSubcategories,
+  }) {
+    categoryProducts.assignAll(loadedProducts);
+    subcategories.assignAll(
+      loadedSubcategories.where((item) => item.isActive).toList(),
+    );
+
+    final initialSubcategory = _initialSubcategoryForTargetProduct();
+    selectedSubcategory.value = initialSubcategory;
+
+    if (initialSubcategory != null) {
+      products.assignAll(
+        _productsForSubcategory(initialSubcategory, loadedProducts),
+      );
+      return;
+    }
+
+    if (visibleSubcategoryOptions.isNotEmpty) {
+      products.clear();
+      return;
+    }
+
+    products.assignAll(loadedProducts);
+  }
+
+  ProductSubcategoryModel? _initialSubcategoryForTargetProduct() {
+    final productId = targetProductId.value;
+    if (productId == null || productId.isEmpty) return null;
+
+    final product = categoryProducts.firstWhereOrNull(
+      (item) => item.id == productId,
+    );
+    if (product == null) return null;
+
+    if (!_hasSubcategory(product)) {
+      return visibleSubcategoryOptions.firstWhereOrNull((item) => item.isMixed);
+    }
+
+    return visibleSubcategoryOptions.firstWhereOrNull((item) {
+      if (item.isMixed) return false;
+      if (product.subcategoryId.isNotEmpty) {
+        return item.id == product.subcategoryId;
+      }
+      return _sameName(item.name, product.subcategoryName);
+    });
+  }
+
+  List<ProductModel> _productsForSubcategory(
+    ProductSubcategoryModel subcategory,
+    List<ProductModel> source,
+  ) {
+    if (subcategory.isMixed) return _mixedProducts(source);
+    return source.where((product) {
+      if (product.subcategoryId.isNotEmpty) {
+        return product.subcategoryId == subcategory.id;
+      }
+      return _sameName(product.subcategoryName, subcategory.name);
+    }).toList();
+  }
+
+  List<ProductModel> _mixedProducts(Iterable<ProductModel> source) {
+    return source.where((product) => !_hasSubcategory(product)).toList();
+  }
+
+  bool _hasSubcategory(ProductModel product) {
+    return product.subcategoryId.trim().isNotEmpty ||
+        product.subcategoryName.trim().isNotEmpty;
+  }
+
+  bool _sameName(String first, String second) {
+    return first.trim().toLowerCase() == second.trim().toLowerCase();
+  }
+
   String _productCacheKey(String categoryId) {
     return '$categoryId|${_preferredVendorId ?? ''}';
   }
@@ -348,6 +557,17 @@ class CategoriesController extends GetxController {
   bool _isCurrentProductRequest(int requestId, String categoryId) {
     return requestId == _productsRequestId &&
         selectedCategory.value?.id == categoryId;
+  }
+
+  void _scrollProductsToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!productGridScrollController.hasClients) return;
+      productGridScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   void _scrollToSelectedCategory() {

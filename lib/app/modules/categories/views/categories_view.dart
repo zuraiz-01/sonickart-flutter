@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
+import '../../../data/models/product_subcategory_model.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
@@ -127,19 +128,56 @@ class CategoriesView extends GetView<CategoriesController> {
                   Expanded(
                     child: Container(
                       color: AppColors.surface,
-                      child: controller.isProductsLoading.value
+                      child: controller.shouldShowSubcategoryOptions
+                          ? _SubcategoryGrid(
+                              subcategories:
+                                  controller.visibleSubcategoryOptions,
+                              onTap: controller.selectSubcategory,
+                            )
+                          : controller.isProductsLoading.value ||
+                                controller.isSubcategoriesLoading.value
                           ? Center(child: CircularProgressIndicator())
                           : controller.products.isEmpty
                           ? Center(
                               child: Padding(
                                 padding: EdgeInsets.all(20.rpx),
-                                child: Text(
-                                  'New categories will be available soon.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      controller.selectedSubcategory.value ==
+                                              null
+                                          ? 'New categories will be available soon.'
+                                          : 'No products found in this subcategory.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (controller.selectedSubcategory.value !=
+                                            null &&
+                                        controller
+                                            .visibleSubcategoryOptions
+                                            .isNotEmpty) ...[
+                                      SizedBox(height: 14.hpx),
+                                      TextButton.icon(
+                                        onPressed:
+                                            controller.showSubcategoryOptions,
+                                        icon: Icon(
+                                          Icons.apps_rounded,
+                                          size: 18.spx,
+                                        ),
+                                        label: Text(
+                                          'Subcategories',
+                                          style: TextStyle(
+                                            fontSize: 12.spx,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             )
@@ -159,9 +197,29 @@ class CategoriesView extends GetView<CategoriesController> {
                                     mainAxisSpacing: 10,
                                     childAspectRatio: 0.50,
                                   ),
-                              itemCount: controller.products.length,
+                              itemCount:
+                                  controller.products.length +
+                                  (controller.selectedSubcategory.value !=
+                                              null &&
+                                          controller
+                                              .visibleSubcategoryOptions
+                                              .isNotEmpty
+                                      ? 1
+                                      : 0),
                               itemBuilder: (context, index) {
-                                final product = controller.products[index];
+                                final hasBackCard =
+                                    controller.selectedSubcategory.value !=
+                                        null &&
+                                    controller
+                                        .visibleSubcategoryOptions
+                                        .isNotEmpty;
+                                if (hasBackCard && index == 0) {
+                                  return _BackToSubcategoriesCard(
+                                    onTap: controller.showSubcategoryOptions,
+                                  );
+                                }
+                                final product = controller
+                                    .products[hasBackCard ? index - 1 : index];
                                 return InkWell(
                                   onTap: () => Get.toNamed(
                                     AppRoutes.productDetail,
@@ -476,6 +534,195 @@ class _CategoriesNavItem extends StatelessWidget {
       height: 46.hpx,
       child: Center(
         child: Icon(icon, size: 19.spx, color: AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _BackToSubcategoriesCard extends StatelessWidget {
+  const _BackToSubcategoriesCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10.rpx),
+      child: Container(
+        padding: EdgeInsets.all(10.rpx),
+        decoration: BoxDecoration(
+          color: AppColors.accent.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(10.rpx),
+          border: Border.all(color: AppColors.accent),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 48.rpx,
+              height: 48.rpx,
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Icon(
+                Icons.apps_rounded,
+                color: AppColors.primary,
+                size: 24.spx,
+              ),
+            ),
+            SizedBox(height: 10.hpx),
+            Text(
+              'Subcategories',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+                fontSize: 12.spx,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubcategoryGrid extends StatelessWidget {
+  const _SubcategoryGrid({required this.subcategories, required this.onTap});
+
+  final List<ProductSubcategoryModel> subcategories;
+  final ValueChanged<ProductSubcategoryModel> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: EdgeInsets.fromLTRB(10.wpx, 14.hpx, 10.wpx, 112.hpx),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10.wpx,
+        mainAxisSpacing: 12.hpx,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: subcategories.length,
+      itemBuilder: (context, index) {
+        final subcategory = subcategories[index];
+        return _SubcategoryCard(
+          subcategory: subcategory,
+          onTap: () => onTap(subcategory),
+        );
+      },
+    );
+  }
+}
+
+class _SubcategoryCard extends StatelessWidget {
+  const _SubcategoryCard({required this.subcategory, required this.onTap});
+
+  final ProductSubcategoryModel subcategory;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18.rpx),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 8.wpx, vertical: 12.hpx),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(18.rpx),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.cardShadow,
+              blurRadius: 5.rpx,
+              offset: Offset(0, 3.hpx),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _SubcategoryThumb(subcategory: subcategory),
+            SizedBox(height: 10.hpx),
+            Text(
+              subcategory.name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 12.spx,
+                fontWeight: FontWeight.w900,
+                height: 1.15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubcategoryThumb extends StatelessWidget {
+  const _SubcategoryThumb({required this.subcategory});
+
+  final ProductSubcategoryModel subcategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = subcategory.resolvedImageUrl;
+    return Container(
+      width: 66.rpx,
+      height: 66.rpx,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: subcategory.isMixed
+            ? AppColors.accent.withValues(alpha: 0.22)
+            : AppColors.productImageFill,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: subcategory.isMixed
+              ? AppColors.accent
+              : AppColors.primary.withValues(alpha: 0.08),
+          width: 1.2.rpx,
+        ),
+      ),
+      child: subcategory.isMixed
+          ? Icon(
+              Icons.inventory_2_rounded,
+              color: AppColors.primary,
+              size: 30.spx,
+            )
+          : imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              width: 66.rpx,
+              height: 66.rpx,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => _fallback(),
+            )
+          : _fallback(),
+    );
+  }
+
+  Widget _fallback() {
+    return Text(
+      subcategory.name.isEmpty
+          ? 'S'
+          : subcategory.name.characters.first.toUpperCase(),
+      style: TextStyle(
+        color: AppColors.primary,
+        fontWeight: FontWeight.w900,
+        fontSize: 24.spx,
       ),
     );
   }
