@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../../../data/models/app_ad_model.dart';
 import '../../../core/utils/auth_guard.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
+import '../../ads/widgets/ad_placement.dart';
 import '../controllers/cart_controller.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 
@@ -36,6 +38,8 @@ class CartView extends GetView<CartController> {
           ),
           SizedBox(height: 16.hpx),
           _ActionSection(controller: controller),
+          SizedBox(height: 12.hpx),
+          const AdPlacement(placement: AppAdPlacement.cart),
         ],
       );
     });

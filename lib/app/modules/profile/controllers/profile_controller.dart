@@ -13,6 +13,7 @@ import '../../../data/models/user_model.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -54,6 +55,9 @@ class ProfileController extends GetxController {
   final rewardPoints = 0.obs;
   final refundCount = 0.obs;
   final giftCardCount = 0.obs;
+  final notificationsEnabled = false.obs;
+  final isUpdatingNotifications = false.obs;
+  final isDeletingAccount = false.obs;
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
@@ -160,6 +164,7 @@ class ProfileController extends GetxController {
 
   Future<void> _bootstrapProfile() async {
     _syncProfileForm();
+    unawaited(syncNotificationPreference());
     if (!hasBackendSession) {
       _restoreGuestCatalogContext();
       await loadAddresses();
@@ -167,7 +172,6 @@ class ProfileController extends GetxController {
       return;
     }
 
-    await _clearStartupSelectedAddressContext();
     await loadAddresses();
     await loadProfileSummary();
   }
@@ -180,7 +184,7 @@ class ProfileController extends GetxController {
     addressLoadError.value = null;
     requiresAddressRelogin.value = false;
     _syncProfileForm();
-    await _clearStartupSelectedAddressContext();
+    unawaited(syncNotificationPreference());
     await loadProfileSummary();
     await loadAddresses();
     if (activeAddress == null) {
@@ -323,7 +327,7 @@ class ProfileController extends GetxController {
       ),
       'notifications' => (
         'Notifications',
-        'Notification preferences will be available shortly.',
+        'Use the notification switch in Profile to control order and package update alerts.',
       ),
       'suggest' => (
         'Suggest Products',
@@ -437,16 +441,90 @@ class ProfileController extends GetxController {
 
   Future<void> deleteAccount() async {
     debugPrint('ProfileController.deleteAccount: delete requested');
+    if (isDeletingAccount.value) return;
+    if (!hasBackendSession) {
+      statusMessage.value = 'Please log in again before deleting your account.';
+      return;
+    }
+    if (!Get.isRegistered<ApiService>()) {
+      statusMessage.value =
+          'Account deletion is not available right now. Please try again.';
+      return;
+    }
+
+    isDeletingAccount.value = true;
+    statusMessage.value = null;
     try {
-      if (Get.isRegistered<ApiService>()) {
-        await Get.find<ApiService>().delete(
-          endpoint: ApiConstants.deleteAccount,
-        );
-      }
+      await Get.find<ApiService>().delete(endpoint: ApiConstants.deleteAccount);
+      await logout();
+    } on ApiException catch (error) {
+      debugPrint('ProfileController.deleteAccount API failed: $error');
+      statusMessage.value = error.message.isNotEmpty
+          ? error.message
+          : 'Account deletion failed. Please try again.';
+    } on TimeoutException {
+      statusMessage.value =
+          'Account deletion request timed out. Please try again.';
+    } on http.ClientException {
+      statusMessage.value =
+          'Internet connection issue. Account was not deleted.';
     } catch (error) {
       debugPrint('ProfileController.deleteAccount API failed: $error');
+      statusMessage.value =
+          'Account deletion failed. Please try again or contact support.';
+    } finally {
+      isDeletingAccount.value = false;
     }
-    await logout();
+  }
+
+  Future<void> syncNotificationPreference() async {
+    try {
+      if (Get.isRegistered<PushNotificationService>()) {
+        notificationsEnabled.value = await Get.find<PushNotificationService>()
+            .areNotificationsEnabled();
+        return;
+      }
+      notificationsEnabled.value =
+          _storage.read<bool>(
+            PushNotificationService.notificationsDisabledStorageKey,
+          ) !=
+          true;
+    } catch (error) {
+      debugPrint('ProfileController.syncNotificationPreference failed: $error');
+      notificationsEnabled.value = false;
+    }
+  }
+
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    if (isUpdatingNotifications.value) return;
+    isUpdatingNotifications.value = true;
+    statusMessage.value = null;
+    try {
+      final service = await _pushNotificationService();
+      if (enabled) {
+        final allowed = await service.enableNotifications();
+        notificationsEnabled.value = allowed;
+        statusMessage.value = allowed
+            ? 'Order and package notifications are turned on.'
+            : 'Notifications were not allowed. You can enable them from device settings.';
+        return;
+      }
+
+      await service.disableNotifications();
+      notificationsEnabled.value = false;
+      statusMessage.value = 'Order and package notifications are turned off.';
+    } finally {
+      isUpdatingNotifications.value = false;
+    }
+  }
+
+  Future<PushNotificationService> _pushNotificationService() async {
+    if (Get.isRegistered<PushNotificationService>()) {
+      return Get.find<PushNotificationService>();
+    }
+    final service = Get.put(PushNotificationService(), permanent: true);
+    await service.init();
+    return service;
   }
 
   Future<void> loadAddresses() async {
@@ -458,7 +536,7 @@ class ProfileController extends GetxController {
     if (!hasBackendSession) {
       addresses.clear();
       addressLoadError.value =
-          'Login session missing hai. Apne saved addresses dekhne ke liye dobara login karo.';
+          'Login session is missing. Please log in again to view your saved addresses.';
       requiresAddressRelogin.value = true;
       isLoadingAddresses.value = false;
       return;
@@ -478,21 +556,20 @@ class ProfileController extends GetxController {
         _restoreLocalAddresses();
         addressLoadError.value = error.message.isNotEmpty
             ? error.message
-            : 'Addresses abhi load nahi ho rahe. Dobara try karo.';
+            : 'Addresses are not loading right now. Please try again.';
       }
     } on http.ClientException {
       _restoreLocalAddresses();
       addressLoadError.value =
-          'Internet issue ki wajah se addresses sync nahi ho sake.';
+          'Addresses could not be synced because of an internet issue.';
     } on TimeoutException {
       _restoreLocalAddresses();
-      addressLoadError.value =
-          'Address request timeout ho gayi. Dobara try karo.';
+      addressLoadError.value = 'Address request timed out. Please try again.';
     } catch (error) {
       debugPrint('ProfileController.loadAddresses failed: $error');
       _restoreLocalAddresses();
       addressLoadError.value =
-          'Addresses abhi load nahi ho pa rahe. Dobara try karo.';
+          'Addresses could not be loaded right now. Please try again.';
     } finally {
       isLoadingAddresses.value = false;
     }
@@ -545,7 +622,8 @@ class ProfileController extends GetxController {
     final phone = addressPhoneController.text.trim();
     var addressLine = addressLineController.text.trim();
     if (fullName.isEmpty || phone.length < 10 || addressLine.isEmpty) {
-      statusMessage.value = 'Name, valid phone aur address zaroor enter karo.';
+      statusMessage.value =
+          'Enter a name, a valid phone number, and an address.';
       return;
     }
 
@@ -637,16 +715,15 @@ class ProfileController extends GetxController {
       }
       statusMessage.value = error.message.isNotEmpty
           ? error.message
-          : 'Address save nahi ho saka. Dobara try karo.';
+          : 'Address could not be saved. Please try again.';
     } on http.ClientException {
       statusMessage.value =
-          'Internet issue ki wajah se address save nahi ho saka.';
+          'Address could not be saved because of an internet issue.';
     } on TimeoutException {
-      statusMessage.value =
-          'Address save request timeout ho gayi. Dobara try karo.';
+      statusMessage.value = 'Address save request timed out. Please try again.';
     } catch (error) {
       debugPrint('ProfileController.saveAddress failed: $error');
-      statusMessage.value = 'Address save nahi ho saka. Dobara try karo.';
+      statusMessage.value = 'Address could not be saved. Please try again.';
     }
   }
 
@@ -734,7 +811,7 @@ class ProfileController extends GetxController {
     selectedAddressId.value = temporaryAddress.id;
     await _storage.remove(_selectedVendorIdStorageKey);
     liveLocationAddress.value = normalizedAddress;
-    await _updateUserLocation(temporaryAddress);
+    unawaited(_updateUserLocation(temporaryAddress));
     final vendorId = await _tryResolveVendor(temporaryAddress);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
@@ -746,7 +823,7 @@ class ProfileController extends GetxController {
         temporaryAddress.copyWith(vendorId: vendorId),
       );
     }
-    await _refreshCatalogAfterAddressChange();
+    unawaited(_refreshCatalogAfterAddressChange());
   }
 
   Future<void> applyBlockedServiceAreaLocation({
@@ -766,7 +843,7 @@ class ProfileController extends GetxController {
         longitude > 180) {
       await _storage.remove(_selectedVendorIdStorageKey);
       await _storage.write(_selectedLocationServiceableStorageKey, false);
-      await _refreshCatalogAfterAddressChange();
+      unawaited(_refreshCatalogAfterAddressChange());
       return;
     }
 
@@ -789,7 +866,7 @@ class ProfileController extends GetxController {
     await _storage.remove(_selectedVendorIdStorageKey);
     await _storage.write(_selectedLocationServiceableStorageKey, false);
     await _persistSelectedAddress(blockedAddress);
-    await _refreshCatalogAfterAddressChange();
+    unawaited(_refreshCatalogAfterAddressChange());
   }
 
   Future<void> deleteAddress(AddressModel address) async {
@@ -818,10 +895,10 @@ class ProfileController extends GetxController {
       }
       statusMessage.value = error.message.isNotEmpty
           ? error.message
-          : 'Address delete nahi ho saka. Dobara try karo.';
+          : 'Address could not be deleted. Please try again.';
     } on http.ClientException {
       statusMessage.value =
-          'Internet issue ki wajah se address delete nahi ho saka.';
+          'Address could not be deleted because of an internet issue.';
     }
   }
 
@@ -946,25 +1023,6 @@ class ProfileController extends GetxController {
     return source.map((item) => item.copyWith(isSelected: false)).toList();
   }
 
-  Future<void> _clearStartupSelectedAddressContext() async {
-    selectedAddressId.value = null;
-    await _storage.remove(_selectedAddressStorageKey);
-    await _storage.remove(_selectedVendorIdStorageKey);
-    await _storage.remove(_selectedLocationServiceableStorageKey);
-
-    final rawList =
-        _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
-    if (rawList.isEmpty) return;
-
-    final cleaned = rawList
-        .whereType<Map>()
-        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item)))
-        .map((item) => item.copyWith(isSelected: false))
-        .map((item) => item.toJson())
-        .toList();
-    await _storage.write(_addressStorageKey, cleaned);
-  }
-
   void _restoreLocalAddresses() {
     final rawList =
         _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
@@ -1001,12 +1059,15 @@ class ProfileController extends GetxController {
       final locationLabel = resolved?.trim().isNotEmpty == true
           ? resolved!.trim()
           : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      if (activeAddress != null) return;
       liveLocationAddress.value = locationLabel;
-      await _applyLiveLocationCatalogContext(
-        address: locationLabel,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+      if (hasBackendSession) {
+        await _applyLiveLocationCatalogContext(
+          address: locationLabel,
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+      }
     } catch (error) {
       debugPrint('ProfileController._resolveHomeLocationPreview: $error');
     } finally {
@@ -1019,6 +1080,9 @@ class ProfileController extends GetxController {
     required double latitude,
     required double longitude,
   }) async {
+    final selected = activeAddress;
+    if (selected != null && selected.id != 'live-location') return;
+
     final user = currentUser;
     final liveAddress = AddressModel(
       id: 'live-location',
@@ -1148,7 +1212,7 @@ class ProfileController extends GetxController {
   void _markAddressSessionExpired() {
     addresses.clear();
     addressLoadError.value =
-        'Session expire ho gayi hai. Backend addresses dekhne ke liye dobara login karo.';
+        'Session expired. Please log in again to view backend addresses.';
     requiresAddressRelogin.value = true;
   }
 
@@ -1179,7 +1243,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }
@@ -1216,7 +1280,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }
@@ -1269,6 +1333,10 @@ class ProfileController extends GetxController {
     Map<String, dynamic> response,
     double radiusKm,
   ) {
+    if (_explicitlyOutsideRadius(response)) {
+      return const [];
+    }
+
     final vendors = _extractVendorMaps(response);
     if (vendors.isNotEmpty) {
       final nearbyVendors = vendors.where((vendor) {
@@ -1313,6 +1381,27 @@ class ProfileController extends GetxController {
       if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
+  }
+
+  bool _explicitlyOutsideRadius(Map<String, dynamic> response) {
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+
+    for (final source in [response, data, result]) {
+      final within = source['withinServiceRadius'] ?? source['within_radius'];
+      if (within == false || within.toString().toLowerCase() == 'false') {
+        return true;
+      }
+      final count = _numberFrom(source['count'] ?? source['vendorCount']);
+      if (count != null && count <= 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _extractVendorMaps(Map<String, dynamic> response) {
@@ -1382,7 +1471,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }

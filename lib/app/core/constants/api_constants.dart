@@ -15,6 +15,7 @@ class ApiConstants {
   // Catalog
   static const categories = '/categories';
   static const productSearch = '/products/search';
+  static const ads = '/ads';
 
   // Cart (legacy compatible)
   static const cart = '/cart';

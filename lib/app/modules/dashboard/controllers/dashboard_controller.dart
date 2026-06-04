@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/utils/auth_guard.dart';
 import '../../../core/widgets/delivery_rating_dialog.dart';
 import '../../../data/models/category_model.dart';
@@ -83,7 +84,6 @@ int _normalizeDashboardIndex(int index) => index.clamp(0, 4);
 
 class DashboardController extends GetxController {
   final currentIndex = 0.obs;
-  final currentPromoIndex = 0.obs;
   final currentSearchHintIndex = 0.obs;
   final isCatalogLoading = false.obs;
   final isFeaturedLoading = false.obs;
@@ -104,11 +104,6 @@ class DashboardController extends GetxController {
     'Search for ata, dal, coke',
     'Search "chips"',
     'Search "pooja thali"',
-  ];
-
-  final promoCards = const [
-    'assets/images/slider1.jpeg',
-    'assets/images/slider2.jpeg',
   ];
 
   void changeTab(int index) {
@@ -194,12 +189,6 @@ class DashboardController extends GetxController {
     }
   }
 
-  void nextPromo() {
-    if (promoCards.isEmpty) return;
-
-    currentPromoIndex.value = (currentPromoIndex.value + 1) % promoCards.length;
-  }
-
   Future<void> loadCatalog({bool force = false}) async {
     if ((isCatalogLoading.value || isFeaturedLoading.value) && !force) return;
 
@@ -215,6 +204,12 @@ class DashboardController extends GetxController {
         repo.invalidateProductScope();
         featuredProducts.clear();
       }
+
+      if (!force) {
+        await _ensureGuestServiceAreaChecked();
+      }
+
+      if (!_isCurrentCatalogLoad(requestId)) return;
 
       await repo.loadDeliverySettings(force: force);
 
@@ -266,6 +261,16 @@ class DashboardController extends GetxController {
 
   bool _isCurrentCatalogLoad(int requestId) {
     return requestId == _catalogLoadRequestId;
+  }
+
+  Future<void> _ensureGuestServiceAreaChecked() async {
+    if (Get.isRegistered<ProfileController>() &&
+        Get.find<ProfileController>().hasBackendSession) {
+      return;
+    }
+    if (!Get.isRegistered<ServiceAreaGateController>()) return;
+
+    await Get.find<ServiceAreaGateController>().ensureChecked();
   }
 
   Future<void> syncActiveProductOrder() async {

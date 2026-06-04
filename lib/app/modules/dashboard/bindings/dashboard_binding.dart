@@ -10,7 +10,9 @@ import '../../../core/services/package_socket_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/services/service_area_gate_service.dart';
+import '../../../data/repositories/ads_repository.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../ads/controllers/ads_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../categories/controllers/categories_controller.dart';
 import '../../order_controller.dart';
@@ -36,6 +38,13 @@ class DashboardBinding extends Bindings {
     }
     if (!Get.isRegistered<CatalogRepository>()) {
       Get.put(CatalogRepository(Get.find()), permanent: true);
+    }
+    if (!Get.isRegistered<AdsRepository>()) {
+      Get.put(AdsRepository(Get.find()), permanent: true);
+    }
+    if (!Get.isRegistered<AdsController>()) {
+      final adsController = Get.put(AdsController(Get.find()), permanent: true);
+      adsController.prefetchCorePlacements();
     }
     if (!Get.isRegistered<CartController>()) {
       Get.put(CartController(GetStorage()), permanent: true);

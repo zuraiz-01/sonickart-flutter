@@ -53,7 +53,7 @@ class CategoriesController extends GetxController {
     if (selected == null) return const [];
 
     final options = subcategories.toList(growable: true);
-    if (_mixedProducts(categoryProducts).isNotEmpty) {
+    if (options.isNotEmpty && _mixedProducts(categoryProducts).isNotEmpty) {
       options.add(ProductSubcategoryModel.mixed(categoryId: selected.id));
     }
     return options;

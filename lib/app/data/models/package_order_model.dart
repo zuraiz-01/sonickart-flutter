@@ -842,6 +842,40 @@ class PackageOrderModel {
   final String receiverPhone;
   final Map<String, dynamic> raw;
 
+  int? get deliveryRating {
+    final parsed = _intOrNull(
+      raw['rating'] ??
+          raw['deliveryRating'] ??
+          raw['delivery_rating'] ??
+          raw['deliveryPartnerRating'] ??
+          raw['delivery_partner_rating'],
+    );
+    if (parsed == null || parsed < 1 || parsed > 5) return null;
+    return parsed;
+  }
+
+  String get deliveryRatingFeedback {
+    return _firstString([
+      raw['ratingFeedback'],
+      raw['rating_feedback'],
+      raw['deliveryFeedback'],
+      raw['delivery_feedback'],
+      raw['feedback'],
+    ]);
+  }
+
+  DateTime? get deliveryRatedAt {
+    final value =
+        raw['ratedAt'] ??
+        raw['rated_at'] ??
+        raw['deliveryRatedAt'] ??
+        raw['delivery_rated_at'];
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value?.toString() ?? '');
+  }
+
+  bool get hasDeliveryRating => deliveryRating != null;
+
   Map<String, dynamic> toJson() {
     final dropCount = _maxInt([
       dropAddresses.length,
@@ -935,7 +969,11 @@ class PackageOrderModel {
       }
     }
 
-    return {
+    final rating = deliveryRating;
+    final feedback = deliveryRatingFeedback;
+    final ratedAt = deliveryRatedAt;
+
+    final payload = <String, dynamic>{
       'id': id,
       'orderId': id,
       'orderType': 'package',
@@ -979,6 +1017,25 @@ class PackageOrderModel {
       'createdAt': createdAt.toIso8601String(),
       'raw': raw,
     };
+
+    if (rating != null) {
+      payload['rating'] = rating;
+      payload['deliveryRating'] = rating;
+      payload['delivery_rating'] = rating;
+    }
+    if (feedback.isNotEmpty) {
+      payload['ratingFeedback'] = feedback;
+      payload['rating_feedback'] = feedback;
+      payload['deliveryFeedback'] = feedback;
+      payload['delivery_feedback'] = feedback;
+    }
+    if (ratedAt != null) {
+      final submittedAt = ratedAt.toIso8601String();
+      payload['ratedAt'] = submittedAt;
+      payload['rated_at'] = submittedAt;
+    }
+
+    return payload;
   }
 
   factory PackageOrderModel.fromJson(Map<String, dynamic> json) {
@@ -1099,7 +1156,7 @@ class PackageOrderModel {
         (inferredDropCount > 0 ? inferredDropCount : 1);
 
     // FIX: agar backend currentDropIndex na bheje,
-    // to dropStatuses se next pending drop calculate hoga.
+    // The next pending drop is calculated from dropStatuses.
     final calculatedDropIndex = _calculateCurrentDropIndex(dropStatuses);
 
     final currentDropIndex = _clampDropIndex(

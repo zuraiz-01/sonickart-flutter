@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../data/models/order_model.dart';
 import '../core/widgets/delivery_rating_dialog.dart';
+import '../core/widgets/live_tracking_bike_marker_icon.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import 'order_controller.dart';
@@ -239,6 +240,8 @@ class _LiveTrackingHeader extends StatelessWidget {
     }
     if (lower == 'arriving' ||
         lower == 'picked' ||
+        lower == 'picked_up' ||
+        lower == 'in_transit' ||
         lower == 'out_for_delivery') {
       return 'Order Picked Up';
     }
@@ -477,7 +480,7 @@ class _LiveStatusCard extends StatelessWidget {
     return switch (normalized) {
       'pending' => 'Waiting for pickup',
       'assigned' => 'On the way to pickup',
-      'picked' => 'On the way to delivery',
+      'picked' || 'picked_up' || 'in_transit' => 'On the way to delivery',
       'confirmed' || 'accepted' => 'On the way',
       'out_for_delivery' => 'Out for delivery',
       'prepared' => 'Preparing order',
@@ -998,7 +1001,24 @@ class _LiveMapCardState extends State<_LiveMapCard> {
   GoogleMapController? _mapController;
   LatLng? _displayedPartnerLoc;
   LatLng? _targetPartnerLoc;
+  BitmapDescriptor? _partnerBikeIcon;
   Timer? _glideTimer;
+  String? _lastCameraKey;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPartnerBikeIcon());
+  }
+
+  Future<void> _loadPartnerBikeIcon() async {
+    try {
+      final icon = await loadLiveTrackingBikeMarkerIcon();
+      if (mounted) setState(() => _partnerBikeIcon = icon);
+    } catch (_) {
+      // Keep the default map marker if the asset cannot be loaded.
+    }
+  }
 
   @override
   void didUpdateWidget(covariant _LiveMapCard oldWidget) {
@@ -1018,6 +1038,7 @@ class _LiveMapCardState extends State<_LiveMapCard> {
       _displayedPartnerLoc = data.deliveryPersonLocation;
       _targetPartnerLoc = data.deliveryPersonLocation;
     }
+    _scheduleFitToBounds(data);
   }
 
   void _startGlide() {
@@ -1067,12 +1088,81 @@ class _LiveMapCardState extends State<_LiveMapCard> {
         Marker(
           markerId: const MarkerId('deliveryPartner'),
           position: partnerPos,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
+          icon:
+              _partnerBikeIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          anchor: liveTrackingBikeMarkerAnchor,
+          flat: true,
           infoWindow: const InfoWindow(title: 'Delivery Partner'),
         ),
     };
+  }
+
+  void _scheduleFitToBounds(_TrackingMapData data) {
+    if (_mapController == null || data.points.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_fitToBounds(data));
+    });
+  }
+
+  Future<void> _fitToBounds(_TrackingMapData data) async {
+    final controller = _mapController;
+    final points = data.focusPoints;
+    if (controller == null || points.isEmpty) return;
+
+    final cameraKey = points
+        .map(
+          (point) =>
+              '${point.latitude.toStringAsFixed(5)},${point.longitude.toStringAsFixed(5)}',
+        )
+        .join('|');
+    if (_lastCameraKey == cameraKey) return;
+
+    try {
+      if (points.length == 1) {
+        await controller.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: points.first, zoom: 15),
+          ),
+        );
+      } else {
+        await controller.animateCamera(
+          CameraUpdate.newLatLngBounds(_boundsFor(points), 54.rpx),
+        );
+      }
+      _lastCameraKey = cameraKey;
+    } catch (_) {
+      // GoogleMap can reject camera updates before its native view is laid out.
+    }
+  }
+
+  LatLngBounds _boundsFor(List<LatLng> points) {
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+
+    for (final point in points.skip(1)) {
+      minLat = min(minLat, point.latitude);
+      maxLat = max(maxLat, point.latitude);
+      minLng = min(minLng, point.longitude);
+      maxLng = max(maxLng, point.longitude);
+    }
+
+    if ((maxLat - minLat).abs() < 0.001) {
+      minLat -= 0.004;
+      maxLat += 0.004;
+    }
+    if ((maxLng - minLng).abs() < 0.001) {
+      minLng -= 0.004;
+      maxLng += 0.004;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
   }
 
   @override
@@ -1106,6 +1196,7 @@ class _LiveMapCardState extends State<_LiveMapCard> {
               ),
               onMapCreated: (controller) {
                 _mapController = controller;
+                _scheduleFitToBounds(data);
               },
               style: _mapStyleJson,
               markers: _animatedMarkers(data),
@@ -1228,36 +1319,74 @@ class _TrackingMapData {
     final deliveryPartner = raw['deliveryPartner'] is Map
         ? Map<String, dynamic>.from(raw['deliveryPartner'] as Map)
         : const <String, dynamic>{};
-    final status = order.status.trim().toLowerCase();
+    final status = _normalizedStatus(order.status);
     return _TrackingMapData(
       deliveryLocation:
           _coordinateFrom(raw['deliveryLocation']) ??
           _coordinateFrom(raw['dropLocation']) ??
+          _coordinateFrom(raw['customerLocation']) ??
+          _coordinateFrom(raw['selectedAddress']) ??
+          _coordinateFrom(raw['deliveryAddress']) ??
+          _coordinateFrom(raw['shippingAddress']) ??
           _coordinateFrom({
             'latitude':
                 raw['customerLatitude'] ??
+                raw['customer_latitude'] ??
                 raw['latitude'] ??
                 raw['deliveryLatitude'] ??
-                raw['delivery_latitude'],
+                raw['delivery_latitude'] ??
+                raw['dropLatitude'] ??
+                raw['drop_latitude'] ??
+                raw['dropLat'] ??
+                raw['drop_lat'],
             'longitude':
                 raw['customerLongitude'] ??
+                raw['customer_longitude'] ??
                 raw['longitude'] ??
                 raw['deliveryLongitude'] ??
-                raw['delivery_longitude'],
+                raw['delivery_longitude'] ??
+                raw['dropLongitude'] ??
+                raw['drop_longitude'] ??
+                raw['dropLng'] ??
+                raw['drop_lng'],
           }),
       pickupLocation:
           _coordinateFrom(raw['pickupLocation']) ??
           _coordinateFrom(raw['vendorLocation']) ??
-          _coordinateFrom(raw['storeLocation']),
+          _coordinateFrom(raw['storeLocation']) ??
+          _coordinateFrom(raw['pickup']) ??
+          _coordinateFrom(raw['vendorDetails']),
       deliveryPersonLocation:
           _coordinateFrom(raw['deliveryPersonLocation']) ??
-          _coordinateFrom(deliveryPartner['liveLocation']),
-      hasAccepted:
-          status == 'confirmed' || status == 'accepted' || status == 'assigned',
-      hasPickedUp:
-          status == 'arriving' ||
-          status == 'picked' ||
-          status == 'out_for_delivery',
+          _coordinateFrom(raw['delivery_person_location']) ??
+          _coordinateFrom(raw['riderLocation']) ??
+          _coordinateFrom(raw['driverLocation']) ??
+          _coordinateFrom(raw['partnerLocation']) ??
+          _coordinateFrom(deliveryPartner['liveLocation']) ??
+          _coordinateFrom(deliveryPartner['location']) ??
+          _coordinateFrom(deliveryPartner['currentLocation']) ??
+          _coordinateFrom({
+            'latitude':
+                raw['deliveryPartnerLatitude'] ??
+                raw['delivery_partner_latitude'] ??
+                raw['deliveryPersonLatitude'] ??
+                raw['delivery_person_latitude'] ??
+                raw['driverLatitude'] ??
+                raw['driver_latitude'] ??
+                raw['partnerLatitude'] ??
+                raw['partner_latitude'],
+            'longitude':
+                raw['deliveryPartnerLongitude'] ??
+                raw['delivery_partner_longitude'] ??
+                raw['deliveryPersonLongitude'] ??
+                raw['delivery_person_longitude'] ??
+                raw['driverLongitude'] ??
+                raw['driver_longitude'] ??
+                raw['partnerLongitude'] ??
+                raw['partner_longitude'],
+          }),
+      hasAccepted: _hasAccepted(status),
+      hasPickedUp: _hasPickedUp(status),
     );
   }
 
@@ -1268,10 +1397,11 @@ class _TrackingMapData {
   ].whereType<LatLng>().toList();
 
   List<LatLng> get focusPoints {
-    final first = hasAccepted ? deliveryPersonLocation : deliveryLocation;
-    final second = hasPickedUp ? deliveryPersonLocation : pickupLocation;
-    final focused = [first, second].whereType<LatLng>().toList();
-    return focused.length >= 2 ? focused : points;
+    final route = [
+      deliveryPersonLocation,
+      hasPickedUp ? deliveryLocation : pickupLocation,
+    ].whereType<LatLng>().toList();
+    return route.length >= 2 ? route : points;
   }
 
   LatLng get initialTarget =>
@@ -1279,7 +1409,7 @@ class _TrackingMapData {
 
   double? get liveDistanceKm {
     final origin = deliveryPersonLocation;
-    final destination = deliveryLocation;
+    final destination = hasPickedUp ? deliveryLocation : pickupLocation;
     if (origin == null || destination == null) return null;
     return _distanceKm(origin, destination);
   }
@@ -1318,10 +1448,8 @@ class _TrackingMapData {
 
   Set<Polyline> get polylines {
     final lines = <Polyline>{};
-    final routeTarget = hasPickedUp
-        ? deliveryLocation
-        : hasAccepted
-        ? pickupLocation
+    final routeTarget = hasAccepted
+        ? (hasPickedUp ? deliveryLocation : pickupLocation)
         : null;
     if (deliveryPersonLocation != null && routeTarget != null) {
       lines.add(
@@ -1420,6 +1548,53 @@ class _TrackingMapData {
         latitude <= 90 &&
         longitude >= -180 &&
         longitude <= 180;
+  }
+
+  static String _normalizedStatus(String status) {
+    final normalized = status.trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
+    final compact = normalized.replaceAll('_', '');
+    if (compact == 'picked' ||
+        compact == 'pickup' ||
+        compact == 'pickedup' ||
+        compact == 'orderpickedup') {
+      return 'picked_up';
+    }
+    if (compact == 'intransit' ||
+        compact == 'transit' ||
+        compact == 'orderintransit') {
+      return 'in_transit';
+    }
+    return normalized.isEmpty ? 'pending' : normalized;
+  }
+
+  static bool _hasAccepted(String status) {
+    return const {
+      'confirmed',
+      'accepted',
+      'assigned',
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'out_for_delivery',
+      'delivered',
+      'completed',
+      'complete',
+    }.contains(status);
+  }
+
+  static bool _hasPickedUp(String status) {
+    return const {
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'out_for_delivery',
+      'delivered',
+      'completed',
+      'complete',
+    }.contains(status);
   }
 
   static double _distanceKm(LatLng origin, LatLng destination) {

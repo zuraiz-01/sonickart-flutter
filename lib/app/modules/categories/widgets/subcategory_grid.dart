@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../../../data/models/app_ad_model.dart';
 import '../../../data/models/product_subcategory_model.dart';
 import '../../../theme/app_colors.dart';
+import '../../ads/widgets/ad_placement.dart';
 
 class SubcategoryGrid extends StatelessWidget {
   const SubcategoryGrid({
@@ -16,22 +18,35 @@ class SubcategoryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: EdgeInsets.fromLTRB(8.wpx, 10.hpx, 8.wpx, 112.hpx),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 8.wpx,
-        mainAxisSpacing: 8.hpx,
-        childAspectRatio: 0.95,
-      ),
-      itemCount: subcategories.length,
-      itemBuilder: (context, index) {
-        final subcategory = subcategories[index];
-        return _SubcategoryCard(
-          subcategory: subcategory,
-          onTap: () => onTap(subcategory),
-        );
-      },
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(8.wpx, 10.hpx, 8.wpx, 8.hpx),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 8.wpx,
+              mainAxisSpacing: 8.hpx,
+              childAspectRatio: 0.95,
+            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final subcategory = subcategories[index];
+              return _SubcategoryCard(
+                subcategory: subcategory,
+                onTap: () => onTap(subcategory),
+              );
+            }, childCount: subcategories.length),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: AdPlacement(
+            placement: AppAdPlacement.categories,
+            height: 108.hpx,
+            padding: EdgeInsets.fromLTRB(8.wpx, 4.hpx, 8.wpx, 10.hpx),
+          ),
+        ),
+        SliverToBoxAdapter(child: SizedBox(height: 102.hpx)),
+      ],
     );
   }
 }

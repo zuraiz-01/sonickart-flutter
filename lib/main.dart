@@ -24,7 +24,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await _clearLaunchAddressSelection();
   if (!Get.isRegistered<AppThemeController>()) {
     Get.put(AppThemeController(GetStorage()), permanent: true);
   }
@@ -42,21 +41,6 @@ Future<void> main() async {
     await Get.putAsync(() => PushNotificationService().init(), permanent: true);
   }
   runApp(const SonicCartApp());
-}
-
-Future<void> _clearLaunchAddressSelection() async {
-  final storage = GetStorage();
-  await storage.remove('selectedAddress');
-  await storage.remove('selectedVendorId');
-
-  final rawAddresses = storage.read<List<dynamic>>('saved_addresses');
-  if (rawAddresses == null || rawAddresses.isEmpty) return;
-
-  final cleanedAddresses = rawAddresses
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item)..['isSelected'] = false)
-      .toList();
-  await storage.write('saved_addresses', cleanedAddresses);
 }
 
 Future<void> _initializeFirebase() async {

@@ -32,7 +32,7 @@ class CatalogRepository {
   double _productRadiusKm = _defaultProductRadiusKm;
   int _featuredProductsLimit = _defaultFeaturedProductsLimit;
   bool _settingsLoaded = false;
-  bool _isFetchingSettings = false;
+  Future<ProductCatalogSettings>? _settingsLoadFuture;
   Future<List<CategoryModel>>? _categoriesLoadFuture;
   List<CategoryModel>? _cachedCategories;
   DateTime? _categoriesCachedAt;
@@ -380,22 +380,25 @@ class CatalogRepository {
   Future<ProductCatalogSettings> loadDeliverySettings({
     bool force = false,
   }) async {
-    if (force || (!_settingsLoaded && !_isFetchingSettings)) {
-      _isFetchingSettings = true;
-      unawaited(
-        _fetchDeliverySettingsFromFirestore()
-            .then((_) {
-              _isFetchingSettings = false;
-            })
-            .catchError((_) {
-              _isFetchingSettings = false;
-            }),
+    if (!force && _settingsLoaded) {
+      return ProductCatalogSettings(
+        productRadiusKm: _productRadiusKm,
+        featuredProductsLimit: _featuredProductsLimit,
       );
     }
-    return ProductCatalogSettings(
-      productRadiusKm: _productRadiusKm,
-      featuredProductsLimit: _featuredProductsLimit,
-    );
+
+    final existing = _settingsLoadFuture;
+    if (!force && existing != null) return existing;
+
+    final future = _fetchDeliverySettingsFromFirestore();
+    _settingsLoadFuture = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_settingsLoadFuture, future)) {
+        _settingsLoadFuture = null;
+      }
+    }
   }
 
   Future<ProductCatalogSettings> _fetchDeliverySettingsFromFirestore() async {
@@ -641,9 +644,9 @@ class CatalogRepository {
     );
     var scopedLatitude = latitude ?? selectedAddress?.latitude;
     var scopedLongitude = longitude ?? selectedAddress?.longitude;
-    if (selectedAddress != null && _isSelectedLocationBlocked) {
+    if (_isSelectedLocationBlocked) {
       debugPrint(
-        'CatalogRepository._resolveProductContext: selected location is blocked, returning empty vendor scope',
+        'CatalogRepository._resolveProductContext: current service location is blocked, returning empty vendor scope',
       );
       return ProductCatalogContext(
         vendorIds: const [],
@@ -663,8 +666,7 @@ class CatalogRepository {
     );
     final canTrustStoredVendorIds =
         storedVendorIds.isNotEmpty &&
-        (_hasBackendSession ||
-            !_hasValidCoordinates(scopedLatitude, scopedLongitude));
+        !_hasValidCoordinates(scopedLatitude, scopedLongitude);
     if (canTrustStoredVendorIds) {
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
@@ -805,11 +807,6 @@ class CatalogRepository {
     return normalized.isEmpty ? null : normalized;
   }
 
-  bool get _hasBackendSession {
-    final token = _storage.read<String>('accessToken');
-    return token != null && token.trim().isNotEmpty;
-  }
-
   bool get _isSelectedLocationBlocked {
     return _storage.read(_selectedLocationServiceableKey) == false;
   }
@@ -890,6 +887,10 @@ class CatalogRepository {
     Map<String, dynamic> response,
     double radiusKm,
   ) {
+    if (_explicitlyOutsideRadius(response)) {
+      return const [];
+    }
+
     final vendors = _extractVendorMaps(response);
     if (vendors.isNotEmpty) {
       final nearbyVendors = vendors.where((vendor) {
@@ -934,6 +935,27 @@ class CatalogRepository {
       if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
+  }
+
+  bool _explicitlyOutsideRadius(Map<String, dynamic> response) {
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+
+    for (final source in [response, data, result]) {
+      final within = source['withinServiceRadius'] ?? source['within_radius'];
+      if (within == false || within.toString().toLowerCase() == 'false') {
+        return true;
+      }
+      final count = _numberFrom(source['count'] ?? source['vendorCount']);
+      if (count != null && count <= 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _extractVendorMaps(Map<String, dynamic> response) {

@@ -24,5 +24,6 @@ class AppThemeController extends GetxController {
     isDarkMode.value = value;
     await _storage.write(_storageKey, value);
     Get.changeThemeMode(themeMode);
+    await Get.forceAppUpdate();
   }
 }

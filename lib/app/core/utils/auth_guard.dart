@@ -14,7 +14,7 @@ bool requireAuth() {
   if (authController.isLoggedIn) return true;
 
   Get.dialog(
-    _LoginRequiredDialog(
+    LoginRequiredDialog(
       onConfirm: () {
         Get.back();
         Get.toNamed(AppRoutes.login);
@@ -26,8 +26,8 @@ bool requireAuth() {
   return false;
 }
 
-class _LoginRequiredDialog extends StatelessWidget {
-  const _LoginRequiredDialog({required this.onConfirm});
+class LoginRequiredDialog extends StatelessWidget {
+  const LoginRequiredDialog({super.key, required this.onConfirm});
 
   final VoidCallback onConfirm;
 

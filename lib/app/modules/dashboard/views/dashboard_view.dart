@@ -1,10 +1,10 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../../../data/models/app_ad_model.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/product_model.dart';
@@ -13,6 +13,7 @@ import '../../../theme/app_colors.dart';
 import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/service_area_gate_overlay.dart';
+import '../../ads/widgets/ad_placement.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
 import '../../cart/widgets/cart_summary_bar.dart';
@@ -138,7 +139,11 @@ class _HomeTab extends StatelessWidget {
         SizedBox(height: 10.hpx),
         _SearchBar(controller: controller),
         SizedBox(height: 12.hpx),
-        _PromoSection(controller: controller),
+        AdPlacement(
+          placement: AppAdPlacement.homeBanner,
+          height: 142.hpx,
+          padding: EdgeInsets.zero,
+        ),
         SizedBox(height: 10.hpx),
         _SectionTitle('Featured Products'),
         SizedBox(height: 7.hpx),
@@ -159,6 +164,8 @@ class _HomeTab extends StatelessWidget {
         ),
         SizedBox(height: 10.hpx),
         const _HomeTagline(),
+        SizedBox(height: 10.hpx),
+        const AdPlacement(placement: AppAdPlacement.home),
         SizedBox(height: 140.hpx),
       ],
     );
@@ -443,122 +450,6 @@ class _SearchBar extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PromoSection extends StatefulWidget {
-  const _PromoSection({required this.controller});
-  final DashboardController controller;
-
-  @override
-  State<_PromoSection> createState() => _PromoSectionState();
-}
-
-class _PromoSectionState extends State<_PromoSection> {
-  late final PageController _pageController;
-  Timer? _slideTimer;
-
-  static const _initialPage = 1000;
-
-  DashboardController get controller => widget.controller;
-
-  @override
-  void initState() {
-    super.initState();
-    final cardCount = controller.promoCards.length;
-    final initialPage = cardCount > 0
-        ? _initialPage - (_initialPage % cardCount)
-        : 0;
-    _pageController = PageController(initialPage: initialPage);
-    _startSlideTimer();
-  }
-
-  void _startSlideTimer() {
-    _slideTimer?.cancel();
-    if (controller.promoCards.length <= 1) return;
-    _slideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted || !_pageController.hasClients) return;
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _slideTimer?.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = controller.promoCards;
-    if (cards.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final sliderHeight = max(110.hpx, constraints.maxWidth * 0.46);
-
-            return SizedBox(
-              height: sliderHeight,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16.rpx),
-                child: PageView.builder(
-                  controller: _pageController,
-                  allowImplicitScrolling: true,
-                  onPageChanged: (page) {
-                    controller.currentPromoIndex.value = page % cards.length;
-                  },
-                  itemBuilder: (context, page) {
-                    final imagePath = cards[page % cards.length];
-                    return Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.10),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Image.asset(
-                        imagePath,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        alignment: Alignment.center,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          },
-        ),
-        SizedBox(height: 8.hpx),
-        Obx(
-          () => Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(cards.length, (i) {
-              final active = i == controller.currentPromoIndex.value;
-              return AnimatedContainer(
-                duration: Duration(milliseconds: 250),
-                margin: EdgeInsets.symmetric(horizontal: 3.wpx),
-                width: active ? 16.wpx : 6.wpx,
-                height: 6.hpx,
-                decoration: BoxDecoration(
-                  color: active
-                      ? AppColors.activeNav
-                      : AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(99.rpx),
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
     );
   }
 }

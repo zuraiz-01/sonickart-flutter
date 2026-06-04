@@ -90,7 +90,7 @@ class AddressBookView extends GetView<ProfileController> {
                     ),
                     SizedBox(height: 14.hpx),
                     Text(
-                      'Addresses load ho rahe hain...',
+                      'Loading addresses...',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w800,
@@ -104,13 +104,13 @@ class AddressBookView extends GetView<ProfileController> {
               _AddressStateCard(
                 child: Column(
                   children: [
-                      Icon(
-                        controller.requiresAddressRelogin.value
-                            ? Icons.lock_clock_outlined
-                            : Icons.cloud_off_rounded,
-                        size: 56,
-                        color: AppColors.price,
-                      ),
+                    Icon(
+                      controller.requiresAddressRelogin.value
+                          ? Icons.lock_clock_outlined
+                          : Icons.cloud_off_rounded,
+                      size: 56,
+                      color: AppColors.price,
+                    ),
                     SizedBox(height: 12.hpx),
                     Text(
                       controller.requiresAddressRelogin.value
@@ -158,11 +158,7 @@ class AddressBookView extends GetView<ProfileController> {
                 ),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.home_outlined,
-                      size: 56,
-                      color: AppColors.price,
-                    ),
+                    Icon(Icons.home_outlined, size: 56, color: AppColors.price),
                     SizedBox(height: 12.hpx),
                     Text(
                       'No saved addresses yet',
