@@ -2493,6 +2493,10 @@ class _PackageOrderListCard extends StatelessWidget {
                     onTap: () => PhoneDialer.open(partnerPhone),
                   ),
                 ],
+                if (order.hasDeliveryRating) ...[
+                  SizedBox(height: 8.hpx),
+                  _PackageRatingSummary(order: order),
+                ],
                 SizedBox(height: 8.hpx),
                 Row(
                   children: [
@@ -2576,6 +2580,77 @@ class _PackageOrderListCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PackageRatingSummary extends StatelessWidget {
+  const _PackageRatingSummary({required this.order});
+
+  final PackageOrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = order.deliveryRating;
+    if (rating == null) return const SizedBox.shrink();
+    final feedback = order.deliveryRatingFeedback.trim();
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 9.wpx, vertical: 7.hpx),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(
+          alpha: AppColors.isDarkMode ? 0.14 : 0.18,
+        ),
+        borderRadius: BorderRadius.circular(8.rpx),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.36)),
+      ),
+      child: Row(
+        crossAxisAlignment: feedback.isEmpty
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: [
+          _PackageRatingStars(rating: rating, size: 13.rpx),
+          SizedBox(width: 7.wpx),
+          Expanded(
+            child: Text(
+              feedback.isEmpty
+                  ? 'Rated $rating/5'
+                  : 'Rated $rating/5 - $feedback',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.spx,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PackageRatingStars extends StatelessWidget {
+  const _PackageRatingStars({required this.rating, required this.size});
+
+  final int rating;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final filled = index < rating;
+        return Icon(
+          filled ? Icons.star_rounded : Icons.star_border_rounded,
+          size: size,
+          color: AppColors.accent,
+        );
+      }),
     );
   }
 }

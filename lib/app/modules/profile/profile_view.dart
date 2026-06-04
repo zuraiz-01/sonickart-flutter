@@ -383,6 +383,7 @@ class ProfileView extends GetView<ProfileController> {
                         label: 'Suggest Products',
                         onTap: () => controller.handleMenuAction('suggest'),
                       ),
+                      _NotificationToggle(controller: controller),
                       _DarkModeToggle(controller: controller),
                       _MenuAction(
                         icon: Icons.info_outline_rounded,
@@ -416,7 +417,9 @@ class ProfileView extends GetView<ProfileController> {
                 ),
                 SizedBox(height: 14.hpx),
                 OutlinedButton.icon(
-                  onPressed: () => _confirmDeleteAccount(context),
+                  onPressed: controller.isDeletingAccount.value
+                      ? null
+                      : () => _confirmDeleteAccount(context),
                   icon: Icon(
                     Icons.delete_forever_rounded,
                     color: AppColors.error,
@@ -432,13 +435,22 @@ class ProfileView extends GetView<ProfileController> {
                       borderRadius: BorderRadius.circular(6.rpx),
                     ),
                   ),
-                  label: Text(
-                    'Delete Account',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15.spx,
-                    ),
-                  ),
+                  label: controller.isDeletingAccount.value
+                      ? SizedBox(
+                          width: 16.rpx,
+                          height: 16.rpx,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.error,
+                          ),
+                        )
+                      : Text(
+                          'Delete Account',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15.spx,
+                          ),
+                        ),
                 ),
                 if ((controller.statusMessage.value ?? '').isNotEmpty) ...[
                   SizedBox(height: 14.hpx),
@@ -515,6 +527,83 @@ class _QuickActionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NotificationToggle extends StatelessWidget {
+  const _NotificationToggle({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 15.wpx, vertical: 15.hpx),
+          child: Row(
+            children: [
+              Icon(
+                Icons.notifications_active_outlined,
+                color: AppColors.accent,
+                size: 20.rpx,
+              ),
+              SizedBox(width: 15.wpx),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Order Notifications',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.spx,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    SizedBox(height: 2.hpx),
+                    Text(
+                      'Status updates for orders and packages',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10.spx,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Obx(
+                () => controller.isUpdatingNotifications.value
+                    ? SizedBox(
+                        width: 22.rpx,
+                        height: 22.rpx,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.accent,
+                        ),
+                      )
+                    : Switch(
+                        value: controller.notificationsEnabled.value,
+                        onChanged: controller.setNotificationsEnabled,
+                        activeThumbColor: AppColors.accent,
+                        activeTrackColor: AppColors.accent.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          height: 1,
+          margin: EdgeInsets.only(left: 15.wpx),
+          color: AppColors.border,
+        ),
+      ],
     );
   }
 }

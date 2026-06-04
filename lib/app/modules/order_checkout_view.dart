@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../data/models/app_ad_model.dart';
 import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
+import 'ads/widgets/ad_placement.dart';
 import 'cart/controllers/cart_controller.dart';
 import 'order_controller.dart';
 import 'profile/controllers/profile_controller.dart';
@@ -110,6 +112,8 @@ class _OrderCheckoutViewState extends State<OrderCheckoutView> {
                   _BillDetails(totals: totals),
                   SizedBox(height: 10.hpx),
                   _DeliveryNoteBox(controller: controller),
+                  SizedBox(height: 10.hpx),
+                  const AdPlacement(placement: AppAdPlacement.checkout),
                 ],
               ),
               Positioned(

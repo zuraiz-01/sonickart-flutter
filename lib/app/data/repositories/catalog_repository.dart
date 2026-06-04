@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get_storage/get_storage.dart';
@@ -9,19 +10,22 @@ import 'package:get_storage/get_storage.dart';
 import '../../../firebase_options.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_service.dart';
+import '../../core/services/firebase_bootstrap.dart';
 import '../models/address_model.dart';
 import '../models/category_model.dart';
 import '../models/product_model.dart';
+import '../models/product_subcategory_model.dart';
 
 class CatalogRepository {
   CatalogRepository(this._apiService, {GetStorage? storage})
     : _storage = storage ?? GetStorage();
 
-  static const _defaultProductRadiusKm = 5.0;
+  static const _defaultProductRadiusKm = 50.0;
   static const _defaultFeaturedProductsLimit = 8;
   static const _lastKnownLocationTimeout = Duration(milliseconds: 800);
   static const _deviceLocationTimeout = Duration(seconds: 8);
   static const _featuredCategoryFetchTimeout = Duration(seconds: 8);
+  static const _selectedLocationServiceableKey = 'selectedLocationServiceable';
 
   final ApiService _apiService;
   final GetStorage _storage;
@@ -34,6 +38,10 @@ class CatalogRepository {
   DateTime? _categoriesCachedAt;
   final _productCache = <String, _TimedCache<List<ProductModel>>>{};
   final _productLoadFutures = <String, Future<List<ProductModel>>>{};
+  final _subcategoryCache =
+      <String, _TimedCache<List<ProductSubcategoryModel>>>{};
+  final _subcategoryLoadFutures =
+      <String, Future<List<ProductSubcategoryModel>>>{};
   final _visibleProductsById = <String, ProductModel>{};
 
   static const _catalogCacheTtl = Duration(minutes: 2);
@@ -44,6 +52,8 @@ class CatalogRepository {
   void invalidateProductScope() {
     _productCache.clear();
     _productLoadFutures.clear();
+    _subcategoryCache.clear();
+    _subcategoryLoadFutures.clear();
     _visibleProductsById.clear();
   }
 
@@ -80,6 +90,58 @@ class CatalogRepository {
       return const [];
     } finally {
       _categoriesLoadFuture = null;
+    }
+  }
+
+  Future<List<ProductSubcategoryModel>> fetchSubcategories(
+    String categoryId,
+  ) async {
+    final cachedCategories = _cachedCategories;
+    if (cachedCategories != null) {
+      for (final category in cachedCategories) {
+        if (category.id == categoryId && category.subcategories.isNotEmpty) {
+          return category.subcategories;
+        }
+      }
+    }
+
+    final cached = _subcategoryCache[categoryId];
+    if (cached != null && !_isExpired(cached.cachedAt)) {
+      return cached.value;
+    }
+    final inFlight = _subcategoryLoadFutures[categoryId];
+    if (inFlight != null) return inFlight;
+
+    debugPrint(
+      'CatalogRepository.fetchSubcategories: request started for $categoryId',
+    );
+    final future = () async {
+      final response = await _apiService.get(
+        endpoint: ApiConstants.categorySubcategories(categoryId),
+        query: {'status': 'active'},
+        authenticated: false,
+      );
+      final subcategories = _extractSubcategoryList(response)
+          .whereType<Map>()
+          .map(
+            (item) => ProductSubcategoryModel.fromJson(
+              Map<String, dynamic>.from(item),
+              fallbackCategoryId: categoryId,
+            ),
+          )
+          .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+          .toList();
+      _subcategoryCache[categoryId] = _TimedCache(subcategories);
+      return subcategories;
+    }();
+    _subcategoryLoadFutures[categoryId] = future;
+    try {
+      return await future;
+    } catch (error) {
+      debugPrint('CatalogRepository.fetchSubcategories: failed $error');
+      return const [];
+    } finally {
+      _subcategoryLoadFutures.remove(categoryId);
     }
   }
 
@@ -134,9 +196,9 @@ class CatalogRepository {
     );
     if (scopedVendorIds.isEmpty) {
       debugPrint(
-        'CatalogRepository.fetchProductsByCategory: no matching vendors in active scope',
+        'CatalogRepository.fetchProductsByCategory: no vendorIds in active location scope',
       );
-      return const [];
+      return const <ProductModel>[];
     }
 
     final lists = await Future.wait(
@@ -202,10 +264,15 @@ class CatalogRepository {
   Future<List<ProductModel>> fetchFeaturedProducts(
     List<CategoryModel> categories,
   ) async {
-    if (categories.isEmpty) return const [];
+    if (categories.isEmpty) {
+      debugPrint('CatalogRepository.fetchFeaturedProducts: no categories');
+      return const [];
+    }
 
     final context = await _resolveProductContext();
-    if (context.vendorIds.isEmpty) return const [];
+    debugPrint(
+      'CatalogRepository.fetchFeaturedProducts: context has ${context.vendorIds.length} vendorIds, radius=${context.radiusKm}, categories=${categories.length}',
+    );
 
     final random = Random();
     final target = max(1, _featuredProductsLimit);
@@ -304,6 +371,8 @@ class CatalogRepository {
       featuredImageUrl: product.featuredImageUrl,
       vendorId: product.vendorId,
       branchId: product.branchId,
+      subcategoryId: product.subcategoryId,
+      subcategoryName: product.subcategoryName,
       raw: nextRaw,
     );
   }
@@ -311,19 +380,34 @@ class CatalogRepository {
   Future<ProductCatalogSettings> loadDeliverySettings({
     bool force = false,
   }) async {
-    if (_settingsLoaded && !force) {
+    if (!force && _settingsLoaded) {
       return ProductCatalogSettings(
         productRadiusKm: _productRadiusKm,
         featuredProductsLimit: _featuredProductsLimit,
       );
     }
-    if (!force && _settingsLoadFuture != null) {
-      return _settingsLoadFuture!;
-    }
 
-    final future = () async {
+    final existing = _settingsLoadFuture;
+    if (!force && existing != null) return existing;
+
+    final future = _fetchDeliverySettingsFromFirestore();
+    _settingsLoadFuture = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_settingsLoadFuture, future)) {
+        _settingsLoadFuture = null;
+      }
+    }
+  }
+
+  Future<ProductCatalogSettings> _fetchDeliverySettingsFromFirestore() async {
+    try {
       final firebaseHeaders = await _firebaseAuthHeaders();
       if (firebaseHeaders == null) {
+        debugPrint(
+          'CatalogRepository._fetchDeliverySettingsFromFirestore: firebaseHeaders is null',
+        );
         _settingsLoaded = true;
         return ProductCatalogSettings(
           productRadiusKm: _productRadiusKm,
@@ -339,6 +423,9 @@ class CatalogRepository {
         headers: firebaseHeaders,
       );
       final fields = _decodeFirestoreFields(response['fields']);
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: raw Firestore fields keys=${fields.keys.join(',')}, values=$fields',
+      );
       _productRadiusKm = max(
         1,
         _readNumber(fields, const [
@@ -360,22 +447,22 @@ class CatalogRepository {
         ], _defaultFeaturedProductsLimit.toDouble()).round(),
       );
       _settingsLoaded = true;
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: final radius=$_productRadiusKm, featuredLimit=$_featuredProductsLimit',
+      );
       return ProductCatalogSettings(
         productRadiusKm: _productRadiusKm,
         featuredProductsLimit: _featuredProductsLimit,
       );
-    }();
-    _settingsLoadFuture = future;
-    try {
-      return await future;
-    } catch (_) {
+    } catch (error) {
       _settingsLoaded = true;
+      debugPrint(
+        'CatalogRepository._fetchDeliverySettingsFromFirestore: failed after $error, using default radius=$_productRadiusKm',
+      );
       return ProductCatalogSettings(
         productRadiusKm: _productRadiusKm,
         featuredProductsLimit: _featuredProductsLimit,
       );
-    } finally {
-      _settingsLoadFuture = null;
     }
   }
 
@@ -394,12 +481,22 @@ class CatalogRepository {
       if (vendorId != null && vendorId.trim().isNotEmpty) {
         query['vendorId'] = vendorId;
       }
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'category=$categoryId vendor=$vendorId radius=${context.radiusKm} '
+        'lat=${context.latitude} lng=${context.longitude}',
+      );
       final response = await _apiService.get(
         endpoint: ApiConstants.productsByCategory(categoryId),
         query: query,
         authenticated: false,
       );
-      final products = _extractList(response)
+      final rawList = _extractList(response);
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'response has ${rawList.length} raw items',
+      );
+      final products = rawList
           .whereType<Map>()
           .map(
             (item) => ProductModel.fromJson(
@@ -412,6 +509,10 @@ class CatalogRepository {
           )
           .where((item) => item.id.isNotEmpty && !_isRemovedProduct(item.raw))
           .toList();
+      debugPrint(
+        'CatalogRepository._fetchProductsByCategoryForVendor: '
+        'parsed ${products.length} valid products',
+      );
       _rememberVisibleProducts(products);
       return products;
     } catch (error) {
@@ -490,6 +591,34 @@ class CatalogRepository {
     return const [];
   }
 
+  List _extractSubcategoryList(Map<String, dynamic> response) {
+    final candidates = [
+      response['subcategories'],
+      response['sub_categories'],
+      response['data'],
+      response['items'],
+      response['result'],
+      response['results'],
+    ];
+    for (final value in candidates) {
+      if (value is List) return value;
+      if (value is Map) {
+        for (final nested in [
+          'subcategories',
+          'sub_categories',
+          'data',
+          'items',
+          'result',
+          'results',
+        ]) {
+          final nestedValue = value[nested];
+          if (nestedValue is List) return nestedValue;
+        }
+      }
+    }
+    return const [];
+  }
+
   Future<ProductCatalogContext> _resolveProductContext({
     List<String>? vendorIds,
     double? latitude,
@@ -498,6 +627,9 @@ class CatalogRepository {
     await loadDeliverySettings();
     final directVendorIds = _uniqueVendorIds(vendorIds ?? const []);
     if (directVendorIds.isNotEmpty) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: using direct vendorIds=$directVendorIds',
+      );
       return ProductCatalogContext(
         vendorIds: directVendorIds,
         latitude: latitude,
@@ -507,13 +639,35 @@ class CatalogRepository {
     }
 
     final selectedAddress = _selectedAddress;
+    debugPrint(
+      'CatalogRepository._resolveProductContext: selectedAddress=$selectedAddress',
+    );
     var scopedLatitude = latitude ?? selectedAddress?.latitude;
     var scopedLongitude = longitude ?? selectedAddress?.longitude;
+    if (_isSelectedLocationBlocked) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: current service location is blocked, returning empty vendor scope',
+      );
+      return ProductCatalogContext(
+        vendorIds: const [],
+        latitude: scopedLatitude,
+        longitude: scopedLongitude,
+        radiusKm: _productRadiusKm,
+      );
+    }
+
+    final storedVendorIdRaw = _selectedVendorId;
     final storedVendorIds = _uniqueVendorIds([
-      ...(_selectedVendorId?.split(',') ?? const []),
+      ...(storedVendorIdRaw?.split(',') ?? const []),
       selectedAddress?.vendorId,
     ]);
-    if (storedVendorIds.isNotEmpty) {
+    debugPrint(
+      'CatalogRepository._resolveProductContext: storedVendorIds=$storedVendorIds, scopedLat=$scopedLatitude, scopedLng=$scopedLongitude',
+    );
+    final canTrustStoredVendorIds =
+        storedVendorIds.isNotEmpty &&
+        !_hasValidCoordinates(scopedLatitude, scopedLongitude);
+    if (canTrustStoredVendorIds) {
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
         latitude: scopedLatitude,
@@ -525,12 +679,21 @@ class CatalogRepository {
     var lat = scopedLatitude;
     var lng = scopedLongitude;
     if (!_hasValidCoordinates(lat, lng)) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: no address coords, reading device location',
+      );
       final deviceCoordinate = await _readDeviceCoordinate();
       lat = deviceCoordinate?.latitude;
       lng = deviceCoordinate?.longitude;
+      debugPrint(
+        'CatalogRepository._resolveProductContext: device coords lat=$lat lng=$lng',
+      );
     }
 
     final resolvedVendorIds = await _resolveVendorIds(lat, lng);
+    debugPrint(
+      'CatalogRepository._resolveProductContext: resolved vendorIds=$resolvedVendorIds',
+    );
     return ProductCatalogContext(
       vendorIds: resolvedVendorIds,
       latitude: lat,
@@ -553,8 +716,20 @@ class CatalogRepository {
     double? latitude,
     double? longitude,
   ) async {
-    if (!_hasValidCoordinates(latitude, longitude)) return const [];
+    if (!_hasValidCoordinates(latitude, longitude)) {
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: invalid coords lat=$latitude lng=$longitude',
+      );
+      return const [];
+    }
     try {
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: querying lat=$latitude lng=$longitude radius=$_productRadiusKm',
+      );
+      final token = _storage.read<String>('accessToken');
+      final headers = (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Bearer $token'}
+          : null;
       final response = await _apiService.get(
         endpoint: ApiConstants.resolveVendor,
         query: {
@@ -563,8 +738,15 @@ class CatalogRepository {
           'radiusKm': _productRadiusKm,
         },
         authenticated: false,
+        headers: headers,
+      );
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: response keys=${response.keys.join(',')}',
       );
       final vendorIds = _resolveNearbyVendorIds(response, _productRadiusKm);
+      debugPrint(
+        'CatalogRepository._resolveVendorIds: resolved vendorIds=$vendorIds',
+      );
       if (vendorIds.isNotEmpty) {
         await _storage.write('selectedVendorId', vendorIds.join(','));
       } else {
@@ -623,6 +805,10 @@ class CatalogRepository {
     if (value == null) return null;
     final normalized = value.toString().trim();
     return normalized.isEmpty ? null : normalized;
+  }
+
+  bool get _isSelectedLocationBlocked {
+    return _storage.read(_selectedLocationServiceableKey) == false;
   }
 
   Map<String, dynamic> _normalizeProductJson(
@@ -701,6 +887,10 @@ class CatalogRepository {
     Map<String, dynamic> response,
     double radiusKm,
   ) {
+    if (_explicitlyOutsideRadius(response)) {
+      return const [];
+    }
+
     final vendors = _extractVendorMaps(response);
     if (vendors.isNotEmpty) {
       final nearbyVendors = vendors.where((vendor) {
@@ -745,6 +935,27 @@ class CatalogRepository {
       if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
+  }
+
+  bool _explicitlyOutsideRadius(Map<String, dynamic> response) {
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+
+    for (final source in [response, data, result]) {
+      final within = source['withinServiceRadius'] ?? source['within_radius'];
+      if (within == false || within.toString().toLowerCase() == 'false') {
+        return true;
+      }
+      final count = _numberFrom(source['count'] ?? source['vendorCount']);
+      if (count != null && count <= 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _extractVendorMaps(Map<String, dynamic> response) {
@@ -838,8 +1049,25 @@ class CatalogRepository {
 
   Future<Map<String, String>?> _firebaseAuthHeaders() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      if (Firebase.apps.isEmpty) {
+        debugPrint(
+          'CatalogRepository._firebaseAuthHeaders: Firebase not initialized, initializing',
+        );
+        await FirebaseBootstrap.initialize();
+        if (Firebase.apps.isEmpty) {
+          debugPrint(
+            'CatalogRepository._firebaseAuthHeaders: Firebase still not initialized',
+          );
+          return null;
+        }
+      }
+      var user = FirebaseAuth.instance.currentUser;
+      final wasAnonymous = user == null;
+      user ??= (await FirebaseAuth.instance.signInAnonymously()).user;
       if (user == null) return null;
+      debugPrint(
+        'CatalogRepository._firebaseAuthHeaders: user=${user.uid}, wasAnonymous=$wasAnonymous',
+      );
       final token = await user.getIdToken();
       if (token == null || token.trim().isEmpty) return null;
       return {'Authorization': 'Bearer $token'};

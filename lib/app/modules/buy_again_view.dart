@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../core/utils/auth_guard.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import 'cart/controllers/cart_controller.dart';
@@ -75,6 +76,7 @@ class BuyAgainView extends GetView<OrderController> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: () async {
+                        if (!requireAuth()) return;
                         for (final item in order.items) {
                           for (var i = 0; i < item.quantity; i++) {
                             await cart.addItem(item.product);

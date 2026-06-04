@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -11,17 +12,21 @@ import '../constants/api_constants.dart';
 import '../network/api_service.dart';
 import 'firebase_bootstrap.dart';
 import 'local_notification_service.dart';
+import 'notification_service.dart';
 import 'status_notification_copy.dart';
 
 class PushNotificationService extends GetxService {
   PushNotificationService({GetStorage? storage})
     : _storage = storage ?? GetStorage();
 
+  static const notificationsDisabledStorageKey = 'pushNotificationsDisabled';
+
   final GetStorage _storage;
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<Map<String, dynamic>>? _localTapSub;
   bool _initialized = false;
   String? _lastRegisteredToken;
+  final _recentRecords = <String, DateTime>{};
 
   Future<PushNotificationService> init() async {
     if (_initialized) return this;
@@ -29,17 +34,7 @@ class PushNotificationService extends GetxService {
 
     try {
       await FirebaseBootstrap.initialize();
-      await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      await FirebaseMessaging.instance
-          .setForegroundNotificationPresentationOptions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+      await _setForegroundPresentationOptions();
 
       _bindLocalNotificationTaps();
       FirebaseMessaging.onMessage.listen(_showForegroundNotification);
@@ -55,7 +50,9 @@ class PushNotificationService extends GetxService {
         _handleTap(initialMessage);
       }
 
-      await registerCurrentToken();
+      if (await areNotificationsEnabled()) {
+        await registerCurrentToken();
+      }
     } catch (error) {
       debugPrint('PushNotificationService.init skipped: $error');
     }
@@ -65,8 +62,10 @@ class PushNotificationService extends GetxService {
   Future<void> registerCurrentToken({String? token}) async {
     final accessToken = _storage.read<String>('accessToken');
     if (accessToken == null || accessToken.trim().isEmpty) return;
+    if (!await areNotificationsEnabled()) return;
 
     try {
+      final apnsToken = await _waitForApnsToken();
       final fcmToken = token ?? await FirebaseMessaging.instance.getToken();
       if (fcmToken == null || fcmToken.trim().isEmpty) return;
       if (_lastRegisteredToken == fcmToken) return;
@@ -74,15 +73,18 @@ class PushNotificationService extends GetxService {
         'PushNotificationService: FCM token fetched ${_describeToken(fcmToken)}',
       );
 
-      await _api.patch(
-        endpoint: ApiConstants.user,
-        data: {
-          'fcmToken': fcmToken,
-          'fcm_token': fcmToken,
-          'deviceToken': fcmToken,
-          'device_token': fcmToken,
-        },
-      );
+      final payload = <String, String>{
+        'fcmToken': fcmToken,
+        'fcm_token': fcmToken,
+        'deviceToken': fcmToken,
+        'device_token': fcmToken,
+      };
+      if (apnsToken != null) {
+        payload['apnsToken'] = apnsToken;
+        payload['apns_token'] = apnsToken;
+      }
+
+      await _api.patch(endpoint: ApiConstants.user, data: payload);
       _lastRegisteredToken = fcmToken;
       await _storage.write('fcmToken', fcmToken);
       debugPrint(
@@ -93,9 +95,85 @@ class PushNotificationService extends GetxService {
     }
   }
 
+  Future<bool> areNotificationsEnabled() async {
+    if (_notificationsDisabledByUser) return false;
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+      return _isAllowed(settings.authorizationStatus);
+    }
+    return true;
+  }
+
+  Future<bool> enableNotifications() async {
+    try {
+      await FirebaseBootstrap.initialize();
+      await _setForegroundPresentationOptions();
+      await _storage.write(notificationsDisabledStorageKey, false);
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      final allowed = _isAllowed(settings.authorizationStatus);
+      if (!allowed) {
+        await _storage.write(notificationsDisabledStorageKey, true);
+        return false;
+      }
+      await registerCurrentToken();
+      return true;
+    } catch (error) {
+      debugPrint('PushNotificationService.enableNotifications failed: $error');
+      return false;
+    }
+  }
+
+  Future<void> disableNotifications() async {
+    await _storage.write(notificationsDisabledStorageKey, true);
+    await clearTokenCache();
+    final accessToken = _storage.read<String>('accessToken');
+    if (accessToken == null || accessToken.trim().isEmpty) return;
+    try {
+      await _api.patch(
+        endpoint: ApiConstants.user,
+        data: const {
+          'fcmToken': '',
+          'fcm_token': '',
+          'deviceToken': '',
+          'device_token': '',
+          'apnsToken': '',
+          'apns_token': '',
+        },
+      );
+    } catch (error) {
+      debugPrint(
+        'PushNotificationService.disableNotifications token clear failed: $error',
+      );
+    }
+  }
+
   Future<void> clearTokenCache() async {
     _lastRegisteredToken = null;
     await _storage.remove('fcmToken');
+  }
+
+  bool get _notificationsDisabledByUser {
+    return _storage.read<bool>(notificationsDisabledStorageKey) == true;
+  }
+
+  bool _isAllowed(AuthorizationStatus status) {
+    return status == AuthorizationStatus.authorized ||
+        status == AuthorizationStatus.provisional;
+  }
+
+  Future<void> _setForegroundPresentationOptions() {
+    return FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
   }
 
   ApiService get _api {
@@ -112,6 +190,9 @@ class PushNotificationService extends GetxService {
   void _showForegroundNotification(RemoteMessage message) {
     final data = _notificationData(message.data);
     final isPackage = _isPackagePayload(data);
+    final isIosSystemNotification =
+        defaultTargetPlatform == TargetPlatform.iOS &&
+        message.notification != null;
     final status = _status(data);
     final copy = status == null
         ? null
@@ -138,13 +219,22 @@ class PushNotificationService extends GetxService {
         ]) ??
         copy?.body;
     if (title == null && body == null) return;
-    if (!Get.isRegistered<LocalNotificationService>()) return;
 
-    Get.find<LocalNotificationService>().show(
+    _recordInAppNotification(
       title: title ?? (isPackage ? 'Package update' : 'Order update'),
       body: body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
-      payload: _encodePayload(data, package: isPackage),
+      package: isPackage,
     );
+
+    if (!isIosSystemNotification &&
+        Get.isRegistered<LocalNotificationService>()) {
+      Get.find<LocalNotificationService>().show(
+        title: title ?? (isPackage ? 'Package update' : 'Order update'),
+        body:
+            body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
+        payload: _encodePayload(data, package: isPackage),
+      );
+    }
   }
 
   void _handleTap(RemoteMessage message) {
@@ -156,9 +246,64 @@ class PushNotificationService extends GetxService {
   }
 
   void _handleNotificationData(Map<String, dynamic> data) {
+    final isPackage = _isPackagePayload(data);
+    final title =
+        _firstText(data, const [
+          'title',
+          'notificationTitle',
+          'notification_title',
+        ]) ??
+        (isPackage ? 'Package update' : 'Order update');
+    final body =
+        _firstText(data, const [
+          'body',
+          'message',
+          'notificationBody',
+          'notification_body',
+        ]) ??
+        'You have a new ${isPackage ? 'package' : 'order'} update.';
+    _recordInAppNotification(title: title, body: body, package: isPackage);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_routeWhenReady(data));
     });
+  }
+
+  Future<String?> _waitForApnsToken() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return null;
+    }
+
+    for (var attempt = 0; attempt < 10; attempt += 1) {
+      final token = await FirebaseMessaging.instance.getAPNSToken();
+      if (token != null && token.trim().isNotEmpty) return token;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    return null;
+  }
+
+  void _recordInAppNotification({
+    required String title,
+    required String body,
+    required bool package,
+  }) {
+    if (!Get.isRegistered<NotificationService>()) return;
+    final now = DateTime.now();
+    _recentRecords.removeWhere(
+      (_, recordedAt) => now.difference(recordedAt).inMinutes >= 2,
+    );
+    final signature = '${package ? 'package' : 'order'}|$title|$body';
+    if (_recentRecords.containsKey(signature)) return;
+    _recentRecords[signature] = now;
+
+    unawaited(
+      Get.find<NotificationService>().record(
+        title: title,
+        message: body,
+        category: package ? 'package' : 'order',
+      ),
+    );
   }
 
   Future<void> _routeWhenReady(Map<String, dynamic> data) async {

@@ -206,8 +206,13 @@ class OrderModel {
     ]);
     return OrderModel(
       id:
-          (json['id'] ?? json['_id'] ?? json['orderId'] ?? json['orderNumber'])
-              ?.toString() ??
+          _firstString([
+            json['id'],
+            json['_id'],
+            json['orderId'],
+            json['order_id'],
+            json['orderNumber'],
+          ]) ??
           '',
       items: rawItems
           .whereType<Map>()

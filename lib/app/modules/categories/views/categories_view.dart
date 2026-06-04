@@ -12,6 +12,7 @@ import '../../cart/widgets/cart_summary_bar.dart';
 import '../../cart/widgets/universal_add.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../controllers/categories_controller.dart';
+import '../widgets/subcategory_grid.dart';
 
 class CategoriesView extends GetView<CategoriesController> {
   const CategoriesView({super.key});
@@ -127,19 +128,56 @@ class CategoriesView extends GetView<CategoriesController> {
                   Expanded(
                     child: Container(
                       color: AppColors.surface,
-                      child: controller.isProductsLoading.value
+                      child: controller.shouldShowSubcategoryOptions
+                          ? SubcategoryGrid(
+                              subcategories:
+                                  controller.visibleSubcategoryOptions,
+                              onTap: controller.selectSubcategory,
+                            )
+                          : controller.isProductsLoading.value ||
+                                controller.isSubcategoriesLoading.value
                           ? Center(child: CircularProgressIndicator())
                           : controller.products.isEmpty
                           ? Center(
                               child: Padding(
                                 padding: EdgeInsets.all(20.rpx),
-                                child: Text(
-                                  'New categories will be available soon.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      controller.selectedSubcategory.value ==
+                                              null
+                                          ? 'New categories will be available soon.'
+                                          : 'No products found in this subcategory.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (controller.selectedSubcategory.value !=
+                                            null &&
+                                        controller
+                                            .visibleSubcategoryOptions
+                                            .isNotEmpty) ...[
+                                      SizedBox(height: 14.hpx),
+                                      TextButton.icon(
+                                        onPressed:
+                                            controller.showSubcategoryOptions,
+                                        icon: Icon(
+                                          Icons.apps_rounded,
+                                          size: 18.spx,
+                                        ),
+                                        label: Text(
+                                          'Subcategories',
+                                          style: TextStyle(
+                                            fontSize: 12.spx,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             )
@@ -159,9 +197,29 @@ class CategoriesView extends GetView<CategoriesController> {
                                     mainAxisSpacing: 10,
                                     childAspectRatio: 0.50,
                                   ),
-                              itemCount: controller.products.length,
+                              itemCount:
+                                  controller.products.length +
+                                  (controller.selectedSubcategory.value !=
+                                              null &&
+                                          controller
+                                              .visibleSubcategoryOptions
+                                              .isNotEmpty
+                                      ? 1
+                                      : 0),
                               itemBuilder: (context, index) {
-                                final product = controller.products[index];
+                                final hasBackCard =
+                                    controller.selectedSubcategory.value !=
+                                        null &&
+                                    controller
+                                        .visibleSubcategoryOptions
+                                        .isNotEmpty;
+                                if (hasBackCard && index == 0) {
+                                  return BackToSubcategoriesCard(
+                                    onTap: controller.showSubcategoryOptions,
+                                  );
+                                }
+                                final product = controller
+                                    .products[hasBackCard ? index - 1 : index];
                                 return InkWell(
                                   onTap: () => Get.toNamed(
                                     AppRoutes.productDetail,
@@ -362,7 +420,7 @@ class _CategoriesBottomNav extends StatelessWidget {
                         }
                         AppSnackBar.show(
                           tabs[i].$1,
-                          '${tabs[i].$1} tab abhi pending hai.',
+                          '${tabs[i].$1} tab is not available yet.',
                           snackPosition: SnackPosition.BOTTOM,
                         );
                       },

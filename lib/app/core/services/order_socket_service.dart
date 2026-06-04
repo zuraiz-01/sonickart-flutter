@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -105,7 +105,17 @@ class OrderSocketService extends GetxService {
   ) async {
     final map = _asMap(payload);
     if (map != null) {
-      await controller.handleRealtimeOrderPayload(map);
+      final payloadOrderId =
+          map['orderId'] ??
+          map['order_id'] ??
+          map['id'] ??
+          map['_id'] ??
+          map['orderNumber'] ??
+          orderId;
+      await controller.handleRealtimeOrderPayload({
+        ...map,
+        'orderId': payloadOrderId,
+      });
       return;
     }
     await controller.refreshTrackingOrder(orderId);

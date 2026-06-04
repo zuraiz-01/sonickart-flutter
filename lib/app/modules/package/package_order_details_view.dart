@@ -10,6 +10,7 @@ import 'package:sonic_cart/app/core/utils/responsive.dart';
 import '../../core/services/package_socket_service.dart';
 import '../../core/utils/phone_dialer.dart';
 import '../../core/widgets/delivery_rating_dialog.dart';
+import '../../core/widgets/live_tracking_bike_marker_icon.dart';
 import '../../data/models/package_order_model.dart';
 import '../../theme/app_colors.dart';
 import 'controllers/package_controller.dart';
@@ -147,6 +148,10 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
                     _PackageLiveMapCard(order: order),
                     SizedBox(height: 16.hpx),
                     _PackageBillCard(order: order),
+                    if (order.hasDeliveryRating) ...[
+                      SizedBox(height: 16.hpx),
+                      _PackageRatingCard(order: order),
+                    ],
                   ],
                 ),
               );
@@ -471,7 +476,23 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
   GoogleMapController? _mapController;
   LatLng? _displayedPartnerLoc;
   LatLng? _targetPartnerLoc;
+  BitmapDescriptor? _partnerBikeIcon;
   Timer? _glideTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPartnerBikeIcon());
+  }
+
+  Future<void> _loadPartnerBikeIcon() async {
+    try {
+      final icon = await loadLiveTrackingBikeMarkerIcon();
+      if (mounted) setState(() => _partnerBikeIcon = icon);
+    } catch (_) {
+      // Keep the default map marker if the asset cannot be loaded.
+    }
+  }
 
   @override
   void didUpdateWidget(covariant _PackageLiveMapCard oldWidget) {
@@ -540,9 +561,11 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
         Marker(
           markerId: const MarkerId('deliveryPartner'),
           position: partnerPos,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
+          icon:
+              _partnerBikeIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          anchor: liveTrackingBikeMarkerAnchor,
+          flat: true,
           infoWindow: const InfoWindow(title: 'Delivery Partner'),
         ),
     };
@@ -693,6 +716,93 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
     return LatLngBounds(
       southwest: LatLng(minLat, minLng),
       northeast: LatLng(maxLat, maxLng),
+    );
+  }
+}
+
+class _PackageRatingCard extends StatelessWidget {
+  const _PackageRatingCard({required this.order});
+
+  final PackageOrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = order.deliveryRating;
+    if (rating == null) return const SizedBox.shrink();
+    final feedback = order.deliveryRatingFeedback.trim();
+    final ratedAt = order.deliveryRatedAt;
+
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.star_rounded, color: AppColors.accent, size: 22.rpx),
+              SizedBox(width: 10.wpx),
+              Expanded(
+                child: Text(
+                  'Your Rating',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '$rating/5',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.hpx),
+          _PackageDetailRatingStars(rating: rating),
+          if (feedback.isNotEmpty) ...[
+            SizedBox(height: 12.hpx),
+            Text(
+              feedback,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (ratedAt != null) ...[
+            SizedBox(height: 10.hpx),
+            Text(
+              'Submitted ${ratedAt.toLocal().toString().substring(0, 16)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PackageDetailRatingStars extends StatelessWidget {
+  const _PackageDetailRatingStars({required this.rating});
+
+  final int rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(5, (index) {
+        final filled = index < rating;
+        return Icon(
+          filled ? Icons.star_rounded : Icons.star_border_rounded,
+          color: AppColors.accent,
+          size: 24.rpx,
+        );
+      }),
     );
   }
 }

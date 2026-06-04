@@ -28,6 +28,8 @@ class LocalNotificationService extends GetxService {
   static Future<void> showRemoteMessageFromBackground(
     RemoteMessage message,
   ) async {
+    if (message.notification != null) return;
+
     final data = _notificationData(message.data);
     final isPackage = _isPackagePayload(data);
     final status = _status(data);
@@ -77,9 +79,9 @@ class LocalNotificationService extends GetxService {
       '@mipmap/ic_launcher',
     );
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
     );
     const settings = InitializationSettings(
       android: androidSettings,
@@ -138,11 +140,21 @@ class LocalNotificationService extends GetxService {
       priority: priority,
       icon: '@mipmap/ic_launcher',
     );
-    final details = NotificationDetails(android: androidDetails);
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: iosDetails,
+    );
 
     try {
       await _plugin.show(
-        id: notificationId ??
+        id:
+            notificationId ??
             DateTime.now().millisecondsSinceEpoch.remainder(100000),
         title: title.trim().isEmpty ? 'SonicKart' : title.trim(),
         body: body.trim().isEmpty ? 'You have a new update.' : body.trim(),

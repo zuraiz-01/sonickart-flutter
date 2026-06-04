@@ -18,6 +18,6 @@ class SplashBinding extends Bindings {
         permanent: true,
       );
     }
-    Get.put(SplashController(Get.find()));
+    Get.put(SplashController());
   }
 }

@@ -1954,6 +1954,7 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/package_order_model.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../../core/utils/auth_guard.dart';
 
 enum PackageViewMode { send, orders }
 
@@ -2387,6 +2388,7 @@ class PackageController extends GetxController {
   }
 
   void continueFromContact() {
+    if (!requireAuth()) return;
     if (!canMoveFromContact) {
       _showSnack(
         'Contact Required',
@@ -3887,16 +3889,38 @@ class PackageController extends GetxController {
     String feedback = '',
   }) async {
     if (!Get.isRegistered<ApiService>()) return;
+    final normalizedRating = rating.clamp(1, 5).toInt();
+    final trimmedFeedback = feedback.trim();
     try {
-      await Get.find<ApiService>().post(
+      final response = await Get.find<ApiService>().post(
         endpoint: ApiConstants.packageOrderRating(orderId),
         data: {
           'orderId': orderId,
-          'rating': rating.clamp(1, 5),
-          if (feedback.isNotEmpty) 'feedback': feedback,
+          'rating': normalizedRating,
+          if (trimmedFeedback.isNotEmpty) 'feedback': trimmedFeedback,
         },
       );
-      _ratedOrderIds.add(orderId);
+      final responseObject = _extractObject(response);
+      final submittedRating =
+          _ratingFromResponse(responseObject) ?? normalizedRating;
+      final submittedFeedback =
+          _firstNonEmpty([
+            responseObject['feedback'],
+            responseObject['ratingFeedback'],
+            responseObject['rating_feedback'],
+            responseObject['deliveryFeedback'],
+            responseObject['delivery_feedback'],
+          ]) ??
+          trimmedFeedback;
+      final updatedOrder = await _markOrderRated(
+        orderId: orderId,
+        rating: submittedRating,
+        feedback: submittedFeedback,
+        response: responseObject,
+      );
+      _ratedOrderIds.addAll(
+        updatedOrder == null ? [orderId] : _orderIdentifiers(updatedOrder),
+      );
       needsRatingForOrder.value = null;
     } catch (error) {
       debugPrint('PackageController.submitDeliveryRating failed: $error');
@@ -3909,6 +3933,50 @@ class PackageController extends GetxController {
       }
       rethrow;
     }
+  }
+
+  Future<PackageOrderModel?> _markOrderRated({
+    required String orderId,
+    required int rating,
+    required String feedback,
+    required Map<String, dynamic> response,
+  }) async {
+    final localOrder = findOrderById(orderId) ?? selectedOrder.value;
+    if (localOrder == null) return null;
+
+    final now = DateTime.now().toIso8601String();
+    final merged = <String, dynamic>{
+      ...localOrder.raw,
+      ...localOrder.toJson(),
+      ...response,
+      'rating': rating,
+      'ratingFeedback': feedback,
+      'rating_feedback': feedback,
+      'deliveryRating': rating,
+      'delivery_rating': rating,
+      'deliveryFeedback': feedback,
+      'delivery_feedback': feedback,
+      'ratedAt': response['ratedAt'] ?? response['rated_at'] ?? now,
+      'rated_at': response['rated_at'] ?? response['ratedAt'] ?? now,
+    };
+    final updated = await _upsertOrder(PackageOrderModel.fromJson(merged));
+    if (_orderIdentifiers(
+      updated,
+    ).map(_normalizeId).contains(_normalizeId(orderId))) {
+      selectedOrder.value = updated;
+    }
+    return updated;
+  }
+
+  int? _ratingFromResponse(Map<String, dynamic> response) {
+    for (final key in ['rating', 'deliveryRating', 'delivery_rating']) {
+      final value = response[key];
+      final parsed = value is num
+          ? value.toInt()
+          : int.tryParse(value?.toString() ?? '');
+      if (parsed != null && parsed >= 1 && parsed <= 5) return parsed;
+    }
+    return null;
   }
 
   String deliveryPartnerNameFor(PackageOrderModel order) {

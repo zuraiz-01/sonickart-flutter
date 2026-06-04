@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-
+import '../../data/models/address_model.dart';
 import '../../modules/profile/controllers/profile_controller.dart';
 import 'location_lookup_service.dart';
 import 'service_area_gate_service.dart';
@@ -13,15 +12,12 @@ class ServiceAreaGateController extends GetxController {
   ServiceAreaGateController({
     required ServiceAreaGateService serviceAreaGateService,
     LocationLookupService? locationLookupService,
-    GetStorage? storage,
   }) : _serviceAreaGateService = serviceAreaGateService,
        _locationLookupService =
-           locationLookupService ?? LocationLookupService(),
-       _storage = storage ?? GetStorage();
+           locationLookupService ?? LocationLookupService();
 
   final ServiceAreaGateService _serviceAreaGateService;
   final LocationLookupService _locationLookupService;
-  final GetStorage _storage;
 
   final blockedResult = Rxn<ServiceAreaGateResult>();
   final isChecking = false.obs;
@@ -34,6 +30,13 @@ class ServiceAreaGateController extends GetxController {
   Timer? _suggestionDebounce;
   bool _checkedForSession = false;
   Future<void>? _activeCheck;
+  int _locationRequestVersion = 0;
+  final GetStorage _storage = GetStorage();
+
+  static const _selectedAddressStorageKey = 'selectedAddress';
+  static const _selectedVendorIdStorageKey = 'selectedVendorId';
+  static const _selectedLocationServiceableStorageKey =
+      'selectedLocationServiceable';
 
   bool get isBlocked => blockedResult.value != null;
 
@@ -44,19 +47,19 @@ class ServiceAreaGateController extends GetxController {
   }
 
   Future<void> ensureChecked({bool force = false}) async {
-    if (_storage.read('isLoggedIn') != true) {
-      blockedResult.value = null;
-      _checkedForSession = false;
+    if (_checkedForSession && !force) {
+      final activeCheck = _activeCheck;
+      if (activeCheck != null) await activeCheck;
       return;
     }
-    if (_checkedForSession && !force) return;
     _checkedForSession = true;
     await checkCurrentLocation();
   }
 
   Future<void> checkCurrentLocation() async {
     if (_activeCheck != null) return _activeCheck;
-    final check = _runCurrentLocationCheck();
+    final requestVersion = _nextLocationRequestVersion();
+    final check = _runCurrentLocationCheck(requestVersion);
     _activeCheck = check;
     try {
       await check;
@@ -67,19 +70,23 @@ class ServiceAreaGateController extends GetxController {
     }
   }
 
-  Future<void> _runCurrentLocationCheck() async {
+  Future<void> _runCurrentLocationCheck(int requestVersion) async {
     isChecking.value = true;
     statusMessage.value = null;
     try {
       final result = await _serviceAreaGateService.evaluate();
-      await _applyResult(result);
+      if (!_isLatestLocationRequest(requestVersion)) return;
+      await _applyResult(result, requestVersion: requestVersion);
     } catch (error) {
+      if (!_isLatestLocationRequest(requestVersion)) return;
       debugPrint(
         'ServiceAreaGateController.checkCurrentLocation failed: $error',
       );
       statusMessage.value = 'Service area check failed. Please try again.';
     } finally {
-      isChecking.value = false;
+      if (_isLatestLocationRequest(requestVersion)) {
+        isChecking.value = false;
+      }
     }
   }
 
@@ -101,12 +108,8 @@ class ServiceAreaGateController extends GetxController {
     if (!_locationLookupService.isConfigured) return;
     isSearching.value = true;
     try {
-      final bias = await _currentCoordinate();
       final suggestions = await _locationLookupService.getPlaceSuggestions(
         query,
-        latitude: bias?.latitude,
-        longitude: bias?.longitude,
-        radiusMeters: 50000,
       );
       if (addressController.text.trim() == query) {
         placeSuggestions.assignAll(suggestions);
@@ -118,6 +121,7 @@ class ServiceAreaGateController extends GetxController {
 
   Future<void> selectSuggestion(PlaceSuggestion suggestion) async {
     if (isResolvingLocation.value) return;
+    final requestVersion = _beginManualLocationRequest();
     isResolvingLocation.value = true;
     statusMessage.value = null;
     try {
@@ -127,9 +131,11 @@ class ServiceAreaGateController extends GetxController {
       if (details == null ||
           details.latitude == null ||
           details.longitude == null) {
+        if (!_isLatestLocationRequest(requestVersion)) return;
         statusMessage.value = 'Could not resolve selected location.';
         return;
       }
+      if (!_isLatestLocationRequest(requestVersion)) return;
       addressController.text = details.address;
       placeSuggestions.clear();
       await evaluateManualLocation(
@@ -137,13 +143,18 @@ class ServiceAreaGateController extends GetxController {
         latitude: details.latitude!,
         longitude: details.longitude!,
         placeId: details.placeId,
+        requestVersion: requestVersion,
       );
     } finally {
-      isResolvingLocation.value = false;
+      if (_isLatestLocationRequest(requestVersion)) {
+        isResolvingLocation.value = false;
+      }
     }
   }
 
   Future<void> submitTypedAddress() async {
+    if (isResolvingLocation.value) return;
+    final requestVersion = _beginManualLocationRequest();
     final address = addressController.text.trim();
     if (address.length < 4) {
       statusMessage.value = 'Enter a valid address.';
@@ -156,18 +167,23 @@ class ServiceAreaGateController extends GetxController {
       if (details == null ||
           details.latitude == null ||
           details.longitude == null) {
+        if (!_isLatestLocationRequest(requestVersion)) return;
         statusMessage.value = 'Could not find this location.';
         return;
       }
+      if (!_isLatestLocationRequest(requestVersion)) return;
       addressController.text = details.address;
       await evaluateManualLocation(
         address: details.address,
         latitude: details.latitude!,
         longitude: details.longitude!,
         placeId: details.placeId,
+        requestVersion: requestVersion,
       );
     } finally {
-      isResolvingLocation.value = false;
+      if (_isLatestLocationRequest(requestVersion)) {
+        isResolvingLocation.value = false;
+      }
     }
   }
 
@@ -176,7 +192,9 @@ class ServiceAreaGateController extends GetxController {
     required double latitude,
     required double longitude,
     String placeId = '',
+    int? requestVersion,
   }) async {
+    final version = requestVersion ?? _beginManualLocationRequest();
     if (!_isValidCoordinate(latitude, longitude)) {
       statusMessage.value = 'Please select a valid delivery location.';
       return;
@@ -186,6 +204,7 @@ class ServiceAreaGateController extends GetxController {
       longitude: longitude,
       locationLabel: address,
     );
+    if (!_isLatestLocationRequest(version)) return;
     if (result.isAllowed) {
       await _applyAllowedLocation(
         address: address,
@@ -193,17 +212,25 @@ class ServiceAreaGateController extends GetxController {
         longitude: longitude,
         placeId: placeId,
       );
+      if (!_isLatestLocationRequest(version)) return;
       blockedResult.value = null;
       statusMessage.value = null;
       return;
     }
-    await _applyResult(result);
+    await _applyResult(result, requestVersion: version);
+    if (!_isLatestLocationRequest(version)) return;
     statusMessage.value = result.message.isNotEmpty
         ? result.message
         : 'Service is not available at this selected location.';
   }
 
-  Future<void> _applyResult(ServiceAreaGateResult result) async {
+  Future<void> _applyResult(
+    ServiceAreaGateResult result, {
+    int? requestVersion,
+  }) async {
+    if (requestVersion != null && !_isLatestLocationRequest(requestVersion)) {
+      return;
+    }
     if (result.isAllowed) {
       blockedResult.value = null;
       final latitude = result.latitude;
@@ -217,7 +244,34 @@ class ServiceAreaGateController extends GetxController {
       }
       return;
     }
+    final latitude = result.latitude;
+    final longitude = result.longitude;
+    if (latitude != null && longitude != null) {
+      await _applyBlockedLocation(
+        address: result.locationLabel,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    } else {
+      await _persistGuestBlockedCatalogState();
+    }
+    if (requestVersion != null && !_isLatestLocationRequest(requestVersion)) {
+      return;
+    }
     blockedResult.value = result;
+  }
+
+  int _nextLocationRequestVersion() => ++_locationRequestVersion;
+
+  int _beginManualLocationRequest() {
+    final requestVersion = _nextLocationRequestVersion();
+    _activeCheck = null;
+    isChecking.value = false;
+    return requestVersion;
+  }
+
+  bool _isLatestLocationRequest(int requestVersion) {
+    return requestVersion == _locationRequestVersion;
   }
 
   Future<void> _applyAllowedLocation({
@@ -226,7 +280,17 @@ class ServiceAreaGateController extends GetxController {
     required double longitude,
     String placeId = '',
   }) async {
-    if (!Get.isRegistered<ProfileController>()) return;
+    if (!Get.isRegistered<ProfileController>()) {
+      await _persistCatalogLocation(
+        id: 'service-location',
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        placeId: placeId,
+        serviceable: true,
+      );
+      return;
+    }
     await Get.find<ProfileController>().applyServiceAreaLocation(
       address: address.trim().isNotEmpty
           ? address.trim()
@@ -237,27 +301,70 @@ class ServiceAreaGateController extends GetxController {
     );
   }
 
-  Future<({double latitude, double longitude})?> _currentCoordinate() async {
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) return null;
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return null;
-      }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 8),
-        ),
+  Future<void> _applyBlockedLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String placeId = '',
+  }) async {
+    if (!Get.isRegistered<ProfileController>()) {
+      await _persistCatalogLocation(
+        id: 'blocked-service-location',
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        placeId: placeId,
+        serviceable: false,
       );
-      return (latitude: position.latitude, longitude: position.longitude);
-    } catch (_) {
-      return null;
+      return;
     }
+    await Get.find<ProfileController>().applyBlockedServiceAreaLocation(
+      address: address.trim().isNotEmpty
+          ? address.trim()
+          : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}',
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId,
+    );
+  }
+
+  Future<void> _persistCatalogLocation({
+    required String id,
+    required String address,
+    required double latitude,
+    required double longitude,
+    required bool serviceable,
+    String placeId = '',
+  }) async {
+    final label = address.trim().isNotEmpty
+        ? address.trim()
+        : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+    final catalogAddress = AddressModel(
+      id: id,
+      fullName: 'Customer',
+      contactNumber: '',
+      address: label,
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId.trim(),
+      isSelected: true,
+    );
+    await _storage.write(_selectedAddressStorageKey, catalogAddress.toJson());
+    await _storage.write(_selectedLocationServiceableStorageKey, serviceable);
+    if (!serviceable) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+    }
+  }
+
+  Future<void> _persistGuestBlockedCatalogState() async {
+    if (_hasBackendSession) return;
+    await _storage.remove(_selectedVendorIdStorageKey);
+    await _storage.write(_selectedLocationServiceableStorageKey, false);
+  }
+
+  bool get _hasBackendSession {
+    final token = _storage.read<String>('accessToken');
+    return token != null && token.trim().isNotEmpty;
   }
 
   bool _isValidCoordinate(double latitude, double longitude) {
