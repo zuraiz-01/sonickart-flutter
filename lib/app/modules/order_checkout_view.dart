@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 
+import '../core/utils/auth_guard.dart';
 import '../data/models/app_ad_model.dart';
 import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
@@ -139,6 +140,7 @@ class _OrderCheckoutViewState extends State<OrderCheckoutView> {
   }
 
   Future<void> _showAddressConfirmation() async {
+    if (!requireAuth()) return;
     if (_showingAddressConfirmation ||
         _showingPaymentOptions ||
         controller.isPlacingOrder.value ||

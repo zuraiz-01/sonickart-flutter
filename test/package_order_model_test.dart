@@ -13,6 +13,52 @@ void main() {
       expect(order.status, 'pending');
     });
 
+    test('keeps primary status when stale delivery status says delivered', () {
+      final order = PackageOrderModel.fromJson({
+        'id': 'PKG123',
+        'status': 'pending',
+        'deliveryStatus': 'delivered',
+        'packageStatus': 'delivered',
+      });
+
+      expect(order.status, 'pending');
+    });
+
+    test('accepts delivered status when completion evidence exists', () {
+      final order = PackageOrderModel.fromJson({
+        'id': 'PKG123',
+        'status': 'pending',
+        'deliveryStatus': 'delivered',
+        'deliveredAt': '2026-06-09T10:00:00Z',
+      });
+
+      expect(order.status, 'delivered');
+    });
+
+    test('does not treat partial completed drops as delivered', () {
+      final order = PackageOrderModel.fromJson({
+        'id': 'PKG123',
+        'status': 'pending',
+        'deliveryStatus': 'delivered',
+        'totalDrops': 2,
+        'dropLocations': [
+          {'status': 'completed'},
+        ],
+      });
+
+      expect(order.status, 'pending');
+    });
+
+    test('ignores API wrapper success status', () {
+      final order = PackageOrderModel.fromJson({
+        'id': 'PKG123',
+        'status': 'success',
+        'deliveryStatus': 'pending',
+      });
+
+      expect(order.status, 'pending');
+    });
+
     test('accepts explicit cancellation status', () {
       final order = PackageOrderModel.fromJson({
         'id': 'PKG123',

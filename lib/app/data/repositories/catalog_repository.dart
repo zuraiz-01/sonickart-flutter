@@ -10,6 +10,7 @@ import 'package:get_storage/get_storage.dart';
 import '../../../firebase_options.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_service.dart';
+import '../../core/services/app_session_scope.dart';
 import '../../core/services/firebase_bootstrap.dart';
 import '../models/address_model.dart';
 import '../models/category_model.dart';
@@ -26,6 +27,8 @@ class CatalogRepository {
   static const _deviceLocationTimeout = Duration(seconds: 8);
   static const _featuredCategoryFetchTimeout = Duration(seconds: 8);
   static const _selectedLocationServiceableKey = 'selectedLocationServiceable';
+  static const _selectedServiceLocationSessionKey =
+      AppSessionScope.selectedServiceLocationSessionKey;
 
   final ApiService _apiService;
   final GetStorage _storage;
@@ -638,7 +641,13 @@ class CatalogRepository {
       );
     }
 
-    final selectedAddress = _selectedAddress;
+    final storedSelectedAddress = _selectedAddress;
+    final isStaleServiceLocation = _isStaleServiceLocation(
+      storedSelectedAddress,
+    );
+    final selectedAddress = isStaleServiceLocation
+        ? null
+        : storedSelectedAddress;
     debugPrint(
       'CatalogRepository._resolveProductContext: selectedAddress=$selectedAddress',
     );
@@ -656,14 +665,49 @@ class CatalogRepository {
       );
     }
 
-    final storedVendorIdRaw = _selectedVendorId;
-    final storedVendorIds = _uniqueVendorIds([
-      ...(storedVendorIdRaw?.split(',') ?? const []),
-      selectedAddress?.vendorId,
-    ]);
+    final storedVendorIdRaw = isStaleServiceLocation ? null : _selectedVendorId;
+    final storedVendorIds = isStaleServiceLocation
+        ? const <String>[]
+        : _uniqueVendorIds([
+            ...(storedVendorIdRaw?.split(',') ?? const []),
+            selectedAddress?.vendorId,
+          ]);
     debugPrint(
       'CatalogRepository._resolveProductContext: storedVendorIds=$storedVendorIds, scopedLat=$scopedLatitude, scopedLng=$scopedLongitude',
     );
+    final canTrustServiceLocationVendorScope =
+        _isCurrentSessionServiceLocation(selectedAddress) &&
+        _storage.read(_selectedLocationServiceableKey) == true &&
+        storedVendorIds.isNotEmpty;
+    if (canTrustServiceLocationVendorScope) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: using stored service-location vendor scope=$storedVendorIds',
+      );
+      return ProductCatalogContext(
+        vendorIds: storedVendorIds,
+        latitude: scopedLatitude,
+        longitude: scopedLongitude,
+        radiusKm: _productRadiusKm,
+      );
+    }
+
+    final canTrustSelectedAddressVendorScope =
+        selectedAddress != null &&
+        selectedAddress.id.trim().isNotEmpty &&
+        !_isTransientLocationAddress(selectedAddress) &&
+        storedVendorIds.isNotEmpty;
+    if (canTrustSelectedAddressVendorScope) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: using stored selected-address vendor scope=$storedVendorIds',
+      );
+      return ProductCatalogContext(
+        vendorIds: storedVendorIds,
+        latitude: scopedLatitude,
+        longitude: scopedLongitude,
+        radiusKm: _productRadiusKm,
+      );
+    }
+
     final canTrustStoredVendorIds =
         storedVendorIds.isNotEmpty &&
         !_hasValidCoordinates(scopedLatitude, scopedLongitude);
@@ -809,6 +853,26 @@ class CatalogRepository {
 
   bool get _isSelectedLocationBlocked {
     return _storage.read(_selectedLocationServiceableKey) == false;
+  }
+
+  bool _isStaleServiceLocation(AddressModel? address) {
+    return address?.id.trim() == 'service-location' &&
+        !_isCurrentSessionServiceLocation(address);
+  }
+
+  bool _isCurrentSessionServiceLocation(AddressModel? address) {
+    return address?.id.trim() == 'service-location' &&
+        AppSessionScope.isCurrentSession(
+          _storage.read(_selectedServiceLocationSessionKey),
+        );
+  }
+
+  bool _isTransientLocationAddress(AddressModel address) {
+    return const {
+      'live-location',
+      'service-location',
+      'blocked-service-location',
+    }.contains(address.id.trim());
   }
 
   Map<String, dynamic> _normalizeProductJson(

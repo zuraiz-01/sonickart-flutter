@@ -9,6 +9,7 @@ import 'package:get_storage/get_storage.dart';
 
 import '../../../core/services/firebase_bootstrap.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -508,6 +509,16 @@ class AuthController extends GetxController {
 
     resetOtpFlow();
     Get.offAllNamed(AppRoutes.dashboard);
+    _scheduleAuthenticatedServiceAreaRecheck();
+  }
+
+  void _scheduleAuthenticatedServiceAreaRecheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!Get.isRegistered<ServiceAreaGateController>()) return;
+      final serviceGateController = Get.find<ServiceAreaGateController>();
+      if (serviceGateController.preserveSelectedServiceableLocation()) return;
+      unawaited(serviceGateController.ensureChecked(force: true));
+    });
   }
 
   bool _ensureFirebaseReady() {

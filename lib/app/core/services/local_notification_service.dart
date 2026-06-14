@@ -28,8 +28,6 @@ class LocalNotificationService extends GetxService {
   static Future<void> showRemoteMessageFromBackground(
     RemoteMessage message,
   ) async {
-    if (message.notification != null) return;
-
     final data = _notificationData(message.data);
     final isPackage = _isPackagePayload(data);
     final status = _status(data);
@@ -47,6 +45,7 @@ class LocalNotificationService extends GetxService {
           'notificationTitle',
           'notification_title',
         ]) ??
+        message.notification?.title ??
         copy?.title;
     final body =
         _firstMessageText(data, const [
@@ -55,21 +54,70 @@ class LocalNotificationService extends GetxService {
           'notificationBody',
           'notification_body',
         ]) ??
+        message.notification?.body ??
         copy?.body;
     if (title == null && body == null) return;
 
-    DartPluginRegistrant.ensureInitialized();
-    final service = LocalNotificationService();
-    await service.init();
-    final notificationId = orderNumber.isNotEmpty
-        ? orderNumber.hashCode.abs().remainder(100000)
-        : DateTime.now().millisecondsSinceEpoch.remainder(100000);
-    await service.show(
-      title: title ?? 'SonicKart',
-      body: body ?? 'You have a new update.',
-      payload: _encodePayload(data, package: isPackage),
-      notificationId: notificationId,
-    );
+    try {
+      DartPluginRegistrant.ensureInitialized();
+      final plugin = FlutterLocalNotificationsPlugin();
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      );
+      const initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+        macOS: iosSettings,
+      );
+      await plugin.initialize(settings: initSettings);
+
+      final android = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          defaultChannelId,
+          defaultChannelName,
+          description: defaultChannelDescription,
+          importance: Importance.high,
+        ),
+      );
+
+      final notificationId = orderNumber.isNotEmpty
+          ? orderNumber.hashCode.abs().remainder(100000)
+          : DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      await plugin.show(
+        id: notificationId,
+        title: title ?? 'SonicKart',
+        body: body ?? 'You have a new update.',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            defaultChannelId,
+            defaultChannelName,
+            channelDescription: defaultChannelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@drawable/ic_stat_sonickart_notification',
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: _encodePayload(data, package: isPackage),
+      );
+    } catch (error) {
+      debugPrint(
+        'LocalNotificationService.showRemoteMessageFromBackground failed: $error',
+      );
+    }
   }
 
   Future<LocalNotificationService> init() async {
@@ -138,7 +186,7 @@ class LocalNotificationService extends GetxService {
       channelDescription: channelDescription,
       importance: importance,
       priority: priority,
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_stat_sonickart_notification',
     );
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,

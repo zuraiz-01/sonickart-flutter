@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:get/get.dart';
@@ -16,13 +18,30 @@ import 'app/theme/theme_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await FirebaseBootstrap.initialize();
-  await LocalNotificationService.showRemoteMessageFromBackground(message);
+  debugPrint('=== BACKGROUND HANDLER TRIGGERED ===');
+  debugPrint('Message ID: ${message.messageId}');
+  debugPrint('Has notification: ${message.notification != null}');
+  debugPrint('Notification title: ${message.notification?.title}');
+  debugPrint('Notification body: ${message.notification?.body}');
+  debugPrint('Data payload: ${message.data}');
+  try {
+    DartPluginRegistrant.ensureInitialized();
+    debugPrint('DartPluginRegistrant.ensureInitialized() done');
+    await FirebaseBootstrap.initialize();
+    debugPrint('FirebaseBootstrap.initialize() done');
+    await LocalNotificationService.showRemoteMessageFromBackground(message);
+    debugPrint('showRemoteMessageFromBackground() done');
+  } catch (error, stack) {
+    debugPrint('BACKGROUND HANDLER ERROR: $error');
+    debugPrint('STACK: $stack');
+  }
+  debugPrint('=== BACKGROUND HANDLER END ===');
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
+  await _initializeFirebase();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   if (!Get.isRegistered<AppThemeController>()) {
     Get.put(AppThemeController(GetStorage()), permanent: true);
@@ -36,7 +55,6 @@ Future<void> main() async {
       permanent: true,
     );
   }
-  await _initializeFirebase();
   if (!Get.isRegistered<PushNotificationService>()) {
     await Get.putAsync(() => PushNotificationService().init(), permanent: true);
   }

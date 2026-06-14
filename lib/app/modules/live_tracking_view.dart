@@ -1411,7 +1411,8 @@ class _TrackingMapData {
     final origin = deliveryPersonLocation;
     final destination = hasPickedUp ? deliveryLocation : pickupLocation;
     if (origin == null || destination == null) return null;
-    return _distanceKm(origin, destination);
+    final distance = _distanceKm(origin, destination);
+    return _isReasonableTrackingDistance(distance) ? distance : null;
   }
 
   Set<Marker> get markers {
@@ -1516,13 +1517,13 @@ class _TrackingMapData {
     if (source is! Map) return null;
 
     final map = Map<String, dynamic>.from(source);
-    for (final key in [
-      'coordinates',
-      'location',
-      'liveLocation',
-      'geo',
-      'position',
-    ]) {
+    final coordinates = map['coordinates'];
+    if (coordinates is List && coordinates.length >= 2) {
+      final coordinate = _geoJsonCoordinateFrom(coordinates);
+      if (coordinate != null) return coordinate;
+    }
+
+    for (final key in ['location', 'liveLocation', 'geo', 'position']) {
       final nested = map[key];
       if (nested != null && !identical(nested, source)) {
         final coordinate = _coordinateFrom(nested);
@@ -1534,6 +1535,13 @@ class _TrackingMapData {
     final longitude = _double(
       map['longitude'] ?? map['lng'] ?? map['long'] ?? map['_longitude'],
     );
+    if (latitude == null || longitude == null) return null;
+    return _valid(latitude, longitude) ? LatLng(latitude, longitude) : null;
+  }
+
+  static LatLng? _geoJsonCoordinateFrom(List coordinates) {
+    final longitude = _double(coordinates[0]);
+    final latitude = _double(coordinates[1]);
     if (latitude == null || longitude == null) return null;
     return _valid(latitude, longitude) ? LatLng(latitude, longitude) : null;
   }
@@ -1603,14 +1611,30 @@ class _TrackingMapData {
     final dLng = _radians(destination.longitude - origin.longitude);
     final lat1 = _radians(origin.latitude);
     final lat2 = _radians(destination.latitude);
-    final a =
+    final a = min(
+      1.0,
+      max(
+        0.0,
         sin(dLat / 2) * sin(dLat / 2) +
-        sin(dLng / 2) * sin(dLng / 2) * cos(lat1) * cos(lat2);
+            sin(dLng / 2) * sin(dLng / 2) * cos(lat1) * cos(lat2),
+      ),
+    );
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
     return earthRadiusKm * c;
   }
 
+  static bool _isReasonableTrackingDistance(double distanceKm) {
+    const maxReasonableTrackingDistanceKm = 500.0;
+    return distanceKm.isFinite &&
+        distanceKm >= 0 &&
+        distanceKm <= maxReasonableTrackingDistanceKm;
+  }
+
   static double _radians(double value) => value * pi / 180;
+}
+
+double? liveTrackingDistanceKmForTesting(OrderModel order) {
+  return _TrackingMapData.fromOrder(order).liveDistanceKm;
 }
 
 class _MapStatusPill extends StatelessWidget {

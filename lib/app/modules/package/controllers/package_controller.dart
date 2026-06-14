@@ -3263,6 +3263,7 @@ class PackageController extends GetxController {
         previousStatus == 'delivered' || previousStatus == 'completed';
     if (!wasDelivered &&
         (status == 'delivered' || status == 'completed') &&
+        !nextOrder.hasDeliveryRating &&
         !_ratedOrderIds.contains(nextOrder.id) &&
         !_ratedOrderIds.containsAll(_orderIdentifiers(nextOrder))) {
       needsRatingForOrder.value = nextOrder;
@@ -3493,7 +3494,8 @@ class PackageController extends GetxController {
       );
       final raw = _extractObject(response);
       final parsed = PackageOrderModel.fromJson(raw);
-      return parsed.id.isEmpty ? null : parsed;
+      final protectedOrder = _protectFreshPackageOrder(parsed);
+      return protectedOrder.id.isEmpty ? null : protectedOrder;
     } catch (error) {
       return null;
     }
@@ -3753,9 +3755,82 @@ class PackageController extends GetxController {
 
   bool _isTerminalStatus(String status) {
     final normalized = _normalizeStatus(status);
-    return normalized == 'delivered' ||
-        normalized == 'completed' ||
-        normalized == 'cancelled';
+    return _isCompletionStatus(normalized) || normalized == 'cancelled';
+  }
+
+  bool _isCompletionStatus(String status) {
+    return const {
+      'delivered',
+      'completed',
+      'complete',
+      'finished',
+      'done',
+    }.contains(_normalizeStatus(status));
+  }
+
+  PackageOrderModel _protectFreshPackageOrder(PackageOrderModel order) {
+    if (!_isCompletionStatus(order.status) ||
+        _hasPackageCompletionEvidence(order)) {
+      return order;
+    }
+
+    final pendingDropStatuses = order.dropStatuses
+        .map((status) => _isCompletionStatus(status) ? 'pending' : status)
+        .toList(growable: false);
+
+    return PackageOrderModel.fromJson({
+      ...order.raw,
+      ...order.toJson(),
+      'status': 'pending',
+      'deliveryStatus': 'pending',
+      'delivery_status': 'pending',
+      'packageStatus': 'pending',
+      'package_status': 'pending',
+      'dropStatuses': pendingDropStatuses,
+      'drop_statuses': pendingDropStatuses,
+    });
+  }
+
+  bool _hasPackageCompletionEvidence(PackageOrderModel order) {
+    final raw = order.raw;
+    if (_truthy(raw['isDelivered']) ||
+        _truthy(raw['delivered']) ||
+        _truthy(raw['isCompleted']) ||
+        _truthy(raw['completed'])) {
+      return true;
+    }
+
+    if (_firstNonEmpty([
+          raw['deliveredAt'],
+          raw['delivered_at'],
+          raw['completedAt'],
+          raw['completed_at'],
+          raw['deliveryCompletedAt'],
+          raw['delivery_completed_at'],
+        ]) !=
+        null) {
+      return true;
+    }
+
+    final dropStatuses = order.dropStatuses
+        .map(_normalizeStatus)
+        .where((status) => status.isNotEmpty)
+        .toList(growable: false);
+
+    if (dropStatuses.isNotEmpty &&
+        dropStatuses.length >= order.totalDrops &&
+        dropStatuses.every(_isCompletionStatus)) {
+      return true;
+    }
+
+    return order.totalDrops > 0 && order.currentDropIndex >= order.totalDrops;
+  }
+
+  bool _truthy(Object? value) {
+    if (value == true) return true;
+    if (value is num) return value != 0;
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text == 'true' || text == '1' || text == 'yes';
   }
 
   bool _isValidPhone(String value) {

@@ -307,25 +307,29 @@ class _AdImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => _AdFallback(isVideo: false),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Center(
-          child: SizedBox(
-            width: 18.rpx,
-            height: 18.rpx,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.rpx,
-              color: AppColors.activeNav,
+    return ColoredBox(
+      color: _adMediaFillColor(),
+      child: Image.network(
+        url,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+        errorBuilder: (_, _, _) => _AdFallback(isVideo: false),
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Center(
+            child: SizedBox(
+              width: 18.rpx,
+              height: 18.rpx,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.rpx,
+                color: AppColors.activeNav,
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -382,24 +386,32 @@ class _AdVideoState extends State<_AdVideo> {
       return _AdFallback(isVideo: true);
     }
     if (!controller.value.isInitialized) {
-      return Center(
-        child: SizedBox(
-          width: 20.rpx,
-          height: 20.rpx,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.rpx,
-            color: AppColors.activeNav,
+      return ColoredBox(
+        color: _adMediaFillColor(),
+        child: Center(
+          child: SizedBox(
+            width: 20.rpx,
+            height: 20.rpx,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.rpx,
+              color: AppColors.activeNav,
+            ),
           ),
         ),
       );
     }
 
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: controller.value.size.width,
-        height: controller.value.size.height,
-        child: VideoPlayer(controller),
+    return ColoredBox(
+      color: _adMediaFillColor(),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: controller.value.size.width,
+            height: controller.value.size.height,
+            child: VideoPlayer(controller),
+          ),
+        ),
       ),
     );
   }
@@ -413,7 +425,7 @@ class _AdFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: AppColors.productImageFill,
+      color: _adMediaFillColor(),
       child: Center(
         child: Icon(
           isVideo ? Icons.play_circle_fill_rounded : Icons.image_outlined,
@@ -424,3 +436,6 @@ class _AdFallback extends StatelessWidget {
     );
   }
 }
+
+Color _adMediaFillColor() =>
+    AppColors.isDarkMode ? const Color(0xFF06225B) : AppColors.productImageFill;

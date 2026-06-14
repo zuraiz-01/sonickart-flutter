@@ -54,7 +54,7 @@ class CategoriesController extends GetxController {
 
     final options = subcategories.toList(growable: true);
     if (options.isNotEmpty && _mixedProducts(categoryProducts).isNotEmpty) {
-      options.add(ProductSubcategoryModel.mixed(categoryId: selected.id));
+      options.insert(0, ProductSubcategoryModel.mixed(categoryId: selected.id));
     }
     return options;
   }

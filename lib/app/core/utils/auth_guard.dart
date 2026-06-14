@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 
 import '../../modules/auth/controllers/auth_controller.dart';
 import '../../routes/app_routes.dart';
-import '../../theme/app_colors.dart';
 import 'responsive.dart';
 
 /// Checks if the user is authenticated before allowing an action.
@@ -36,19 +35,20 @@ class LoginRequiredDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: EdgeInsets.symmetric(horizontal: 18.wpx),
+      insetPadding: EdgeInsets.symmetric(horizontal: 16.wpx),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 360.wpx),
+        constraints: BoxConstraints(maxWidth: 365.wpx),
         child: Container(
+          width: double.infinity,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(30.rpx),
+            color: const Color(0xFFFDFDFE),
+            borderRadius: BorderRadius.circular(31.rpx),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: 26.rpx,
-                offset: Offset(0, 14.hpx),
+                color: Colors.black.withValues(alpha: 0.17),
+                blurRadius: 28.rpx,
+                offset: Offset(0, 16.hpx),
               ),
             ],
           ),
@@ -60,82 +60,67 @@ class LoginRequiredDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const _LoginRequiredHeader(),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      34.wpx,
-                      54.hpx,
-                      34.wpx,
-                      26.hpx,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Login Required',
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: AppColors.lightPrimary,
-                            fontSize: 27.spx,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0,
-                            height: 1.05,
-                          ),
+                  Transform.translate(
+                    offset: Offset(0, -3.hpx),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.fromLTRB(
+                        38.wpx,
+                        60.hpx,
+                        38.wpx,
+                        25.hpx,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDFDFE),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(21.rpx),
                         ),
-                        SizedBox(height: 18.hpx),
-                        Container(
-                          width: 34.wpx,
-                          height: 3.5.hpx,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            borderRadius: BorderRadius.circular(99.rpx),
-                          ),
-                        ),
-                        SizedBox(height: 21.hpx),
-                        Text(
-                          'Please login to add addresses,\nplace orders and track deliveries.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: const Color(0xFF4A4A5F),
-                            fontSize: 15.5.spx,
-                            fontWeight: FontWeight.w600,
-                            height: 1.55,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        SizedBox(height: 32.hpx),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48.hpx,
-                          child: FilledButton(
-                            onPressed: onConfirm,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.accent,
-                              foregroundColor: AppColors.lightPrimary,
-                              elevation: 8,
-                              shadowColor: AppColors.accent.withValues(
-                                alpha: 0.32,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14.rpx),
-                              ),
-                            ),
-                            child: Text(
-                              'OK',
-                              style: TextStyle(
-                                fontSize: 20.spx,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0,
-                              ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Login Required',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: const Color(0xFF082A78),
+                              fontSize: 28.spx,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                              height: 1.05,
                             ),
                           ),
-                        ),
-                      ],
+                          SizedBox(height: 17.hpx),
+                          Container(
+                            width: 34.wpx,
+                            height: 3.hpx,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFB20D),
+                              borderRadius: BorderRadius.circular(99.rpx),
+                            ),
+                          ),
+                          SizedBox(height: 20.hpx),
+                          Text(
+                            'Please login to add addresses,\nplace orders and track deliveries.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: const Color(0xFF47485A),
+                              fontSize: 15.7.spx,
+                              fontWeight: FontWeight.w600,
+                              height: 1.55,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          SizedBox(height: 31.hpx),
+                          _LoginRequiredButton(onPressed: onConfirm),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
-              Positioned(top: 52.hpx, child: const _SecurityBadge()),
+              Positioned(top: 53.hpx, child: const _SecurityBadge()),
             ],
           ),
         ),
@@ -150,35 +135,35 @@ class _LoginRequiredHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 126.hpx,
+      height: 134.hpx,
       width: double.infinity,
       child: CustomPaint(
         painter: _LoginRequiredHeaderPainter(),
         child: Stack(
           children: [
             Positioned(
-              left: 103.wpx,
-              top: 43.hpx,
-              child: _HeaderDots(color: Colors.white.withValues(alpha: 0.48)),
-            ),
-            Positioned(
-              right: 30.wpx,
-              top: 73.hpx,
+              left: 69.wpx,
+              top: 82.hpx,
               child: _HeaderDots(color: Colors.white.withValues(alpha: 0.28)),
             ),
             Positioned(
-              left: 112.wpx,
-              top: 35.hpx,
-              child: _MiniMark(color: Colors.white.withValues(alpha: 0.92)),
+              right: 24.wpx,
+              top: 82.hpx,
+              child: _HeaderDots(color: Colors.white.withValues(alpha: 0.28)),
             ),
             Positioned(
-              right: 135.wpx,
-              top: 38.hpx,
+              left: 111.wpx,
+              top: 49.hpx,
+              child: _MiniMark(color: Colors.white.withValues(alpha: 0.95)),
+            ),
+            Positioned(
+              right: 118.wpx,
+              top: 48.hpx,
               child: _MiniMark(color: Colors.white.withValues(alpha: 0.86)),
             ),
             Positioned(
-              right: 96.wpx,
-              top: 66.hpx,
+              right: 83.wpx,
+              top: 77.hpx,
               child: _ShortLines(color: Colors.white.withValues(alpha: 0.82)),
             ),
           ],
@@ -193,47 +178,97 @@ class _SecurityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 92.rpx,
-      height: 92.rpx,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 14.rpx,
-            offset: Offset(0, 8.hpx),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 118.rpx,
+          height: 118.rpx,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF0B4DD0).withValues(alpha: 0.13),
           ),
-        ],
-      ),
-      child: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              Icons.security_rounded,
-              color: AppColors.lightSecondaryBlue,
-              size: 58.spx,
+        ),
+        Container(
+          width: 101.rpx,
+          height: 101.rpx,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF0B4DD0).withValues(alpha: 0.2),
+          ),
+        ),
+        Container(
+          width: 86.rpx,
+          height: 86.rpx,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 13.rpx,
+                offset: Offset(0, 7.hpx),
+              ),
+            ],
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 56.rpx,
+              height: 62.rpx,
+              child: CustomPaint(painter: _ShieldLockPainter()),
             ),
-            Positioned(
-              bottom: 24.hpx,
-              child: Container(
-                width: 26.rpx,
-                height: 23.rpx,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(5.rpx),
-                  border: Border.all(color: Colors.white, width: 1.2.rpx),
-                ),
-                child: Icon(
-                  Icons.lock_rounded,
-                  color: AppColors.lightSecondaryBlue,
-                  size: 15.spx,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginRequiredButton extends StatelessWidget {
+  const _LoginRequiredButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48.hpx,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFCE28), Color(0xFFFFAA00)],
+          ),
+          borderRadius: BorderRadius.circular(14.rpx),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFB000).withValues(alpha: 0.36),
+              blurRadius: 14.rpx,
+              offset: Offset(0, 6.hpx),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14.rpx),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14.rpx),
+            onTap: onPressed,
+            child: Center(
+              child: Text(
+                'OK',
+                style: TextStyle(
+                  color: const Color(0xFF082A78),
+                  fontSize: 20.spx,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                  height: 1,
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -362,35 +397,152 @@ class _Dash extends StatelessWidget {
 class _LoginRequiredHeaderPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final basePaint = Paint()..color = AppColors.lightSecondaryBlue;
+    final basePaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF04349E), Color(0xFF052B91), Color(0xFF033DAB)],
+      ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, basePaint);
 
-    final darkPaint = Paint()..color = AppColors.lightPrimary;
-    final leftPaint = Paint()..color = const Color(0xFF073B9F);
     final softPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 15
-      ..color = Colors.white.withValues(alpha: 0.06);
+      ..strokeWidth = size.width * 0.045
+      ..color = Colors.white.withValues(alpha: 0.055);
 
     canvas.drawCircle(
-      Offset(size.width * -0.08, size.height * 1.12),
-      size.width * 0.44,
-      leftPaint,
+      Offset(size.width * -0.06, size.height * 1.12),
+      size.width * 0.43,
+      Paint()..color = const Color(0xFF073FA9),
     );
     canvas.drawCircle(
       Offset(size.width * 1.1, size.height * 1.04),
-      size.width * 0.48,
-      darkPaint..color = const Color(0xFF073393),
+      size.width * 0.47,
+      Paint()..color = const Color(0xFF07359A),
     );
     canvas.drawCircle(
-      Offset(size.width * 0.5, size.height * 0.56),
+      Offset(size.width * 0.5, size.height * 0.58),
       size.width * 0.24,
-      Paint()..color = Colors.white.withValues(alpha: 0.05),
+      Paint()..color = Colors.white.withValues(alpha: 0.045),
     );
     canvas.drawCircle(
-      Offset(size.width * 0.5, size.height * 0.56),
-      size.width * 0.17,
+      Offset(size.width * 0.5, size.height * 0.58),
+      size.width * 0.165,
       softPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ShieldLockPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shield = Path()
+      ..moveTo(size.width * 0.5, size.height * 0.03)
+      ..cubicTo(
+        size.width * 0.35,
+        size.height * 0.16,
+        size.width * 0.24,
+        size.height * 0.19,
+        size.width * 0.13,
+        size.height * 0.23,
+      )
+      ..lineTo(size.width * 0.13, size.height * 0.48)
+      ..cubicTo(
+        size.width * 0.13,
+        size.height * 0.74,
+        size.width * 0.31,
+        size.height * 0.9,
+        size.width * 0.5,
+        size.height * 0.99,
+      )
+      ..cubicTo(
+        size.width * 0.69,
+        size.height * 0.9,
+        size.width * 0.87,
+        size.height * 0.74,
+        size.width * 0.87,
+        size.height * 0.48,
+      )
+      ..lineTo(size.width * 0.87, size.height * 0.23)
+      ..cubicTo(
+        size.width * 0.76,
+        size.height * 0.19,
+        size.width * 0.65,
+        size.height * 0.16,
+        size.width * 0.5,
+        size.height * 0.03,
+      )
+      ..close();
+
+    canvas.drawPath(shield, Paint()..color = const Color(0xFF073FAA));
+    canvas.drawPath(
+      shield,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.055
+        ..strokeJoin = StrokeJoin.round
+        ..color = const Color(0xFF0B5BE7),
+    );
+    canvas.drawPath(
+      shield,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.02
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white.withValues(alpha: 0.56),
+    );
+
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        size.width * 0.31,
+        size.height * 0.48,
+        size.width * 0.38,
+        size.height * 0.31,
+      ),
+      Radius.circular(size.width * 0.085),
+    );
+    final shackle = Path()
+      ..moveTo(size.width * 0.36, size.height * 0.49)
+      ..lineTo(size.width * 0.36, size.height * 0.36)
+      ..cubicTo(
+        size.width * 0.36,
+        size.height * 0.19,
+        size.width * 0.64,
+        size.height * 0.19,
+        size.width * 0.64,
+        size.height * 0.36,
+      )
+      ..lineTo(size.width * 0.64, size.height * 0.49);
+
+    canvas.drawPath(
+      shackle,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.08
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white,
+    );
+    canvas.drawRRect(body, Paint()..color = const Color(0xFFFFBE18));
+
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.61),
+      size.width * 0.035,
+      Paint()..color = const Color(0xFF082A78),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * 0.482,
+          size.height * 0.62,
+          size.width * 0.036,
+          size.height * 0.1,
+        ),
+        Radius.circular(size.width * 0.018),
+      ),
+      Paint()..color = const Color(0xFF082A78),
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import '../../data/models/address_model.dart';
 import '../../modules/profile/controllers/profile_controller.dart';
+import 'app_session_scope.dart';
 import 'location_lookup_service.dart';
 import 'service_area_gate_service.dart';
 
@@ -37,8 +38,22 @@ class ServiceAreaGateController extends GetxController {
   static const _selectedVendorIdStorageKey = 'selectedVendorId';
   static const _selectedLocationServiceableStorageKey =
       'selectedLocationServiceable';
+  static const _selectedServiceLocationSessionStorageKey =
+      AppSessionScope.selectedServiceLocationSessionKey;
 
   bool get isBlocked => blockedResult.value != null;
+
+  bool preserveSelectedServiceableLocation() {
+    final selectedAddress = _serviceableSelectedAddress;
+    if (selectedAddress == null) return false;
+
+    _beginManualLocationRequest();
+    _checkedForSession = true;
+    blockedResult.value = null;
+    statusMessage.value = null;
+    addressController.text = selectedAddress.address;
+    return true;
+  }
 
   @override
   void onInit() {
@@ -53,11 +68,15 @@ class ServiceAreaGateController extends GetxController {
       return;
     }
     _checkedForSession = true;
-    await checkCurrentLocation();
+    await checkCurrentLocation(force: force);
   }
 
-  Future<void> checkCurrentLocation() async {
-    if (_activeCheck != null) return _activeCheck;
+  Future<void> checkCurrentLocation({bool force = false}) async {
+    final activeCheck = _activeCheck;
+    if (activeCheck != null && !force) return activeCheck;
+    if (force) {
+      _checkedForSession = true;
+    }
     final requestVersion = _nextLocationRequestVersion();
     final check = _runCurrentLocationCheck(requestVersion);
     _activeCheck = check;
@@ -351,6 +370,14 @@ class ServiceAreaGateController extends GetxController {
     );
     await _storage.write(_selectedAddressStorageKey, catalogAddress.toJson());
     await _storage.write(_selectedLocationServiceableStorageKey, serviceable);
+    if (id == 'service-location' && serviceable) {
+      await _storage.write(
+        _selectedServiceLocationSessionStorageKey,
+        AppSessionScope.id,
+      );
+    } else {
+      await _storage.remove(_selectedServiceLocationSessionStorageKey);
+    }
     if (!serviceable) {
       await _storage.remove(_selectedVendorIdStorageKey);
     }
@@ -359,12 +386,36 @@ class ServiceAreaGateController extends GetxController {
   Future<void> _persistGuestBlockedCatalogState() async {
     if (_hasBackendSession) return;
     await _storage.remove(_selectedVendorIdStorageKey);
+    await _storage.remove(_selectedServiceLocationSessionStorageKey);
     await _storage.write(_selectedLocationServiceableStorageKey, false);
   }
 
   bool get _hasBackendSession {
     final token = _storage.read<String>('accessToken');
     return token != null && token.trim().isNotEmpty;
+  }
+
+  AddressModel? get _serviceableSelectedAddress {
+    if (_storage.read(_selectedLocationServiceableStorageKey) != true) {
+      return null;
+    }
+    if (!AppSessionScope.isCurrentSession(
+      _storage.read(_selectedServiceLocationSessionStorageKey),
+    )) {
+      return null;
+    }
+    final raw = _storage.read(_selectedAddressStorageKey);
+    if (raw is! Map) return null;
+    final address = AddressModel.fromJson(Map<String, dynamic>.from(raw));
+    final id = address.id.trim();
+    if (id != 'service-location') return null;
+    if (address.address.trim().isEmpty ||
+        address.latitude == null ||
+        address.longitude == null ||
+        !_isValidCoordinate(address.latitude!, address.longitude!)) {
+      return null;
+    }
+    return address;
   }
 
   bool _isValidCoordinate(double latitude, double longitude) {

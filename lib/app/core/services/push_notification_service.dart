@@ -34,6 +34,16 @@ class PushNotificationService extends GetxService {
 
     try {
       await FirebaseBootstrap.initialize();
+
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('PushNotificationService: Notifications permission denied by user');
+      }
+
       await _setForegroundPresentationOptions();
 
       _bindLocalNotificationTaps();
@@ -99,6 +109,11 @@ class PushNotificationService extends GetxService {
     if (_notificationsDisabledByUser) return false;
     if (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS) {
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+      return _isAllowed(settings.authorizationStatus);
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
       final settings = await FirebaseMessaging.instance
           .getNotificationSettings();
       return _isAllowed(settings.authorizationStatus);
@@ -226,14 +241,26 @@ class PushNotificationService extends GetxService {
       package: isPackage,
     );
 
-    if (!isIosSystemNotification &&
-        Get.isRegistered<LocalNotificationService>()) {
-      Get.find<LocalNotificationService>().show(
-        title: title ?? (isPackage ? 'Package update' : 'Order update'),
-        body:
-            body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
-        payload: _encodePayload(data, package: isPackage),
-      );
+    if (!isIosSystemNotification) {
+      if (Get.isRegistered<LocalNotificationService>()) {
+        Get.find<LocalNotificationService>().show(
+          title: title ?? (isPackage ? 'Package update' : 'Order update'),
+          body:
+              body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
+          payload: _encodePayload(data, package: isPackage),
+        );
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (Get.isRegistered<LocalNotificationService>()) {
+            Get.find<LocalNotificationService>().show(
+              title: title ?? (isPackage ? 'Package update' : 'Order update'),
+              body: body ??
+                  'You have a new ${isPackage ? 'package' : 'order'} update.',
+              payload: _encodePayload(data, package: isPackage),
+            );
+          }
+        });
+      }
     }
   }
 
