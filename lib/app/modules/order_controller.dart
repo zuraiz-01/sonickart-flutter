@@ -14,6 +14,7 @@ import '../core/network/api_service.dart';
 import '../core/services/local_notification_service.dart';
 import '../core/services/location_lookup_service.dart';
 import '../core/services/notification_service.dart';
+import '../core/utils/auth_guard.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../data/models/address_model.dart';
 import '../data/models/cart_item_model.dart';
@@ -603,11 +604,399 @@ class OrderController extends GetxController {
   List<String> orderIdentifiers(OrderModel order) => _orderIdentifiers(order);
 
   Future<void> handleRealtimeOrderPayload(Map<String, dynamic> payload) async {
-    final order = OrderModel.fromJson(payload);
+    final existing = _findExistingOrderForPayload(payload);
+    final order = OrderModel.fromJson(
+      _normalizeRealtimeOrderPayload(payload, existing),
+    );
     if (order.id.isEmpty) {
       return;
     }
     await _upsertOrder(order);
+  }
+
+  OrderModel? _findExistingOrderForPayload(Map<String, dynamic> payload) {
+    final incomingIds = _payloadOrderIdentifiers(payload).toSet();
+    if (incomingIds.isEmpty) return null;
+    return orders.firstWhereOrNull(
+      (order) => _orderIdentifiers(order).any(incomingIds.contains),
+    );
+  }
+
+  List<String> _payloadOrderIdentifiers(Map<String, dynamic> payload) {
+    final order = _mapFrom(payload['order']);
+    final data = _mapFrom(payload['data']);
+    final payloadObject = _mapFrom(payload['payload']);
+    return _unique([
+      payload['id']?.toString(),
+      payload['_id']?.toString(),
+      payload['orderId']?.toString(),
+      payload['order_id']?.toString(),
+      payload['orderNumber']?.toString(),
+      order['id']?.toString(),
+      order['_id']?.toString(),
+      order['orderId']?.toString(),
+      order['order_id']?.toString(),
+      order['orderNumber']?.toString(),
+      data['id']?.toString(),
+      data['_id']?.toString(),
+      data['orderId']?.toString(),
+      data['order_id']?.toString(),
+      data['orderNumber']?.toString(),
+      payloadObject['id']?.toString(),
+      payloadObject['_id']?.toString(),
+      payloadObject['orderId']?.toString(),
+      payloadObject['order_id']?.toString(),
+      payloadObject['orderNumber']?.toString(),
+    ]);
+  }
+
+  Map<String, dynamic> _normalizeRealtimeOrderPayload(
+    Map<String, dynamic> payload,
+    OrderModel? existing,
+  ) {
+    if (existing == null) return payload;
+
+    final normalized = Map<String, dynamic>.from(payload);
+    final hasExplicitDestination = _hasExplicitRealtimeDestination(payload);
+    final isPartialUpdate = !_hasOrderDetailFields(payload);
+    final trackingLocation = _trackingLocationFromPayload(
+      payload,
+      allowGenericCoordinates:
+          !hasExplicitDestination &&
+          (isPartialUpdate || _hasActiveTrackingStatus(payload)),
+    );
+
+    if (trackingLocation != null) {
+      normalized['deliveryPersonLocation'] = {
+        ..._mapFrom(normalized['deliveryPersonLocation']),
+        'latitude': trackingLocation.latitude,
+        'longitude': trackingLocation.longitude,
+      };
+    }
+
+    if (!hasExplicitDestination &&
+        (isPartialUpdate || trackingLocation != null)) {
+      _removeRealtimeDestinationAliases(normalized);
+      _preserveExistingDeliveryDestination(normalized, existing);
+    }
+
+    return normalized;
+  }
+
+  bool _hasOrderDetailFields(Map<String, dynamic> payload) {
+    const detailKeys = [
+      'items',
+      'item',
+      'orderItems',
+      'order_items',
+      'cartItems',
+      'cart_items',
+      'products',
+      'customer',
+      'customerName',
+      'customer_name',
+      'customerPhone',
+      'customer_phone',
+      'paymentMode',
+      'payment_mode',
+      'totalPrice',
+      'grandTotal',
+      'total',
+      'amount',
+      'createdAt',
+      'created_at',
+    ];
+    return detailKeys.any(
+      (key) => payload.containsKey(key) && payload[key] != null,
+    );
+  }
+
+  bool _hasExplicitRealtimeDestination(Map<String, dynamic> payload) {
+    if (_firstNonEmpty([
+          payload['deliveryAddress'],
+          payload['delivery_address'],
+          payload['customerAddress'],
+          payload['customer_address'],
+          payload['shippingAddress'],
+          payload['shipping_address'],
+        ]) !=
+        null) {
+      return true;
+    }
+
+    for (final key in [
+      'dropLocation',
+      'drop_location',
+      'customerLocation',
+      'customer_location',
+      'selectedAddress',
+      'selected_address',
+      'shippingAddress',
+      'shipping_address',
+    ]) {
+      final value = payload[key];
+      if (_coordinateFrom(value) != null || _hasAddressLikeFields(value)) {
+        return true;
+      }
+    }
+
+    final deliveryLocation = payload['deliveryLocation'];
+    if (_hasAddressLikeFields(deliveryLocation)) return true;
+
+    final customerDestination = _coordinateFrom({
+      'latitude':
+          payload['customerLatitude'] ??
+          payload['customer_latitude'] ??
+          payload['dropLatitude'] ??
+          payload['drop_latitude'] ??
+          payload['dropLat'] ??
+          payload['drop_lat'],
+      'longitude':
+          payload['customerLongitude'] ??
+          payload['customer_longitude'] ??
+          payload['dropLongitude'] ??
+          payload['drop_longitude'] ??
+          payload['dropLng'] ??
+          payload['drop_lng'],
+    });
+    if (customerDestination != null) return true;
+
+    return false;
+  }
+
+  bool _hasActiveTrackingStatus(Map<String, dynamic> payload) {
+    final deliveryOrder = _mapFrom(payload['deliveryOrder']);
+    final status = _normalizeLocalStatus(
+      _firstNonEmpty([
+            payload['deliveryStatus'],
+            payload['delivery_status'],
+            deliveryOrder['deliveryStatus'],
+            deliveryOrder['delivery_status'],
+            deliveryOrder['status'],
+            payload['status'],
+          ]) ??
+          '',
+    );
+    return const {
+      'accepted',
+      'assigned',
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'out_for_delivery',
+    }.contains(status);
+  }
+
+  bool _hasAddressLikeFields(Object? value) {
+    final map = _mapFrom(value);
+    if (map.isEmpty) return false;
+    return _firstNonEmpty([
+          map['address'],
+          map['formattedAddress'],
+          map['formatted_address'],
+          map['fullAddress'],
+          map['full_address'],
+          map['fullName'],
+          map['full_name'],
+          map['customerName'],
+          map['customer_name'],
+          map['contactNumber'],
+          map['contact_number'],
+          map['customerPhone'],
+          map['customer_phone'],
+        ]) !=
+        null;
+  }
+
+  ({double latitude, double longitude})? _trackingLocationFromPayload(
+    Map<String, dynamic> payload, {
+    required bool allowGenericCoordinates,
+  }) {
+    final deliveryPartner = _mapFrom(payload['deliveryPartner']);
+    for (final source in [
+      payload['deliveryPersonLocation'],
+      payload['delivery_person_location'],
+      payload['riderLocation'],
+      payload['rider_location'],
+      payload['driverLocation'],
+      payload['driver_location'],
+      payload['partnerLocation'],
+      payload['partner_location'],
+      payload['currentLocation'],
+      payload['current_location'],
+      payload['liveLocation'],
+      payload['live_location'],
+      deliveryPartner['liveLocation'],
+      deliveryPartner['live_location'],
+      deliveryPartner['currentLocation'],
+      deliveryPartner['current_location'],
+      deliveryPartner['location'],
+      if (allowGenericCoordinates) payload['deliveryLocation'],
+      if (allowGenericCoordinates) payload['delivery_location'],
+    ]) {
+      final coordinate = _coordinateFrom(source);
+      if (coordinate != null) return coordinate;
+    }
+
+    final dedicated = _coordinateFrom({
+      'latitude':
+          payload['deliveryPartnerLatitude'] ??
+          payload['delivery_partner_latitude'] ??
+          payload['deliveryPersonLatitude'] ??
+          payload['delivery_person_latitude'] ??
+          payload['driverLatitude'] ??
+          payload['driver_latitude'] ??
+          payload['riderLatitude'] ??
+          payload['rider_latitude'] ??
+          payload['partnerLatitude'] ??
+          payload['partner_latitude'],
+      'longitude':
+          payload['deliveryPartnerLongitude'] ??
+          payload['delivery_partner_longitude'] ??
+          payload['deliveryPersonLongitude'] ??
+          payload['delivery_person_longitude'] ??
+          payload['driverLongitude'] ??
+          payload['driver_longitude'] ??
+          payload['riderLongitude'] ??
+          payload['rider_longitude'] ??
+          payload['partnerLongitude'] ??
+          payload['partner_longitude'],
+    });
+    if (dedicated != null) return dedicated;
+
+    if (!allowGenericCoordinates) return null;
+
+    return _coordinateFrom({
+      'latitude':
+          payload['currentLatitude'] ??
+          payload['current_latitude'] ??
+          payload['currentLat'] ??
+          payload['current_lat'] ??
+          payload['latitude'] ??
+          payload['lat'] ??
+          payload['deliveryLatitude'] ??
+          payload['delivery_latitude'],
+      'longitude':
+          payload['currentLongitude'] ??
+          payload['current_longitude'] ??
+          payload['currentLng'] ??
+          payload['current_lng'] ??
+          payload['longitude'] ??
+          payload['lng'] ??
+          payload['long'] ??
+          payload['deliveryLongitude'] ??
+          payload['delivery_longitude'],
+    });
+  }
+
+  void _removeRealtimeDestinationAliases(Map<String, dynamic> payload) {
+    for (final key in [
+      'deliveryLocation',
+      'delivery_location',
+      'dropLocation',
+      'drop_location',
+      'customerLocation',
+      'customer_location',
+      'selectedAddress',
+      'selected_address',
+      'deliveryAddress',
+      'delivery_address',
+      'customerAddress',
+      'customer_address',
+      'shippingAddress',
+      'shipping_address',
+      'latitude',
+      'longitude',
+      'lat',
+      'lng',
+      'long',
+      'deliveryLatitude',
+      'delivery_latitude',
+      'deliveryLongitude',
+      'delivery_longitude',
+      'customerLatitude',
+      'customer_latitude',
+      'customerLongitude',
+      'customer_longitude',
+      'dropLatitude',
+      'drop_latitude',
+      'dropLongitude',
+      'drop_longitude',
+      'dropLat',
+      'drop_lat',
+      'dropLng',
+      'drop_lng',
+    ]) {
+      payload.remove(key);
+    }
+  }
+
+  void _preserveExistingDeliveryDestination(
+    Map<String, dynamic> payload,
+    OrderModel existing,
+  ) {
+    final destination = _deliveryDestinationFromOrder(existing);
+    final deliveryLocation = _deliveryLocationMapFromOrder(
+      existing,
+      destination,
+    );
+    final deliveryAddress =
+        _firstNonEmpty([
+          existing.deliveryAddress,
+          deliveryLocation['address'],
+          existing.raw['deliveryAddress'],
+          existing.raw['delivery_address'],
+          existing.raw['customerAddress'],
+          existing.raw['customer_address'],
+          existing.raw['shippingAddress'],
+          existing.raw['shipping_address'],
+        ]) ??
+        '';
+
+    if (deliveryAddress.isNotEmpty) {
+      payload['deliveryAddress'] = deliveryAddress;
+    }
+    if (deliveryLocation.isNotEmpty) {
+      payload['deliveryLocation'] = deliveryLocation;
+    }
+    if (destination != null) {
+      payload['customerLatitude'] = destination.latitude;
+      payload['customerLongitude'] = destination.longitude;
+      payload['latitude'] = destination.latitude;
+      payload['longitude'] = destination.longitude;
+    }
+  }
+
+  Map<String, dynamic> _deliveryLocationMapFromOrder(
+    OrderModel order,
+    ({double latitude, double longitude})? destination,
+  ) {
+    final existingMap = _mapFrom(order.raw['deliveryLocation']);
+    final address = _firstNonEmpty([
+      existingMap['address'],
+      order.deliveryAddress,
+      order.raw['deliveryAddress'],
+      order.raw['delivery_address'],
+      order.raw['customerAddress'],
+      order.raw['customer_address'],
+      order.raw['shippingAddress'],
+      order.raw['shipping_address'],
+    ]);
+    final location = {
+      ...existingMap,
+      if (order.customerName.trim().isNotEmpty)
+        'fullName': order.customerName.trim(),
+      if (order.customerPhone.trim().isNotEmpty)
+        'contactNumber': order.customerPhone.trim(),
+      if (destination != null) ...{
+        'latitude': destination.latitude,
+        'longitude': destination.longitude,
+      },
+    };
+    if (address != null) {
+      location['address'] = address;
+    }
+    return location;
   }
 
   Future<OrderModel?> refreshTrackingOrder(String? orderId) async {
@@ -644,6 +1033,7 @@ class OrderController extends GetxController {
   }
 
   Future<void> placeOrder() async {
+    if (!requireAuth()) return;
     final cart = _cartController;
     final checkoutItems = cart.items
         .where((item) => item.quantity > 0)
@@ -1572,9 +1962,14 @@ class OrderController extends GetxController {
       (item) => _orderIdentifiers(item).any(incomingIds.contains),
     );
     final existing = index >= 0 ? orders[index] : null;
+    final incomingOrder = existing == null
+        ? order
+        : OrderModel.fromJson(
+            _normalizeRealtimeOrderPayload(order.raw, existing),
+          );
     final nextOrder = existing == null
         ? order
-        : _mergeOrderForList(existing, order);
+        : _mergeOrderForList(existing, incomingOrder);
     if (index >= 0) {
       orders[index] = nextOrder;
     } else {
@@ -1596,6 +1991,48 @@ class OrderController extends GetxController {
       _notifyProductStatusChange(existing, nextOrder);
     }
     return nextOrder;
+  }
+
+  ({double latitude, double longitude})? _deliveryDestinationFromOrder(
+    OrderModel order,
+  ) {
+    final raw = order.raw;
+    return _coordinateFrom(raw['deliveryLocation']) ??
+        _coordinateFrom(raw['delivery_location']) ??
+        _coordinateFrom(raw['dropLocation']) ??
+        _coordinateFrom(raw['drop_location']) ??
+        _coordinateFrom(raw['customerLocation']) ??
+        _coordinateFrom(raw['customer_location']) ??
+        _coordinateFrom(raw['selectedAddress']) ??
+        _coordinateFrom(raw['selected_address']) ??
+        _coordinateFrom(raw['deliveryAddress']) ??
+        _coordinateFrom(raw['delivery_address']) ??
+        _coordinateFrom(raw['shippingAddress']) ??
+        _coordinateFrom(raw['shipping_address']) ??
+        _coordinateFrom({
+          'latitude':
+              raw['customerLatitude'] ??
+              raw['customer_latitude'] ??
+              raw['deliveryLatitude'] ??
+              raw['delivery_latitude'] ??
+              raw['dropLatitude'] ??
+              raw['drop_latitude'] ??
+              raw['dropLat'] ??
+              raw['drop_lat'],
+          'longitude':
+              raw['customerLongitude'] ??
+              raw['customer_longitude'] ??
+              raw['deliveryLongitude'] ??
+              raw['delivery_longitude'] ??
+              raw['dropLongitude'] ??
+              raw['drop_longitude'] ??
+              raw['dropLng'] ??
+              raw['drop_lng'],
+        }) ??
+        _coordinateFrom({
+          'latitude': raw['latitude'] ?? raw['lat'],
+          'longitude': raw['longitude'] ?? raw['lng'] ?? raw['long'],
+        });
   }
 
   ({double latitude, double longitude})? _coordinateFrom(Object? source) {
@@ -1625,12 +2062,19 @@ class OrderController extends GetxController {
     if (source is! Map) return null;
 
     final map = Map<String, dynamic>.from(source);
+    final coordinates = map['coordinates'];
+    if (coordinates is List && coordinates.length >= 2) {
+      final longitude = _double(coordinates[0]);
+      final latitude = _double(coordinates[1]);
+      if (latitude != null &&
+          longitude != null &&
+          _validCoordinate(latitude, longitude)) {
+        return (latitude: latitude, longitude: longitude);
+      }
+    }
+
     final nested =
-        map['coordinates'] ??
-        map['location'] ??
-        map['liveLocation'] ??
-        map['geo'] ??
-        map['position'];
+        map['location'] ?? map['liveLocation'] ?? map['geo'] ?? map['position'];
     if (nested != null && !identical(nested, source)) {
       final coordinate = _coordinateFrom(nested);
       if (coordinate != null) return coordinate;
@@ -1644,6 +2088,21 @@ class OrderController extends GetxController {
     return _validCoordinate(latitude, longitude)
         ? (latitude: latitude, longitude: longitude)
         : null;
+  }
+
+  Map<String, dynamic> _mapFrom(Object? source) {
+    if (source is Map) return Map<String, dynamic>.from(source);
+    if (source is String) {
+      final trimmed = source.trim();
+      if (trimmed.isEmpty) return const <String, dynamic>{};
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return const <String, dynamic>{};
+      }
+    }
+    return const <String, dynamic>{};
   }
 
   double? _double(Object? value) {

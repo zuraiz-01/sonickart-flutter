@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/services/service_area_gate_controller.dart';
+import '../../../core/utils/auth_guard.dart';
 import '../../../core/widgets/delivery_rating_dialog.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
@@ -13,60 +15,75 @@ import '../../cart/controllers/cart_controller.dart';
 import '../../package/controllers/package_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
-bool _dashboardTabNavigationQueued = false;
-int? _queuedDashboardTabIndex;
+bool _isDashboardTabNavigationRunning = false;
+int? _pendingDashboardTabIndex;
 
 void openDashboardTab(int index) {
   final targetIndex = _normalizeDashboardIndex(index);
+
+  if (targetIndex == 4 && !requireAuth()) return;
 
   debugPrint(
     'openDashboardTab: target=$targetIndex currentRoute=${Get.currentRoute} registered=${Get.isRegistered<DashboardController>()}',
   );
 
-  if (Get.isRegistered<DashboardController>()) {
-    final controller = Get.find<DashboardController>();
-    controller.setTabFromNavigation(targetIndex);
-
-    if (Get.currentRoute == AppRoutes.dashboard) {
-      return;
-    }
+  if (Get.currentRoute == AppRoutes.dashboard) {
+    _pendingDashboardTabIndex = null;
+    _setDashboardTabIfReady(targetIndex);
+    return;
   }
 
-  _queuedDashboardTabIndex = targetIndex;
-  if (_dashboardTabNavigationQueued) return;
+  _pendingDashboardTabIndex = targetIndex;
+  if (_isDashboardTabNavigationRunning) return;
 
-  _dashboardTabNavigationQueued = true;
+  _isDashboardTabNavigationRunning = true;
+  unawaited(_runDashboardTabNavigation());
+}
 
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    final queuedTarget = _queuedDashboardTabIndex ?? targetIndex;
-    _queuedDashboardTabIndex = null;
-    try {
-      await Get.offAllNamed(
-        AppRoutes.dashboard,
-        arguments: {'tabIndex': queuedTarget},
-      );
-      final latestQueuedTarget = _queuedDashboardTabIndex;
-      if (latestQueuedTarget != null &&
-          latestQueuedTarget != queuedTarget &&
-          Get.isRegistered<DashboardController>()) {
-        Get.find<DashboardController>().setTabFromNavigation(
-          latestQueuedTarget,
+Future<void> _runDashboardTabNavigation() async {
+  await Future<void>.delayed(Duration.zero);
+  try {
+    while (_pendingDashboardTabIndex != null) {
+      final targetIndex = _pendingDashboardTabIndex!;
+      _pendingDashboardTabIndex = null;
+
+      if (Get.currentRoute != AppRoutes.dashboard) {
+        await Get.offAllNamed(
+          AppRoutes.dashboard,
+          arguments: {'tabIndex': targetIndex},
         );
       }
-    } catch (error) {
-      debugPrint('openDashboardTab: navigation failed $error');
-    } finally {
-      _queuedDashboardTabIndex = null;
-      _dashboardTabNavigationQueued = false;
+
+      _setDashboardTabIfReady(targetIndex);
     }
-  });
+  } catch (error) {
+    debugPrint('openDashboardTab: navigation failed $error');
+  } finally {
+    _isDashboardTabNavigationRunning = false;
+    final pendingTarget = _pendingDashboardTabIndex;
+    if (pendingTarget != null) {
+      openDashboardTab(pendingTarget);
+    }
+  }
+}
+
+void _setDashboardTabIfReady(int targetIndex) {
+  if (!Get.isRegistered<DashboardController>() &&
+      !Get.isPrepared<DashboardController>()) {
+    return;
+  }
+
+  try {
+    Get.find<DashboardController>().setTabFromNavigation(targetIndex);
+  } catch (error) {
+    debugPrint('openDashboardTab: controller not ready $error');
+  }
 }
 
 int _normalizeDashboardIndex(int index) => index.clamp(0, 4);
 
 class DashboardController extends GetxController {
   final currentIndex = 0.obs;
-  final currentPromoIndex = 0.obs;
   final currentSearchHintIndex = 0.obs;
   final isCatalogLoading = false.obs;
   final isFeaturedLoading = false.obs;
@@ -89,11 +106,6 @@ class DashboardController extends GetxController {
     'Search "pooja thali"',
   ];
 
-  final promoCards = const [
-    'assets/images/slider1.jpeg',
-    'assets/images/slider2.jpeg',
-  ];
-
   void changeTab(int index) {
     final targetIndex = _normalizeDashboardIndex(index);
     final current = _normalizeDashboardIndex(currentIndex.value);
@@ -105,6 +117,8 @@ class DashboardController extends GetxController {
     if (current == targetIndex) {
       return;
     }
+
+    if (targetIndex == 4 && !requireAuth()) return;
 
     if (_isChangingTab) return;
 
@@ -125,6 +139,8 @@ class DashboardController extends GetxController {
     debugPrint(
       'DashboardController.setTabFromNavigation: requested tab $targetIndex',
     );
+
+    if (targetIndex == 4 && !requireAuth()) return;
 
     _prepareForTabChange(targetIndex, allowSameTabRefresh: true);
     currentIndex.value = targetIndex;
@@ -173,12 +189,6 @@ class DashboardController extends GetxController {
     }
   }
 
-  void nextPromo() {
-    if (promoCards.isEmpty) return;
-
-    currentPromoIndex.value = (currentPromoIndex.value + 1) % promoCards.length;
-  }
-
   Future<void> loadCatalog({bool force = false}) async {
     if ((isCatalogLoading.value || isFeaturedLoading.value) && !force) return;
 
@@ -194,6 +204,12 @@ class DashboardController extends GetxController {
         repo.invalidateProductScope();
         featuredProducts.clear();
       }
+
+      if (!force) {
+        await _ensureGuestServiceAreaChecked();
+      }
+
+      if (!_isCurrentCatalogLoad(requestId)) return;
 
       await repo.loadDeliverySettings(force: force);
 
@@ -223,6 +239,9 @@ class DashboardController extends GetxController {
 
       if (!_isCurrentCatalogLoad(requestId)) return;
 
+      debugPrint(
+        'DashboardController.loadCatalog: featuredProducts=${loadedFeatured.length}',
+      );
       featuredProducts.assignAll(loadedFeatured);
     } catch (error) {
       if (_isCurrentCatalogLoad(requestId)) {
@@ -232,12 +251,26 @@ class DashboardController extends GetxController {
       if (_isCurrentCatalogLoad(requestId)) {
         isCatalogLoading.value = false;
         isFeaturedLoading.value = false;
+        debugPrint(
+          'DashboardController.loadCatalog: complete requestId=$requestId '
+          'categories=${categories.length} featured=${featuredProducts.length}',
+        );
       }
     }
   }
 
   bool _isCurrentCatalogLoad(int requestId) {
     return requestId == _catalogLoadRequestId;
+  }
+
+  Future<void> _ensureGuestServiceAreaChecked() async {
+    if (Get.isRegistered<ProfileController>() &&
+        Get.find<ProfileController>().hasBackendSession) {
+      return;
+    }
+    if (!Get.isRegistered<ServiceAreaGateController>()) return;
+
+    await Get.find<ServiceAreaGateController>().ensureChecked();
   }
 
   Future<void> syncActiveProductOrder() async {

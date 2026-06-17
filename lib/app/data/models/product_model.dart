@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../../core/constants/api_constants.dart';
 
@@ -16,6 +16,8 @@ class ProductModel {
     this.featuredImageUrl = '',
     this.vendorId = '',
     this.branchId = '',
+    this.subcategoryId = '',
+    this.subcategoryName = '',
     this.raw = const {},
   });
 
@@ -31,6 +33,8 @@ class ProductModel {
   final String featuredImageUrl;
   final String vendorId;
   final String branchId;
+  final String subcategoryId;
+  final String subcategoryName;
   final Map<String, dynamic> raw;
 
   double get numericPrice => double.tryParse(price) ?? 0;
@@ -112,6 +116,8 @@ class ProductModel {
       'featuredImage': featuredImageUrl,
       'vendorId': vendorId,
       'branchId': branchId,
+      'subcategoryId': subcategoryId,
+      'subcategoryName': subcategoryName,
     };
   }
 
@@ -125,6 +131,12 @@ class ProductModel {
     final branch = json['branch'] is Map
         ? Map<String, dynamic>.from(json['branch'] as Map)
         : const <String, dynamic>{};
+    final subcategoryMap = json['subcategory'] is Map
+        ? Map<String, dynamic>.from(json['subcategory'] as Map)
+        : const <String, dynamic>{};
+    final subcategoryText = json['subcategory'] is String
+        ? json['subcategory']?.toString()
+        : null;
     final images = json['images'] is List ? json['images'] as List : const [];
     final rawImageValue =
         json['image'] ??
@@ -225,8 +237,34 @@ class ProductModel {
                   branch['branchId'])
               ?.toString() ??
           '',
+      subcategoryId: _idString(
+        json['subcategoryId'] ??
+            json['subcategory_id'] ??
+            json['subCategoryId'] ??
+            json['sub_category_id'] ??
+            subcategoryMap['id'] ??
+            subcategoryMap['_id'],
+      ),
+      subcategoryName:
+          (json['subcategoryName'] ??
+                  json['subcategory_name'] ??
+                  json['subCategoryName'] ??
+                  json['sub_category_name'] ??
+                  subcategoryMap['name'] ??
+                  subcategoryMap['title'] ??
+                  subcategoryText)
+              ?.toString() ??
+          '',
       raw: json,
     );
+  }
+
+  static String _idString(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    if (normalized.isEmpty || normalized == '0' || normalized == 'null') {
+      return '';
+    }
+    return normalized;
   }
 
   static String _imageString(Object? value) {

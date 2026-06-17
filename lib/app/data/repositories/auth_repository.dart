@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../core/constants/api_constants.dart';
@@ -30,7 +30,7 @@ class AuthRepository {
         throw AuthFlowException(
           error.message.isNotEmpty
               ? error.message
-              : 'Login session start nahi ho saki. Dobara try karo.',
+              : 'Login session could not be started. Please try again.',
         );
       }
 
@@ -52,7 +52,7 @@ class AuthRepository {
         throw AuthFlowException(
           fallbackError.message.isNotEmpty
               ? fallbackError.message
-              : 'Login session start nahi ho saki. Dobara try karo.',
+              : 'Login session could not be started. Please try again.',
         );
       }
     } on AuthFlowException {
@@ -60,7 +60,7 @@ class AuthRepository {
     } catch (error) {
       debugPrint('AuthRepository.loginVerifiedCustomer failed: $error');
       throw AuthFlowException(
-        'Backend se login complete nahi ho saka. Dobara try karo.',
+        'Login could not be completed with the backend. Please try again.',
       );
     }
   }
@@ -96,7 +96,7 @@ class AuthRepository {
     ]);
     if (token == null || token.trim().isEmpty) {
       throw AuthFlowException(
-        'Login session start nahi ho saki. Dobara try karo.',
+        'Login session could not be started. Please try again.',
       );
     }
     await _storage.write('accessToken', token);
@@ -110,7 +110,7 @@ class AuthRepository {
     final user = UserModel.fromJson(userJson);
     if (user.phone.isEmpty && user.id.isEmpty) {
       throw AuthFlowException(
-        'User profile load nahi ho saka. Dobara try karo.',
+        'User profile could not be loaded. Please try again.',
       );
     }
     return user;

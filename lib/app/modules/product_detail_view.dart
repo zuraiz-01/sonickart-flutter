@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 
+import '../core/utils/auth_guard.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../data/models/product_model.dart';
+import '../data/repositories/catalog_repository.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_controller.dart';
@@ -19,6 +21,8 @@ class ProductDetailView extends StatefulWidget {
 
 class _ProductDetailViewState extends State<ProductDetailView> {
   int _activeSlide = 0;
+  List<ProductModel> _moreProducts = [];
+  bool _isLoadingMore = true;
 
   ProductModel? _resolveProduct() {
     final value = Get.arguments?['product'];
@@ -27,6 +31,36 @@ class _ProductDetailViewState extends State<ProductDetailView> {
       return ProductModel.fromJson(Map<String, dynamic>.from(value));
     }
     return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final product = _resolveProduct();
+    if (product != null && product.categoryId.isNotEmpty) {
+      _loadMoreProducts(product.categoryId, product.id);
+    } else {
+      _isLoadingMore = false;
+    }
+  }
+
+  Future<void> _loadMoreProducts(String categoryId, String currentProductId) async {
+    try {
+      final repository = Get.find<CatalogRepository>();
+      final allProducts = await repository.fetchProductsByCategory(categoryId);
+      final filtered = allProducts.where((p) => p.id != currentProductId).take(8).toList();
+      if (mounted) {
+        setState(() {
+          _moreProducts = filtered;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('[PRODUCT][MORE] Failed to load more products: $error');
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
   }
 
   @override
@@ -152,6 +186,8 @@ class _ProductDetailViewState extends State<ProductDetailView> {
               fontSize: 14.spx,
             ),
           ),
+          if (!_isLoadingMore && _moreProducts.isNotEmpty)
+            _MoreProductsSection(products: _moreProducts),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -378,7 +414,10 @@ class _DetailCartActions extends StatelessWidget {
             SizedBox(width: 10.wpx),
             Expanded(
               child: FilledButton(
-                onPressed: () => Get.toNamed(AppRoutes.checkout),
+                onPressed: () {
+                  if (!requireAuth()) return;
+                  Get.toNamed(AppRoutes.checkout);
+                },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.buttonFill,
                   foregroundColor: AppColors.onButtonFill,
@@ -425,6 +464,7 @@ class _DetailCartActions extends StatelessWidget {
   }
 
   Future<void> _buyNow() async {
+    if (!requireAuth()) return;
     debugPrint(
       '[CART][BUY_NOW] ProductDetail buy now tapped id=${product.id} name="${product.name}"',
     );
@@ -433,6 +473,166 @@ class _DetailCartActions extends StatelessWidget {
       '[CART][BUY_NOW_DONE] id=${product.id} quantity=${cart.getItemCount(product.id)} totalItems=${cart.totalItems} -> checkout',
     );
     Get.toNamed(AppRoutes.checkout);
+  }
+}
+
+class _MoreProductsSection extends StatelessWidget {
+  const _MoreProductsSection({required this.products});
+
+  final List<ProductModel> products;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 20.hpx),
+        Text(
+          'More Products',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w900,
+            fontSize: 16.spx,
+          ),
+        ),
+        SizedBox(height: 10.hpx),
+        SizedBox(
+          height: 190.hpx,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: products.length,
+            separatorBuilder: (_, _) => SizedBox(width: 10.wpx),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return _MoreProductCard(product: product);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MoreProductCard extends StatelessWidget {
+  const _MoreProductCard({required this.product});
+
+  final ProductModel product;
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = product.unit == '1 pc' ? '' : product.unit;
+    final imageUrl = product.resolvedFeaturedImageUrl;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Get.toNamed(
+          AppRoutes.productDetail,
+          arguments: {'product': product},
+          preventDuplicates: false,
+        ),
+        borderRadius: BorderRadius.circular(10.rpx),
+        child: Container(
+          width: 140.wpx,
+          padding: EdgeInsets.all(8.rpx),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(10.rpx),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.cardShadow,
+                blurRadius: 3,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 82.hpx,
+              width: double.infinity,
+              alignment: Alignment.center,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: AppColors.productImageFill,
+                borderRadius: BorderRadius.circular(8.rpx),
+              ),
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      width: double.infinity,
+                      height: 82.hpx,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => _fallback(),
+                    )
+                  : _fallback(),
+            ),
+            SizedBox(height: 6.hpx),
+            Text(
+              product.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12.spx,
+                color: AppColors.primary,
+              ),
+            ),
+            SizedBox(height: 4.hpx),
+            Row(
+              children: [
+                Text(
+                  '₹${product.displayPrice}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.spx,
+                    color: AppColors.price,
+                  ),
+                ),
+                if (product.displayMrp.isNotEmpty) ...[
+                  SizedBox(width: 4.wpx),
+                  Text(
+                    '₹${product.displayMrp}',
+                    style: TextStyle(
+                      decoration: TextDecoration.lineThrough,
+                      fontSize: 10.spx,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (unit.isNotEmpty)
+              Text(
+                unit,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.spx,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  Widget _fallback() {
+    return Text(
+      product.emoji.isEmpty
+          ? (product.name.isEmpty
+                ? 'P'
+                : product.name.characters.first.toUpperCase())
+          : product.emoji,
+      style: TextStyle(
+        fontSize: 28.spx,
+        color: AppColors.primary,
+        fontWeight: FontWeight.w800,
+      ),
+    );
   }
 }
 

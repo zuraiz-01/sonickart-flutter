@@ -15,6 +15,7 @@ class ApiConstants {
   // Catalog
   static const categories = '/categories';
   static const productSearch = '/products/search';
+  static const ads = '/ads';
 
   // Cart (legacy compatible)
   static const cart = '/cart';
@@ -42,6 +43,9 @@ class ApiConstants {
 
   static String productsByCategory(String categoryId) =>
       '/products/$categoryId';
+
+  static String categorySubcategories(String categoryId) =>
+      '/categories/$categoryId/subcategories';
 
   static String orderById(String id) => '/order/$id';
 

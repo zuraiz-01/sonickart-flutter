@@ -1,6 +1,7 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../../core/constants/api_constants.dart';
+import 'product_subcategory_model.dart';
 
 class CategoryModel {
   const CategoryModel({
@@ -8,6 +9,8 @@ class CategoryModel {
     required this.name,
     required this.emoji,
     this.imageUrl = '',
+    this.subcategoryCount = 0,
+    this.subcategories = const [],
     this.raw = const {},
   });
 
@@ -15,6 +18,8 @@ class CategoryModel {
   final String name;
   final String emoji;
   final String imageUrl;
+  final int subcategoryCount;
+  final List<ProductSubcategoryModel> subcategories;
   final Map<String, dynamic> raw;
 
   String get resolvedImageUrl {
@@ -51,8 +56,42 @@ class CategoryModel {
             json['icon'] ??
             json['thumbnail'],
       ),
+      subcategoryCount: _intValue(
+        json['subcategory_count'] ??
+            json['subcategoryCount'] ??
+            json['subcategories_count'],
+      ),
+      subcategories: _subcategoriesFromJson(json),
       raw: json,
     );
+  }
+
+  static List<ProductSubcategoryModel> _subcategoriesFromJson(
+    Map<String, dynamic> json,
+  ) {
+    final rawSubcategories =
+        json['subcategories'] ??
+        json['sub_categories'] ??
+        json['children'] ??
+        json['items'];
+    if (rawSubcategories is! List) return const [];
+    final fallbackCategoryId = (json['id'] ?? json['_id'] ?? json['categoryId'])
+        ?.toString();
+    return rawSubcategories
+        .whereType<Map>()
+        .map(
+          (item) => ProductSubcategoryModel.fromJson(
+            Map<String, dynamic>.from(item),
+            fallbackCategoryId: fallbackCategoryId,
+          ),
+        )
+        .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+        .toList();
+  }
+
+  static int _intValue(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static String _imageString(Object? value) {

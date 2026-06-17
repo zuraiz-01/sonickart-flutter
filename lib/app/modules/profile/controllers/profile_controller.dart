@@ -12,7 +12,9 @@ import '../../../data/models/address_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/app_session_scope.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -27,6 +29,15 @@ class ProfileController extends GetxController {
   static const _currentUserStorageKey = 'currentUser';
   static const _selectedAddressStorageKey = 'selectedAddress';
   static const _selectedVendorIdStorageKey = 'selectedVendorId';
+  static const _selectedLocationServiceableStorageKey =
+      'selectedLocationServiceable';
+  static const _selectedServiceLocationSessionStorageKey =
+      AppSessionScope.selectedServiceLocationSessionKey;
+  static const _transientLocationAddressIds = {
+    'live-location',
+    'service-location',
+    'blocked-service-location',
+  };
 
   final GetStorage _storage;
   final LocationLookupService _locationLookupService = LocationLookupService();
@@ -52,6 +63,10 @@ class ProfileController extends GetxController {
   final rewardPoints = 0.obs;
   final refundCount = 0.obs;
   final giftCardCount = 0.obs;
+  final notificationsEnabled = false.obs;
+  final isUpdatingNotifications = false.obs;
+  final isDeletingAccount = false.obs;
+  final _profileRevision = 0.obs;
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
@@ -74,38 +89,44 @@ class ProfileController extends GetxController {
   }
 
   AddressModel? get activeAddress {
+    final selectedId = selectedAddressId.value?.trim();
+    final stored = _storedSelectedAddress;
+    if (selectedId != null && selectedId.isNotEmpty) {
+      final selectedFromList = addresses.firstWhereOrNull(
+        (item) => item.id == selectedId,
+      );
+      if (selectedFromList != null) {
+        return selectedFromList;
+      }
+      if (stored != null && stored.id == selectedId) {
+        return stored;
+      }
+    }
+
     final selectedByFlag = addresses.firstWhereOrNull(
       (item) => item.isSelected,
     );
     if (selectedByFlag != null) {
       return selectedByFlag;
     }
-    final stored = _storedSelectedAddress;
-    if (stored != null) {
+    if (stored != null && !_isTransientLocationAddress(stored)) {
       return stored;
     }
-    if (selectedAddressId.value == null) {
+    if (selectedId == null || selectedId.isEmpty) {
       return null;
     }
-    return addresses.firstWhereOrNull(
-      (item) => item.id == selectedAddressId.value,
-    );
+    return addresses.firstWhereOrNull((item) => item.id == selectedId);
   }
 
   String get dashboardPrimaryLabel {
-    final selectedName = activeAddress?.fullName.trim() ?? '';
-    if (selectedName.isNotEmpty) {
-      return 'Hi, $selectedName';
+    _profileRevision.value;
+    if (hasBackendSession || _storage.read('isLoggedIn') == true) {
+      final displayName = _customerDisplayName(currentUser);
+      if (displayName.isNotEmpty) {
+        return 'Hi, $displayName';
+      }
     }
-    final userName = currentUser?.name.trim() ?? '';
-    if (userName.isNotEmpty) {
-      return 'Hi, $userName';
-    }
-    final userPhone = currentUser?.phone.trim() ?? '';
-    if (userPhone.isNotEmpty) {
-      return 'Hi, $userPhone';
-    }
-    return 'Hi, Guest';
+    return 'Hi, Customer';
   }
 
   String get dashboardAddressLabel {
@@ -120,12 +141,63 @@ class ProfileController extends GetxController {
     return 'Select delivery address';
   }
 
+  String _customerDisplayName(UserModel? user) {
+    final name = user?.name.trim() ?? '';
+    if (name.isNotEmpty && !_isGenericCustomerName(name)) {
+      return name;
+    }
+    final phone = user?.phone.trim() ?? '';
+    if (phone.isNotEmpty) {
+      return phone;
+    }
+    return name.isNotEmpty ? name : '';
+  }
+
+  bool _isGenericCustomerName(String value) {
+    final normalized = value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+    return const {
+      'customer',
+      'guest',
+      'guest user',
+      'sonickart customer',
+      'sonic kart customer',
+    }.contains(normalized);
+  }
+
   AddressModel? get _storedSelectedAddress {
     final raw = _storage.read(_selectedAddressStorageKey);
     if (raw is Map) {
       return AddressModel.fromJson(Map<String, dynamic>.from(raw));
     }
     return null;
+  }
+
+  String? get _storedSelectedVendorId {
+    final value = _storage.read(_selectedVendorIdStorageKey);
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  AddressModel? get _storedServiceableServiceLocation {
+    if (_storage.read(_selectedLocationServiceableStorageKey) != true) {
+      return null;
+    }
+    if (!AppSessionScope.isCurrentSession(
+      _storage.read(_selectedServiceLocationSessionStorageKey),
+    )) {
+      return null;
+    }
+    final stored = _storedSelectedAddress;
+    if (stored == null || stored.id.trim() != 'service-location') {
+      return null;
+    }
+    if (stored.address.trim().isEmpty || !_hasValidCoordinates(stored)) {
+      return null;
+    }
+    return stored;
   }
 
   String get initials {
@@ -158,22 +230,34 @@ class ProfileController extends GetxController {
 
   Future<void> _bootstrapProfile() async {
     _syncProfileForm();
-    await _clearStartupSelectedAddressContext();
+    unawaited(syncNotificationPreference());
+    if (!hasBackendSession) {
+      _restoreGuestCatalogContext();
+      await loadAddresses();
+      await _resolveHomeLocationPreview(forceRefresh: true);
+      return;
+    }
+
     await loadAddresses();
     await loadProfileSummary();
-    await _resolveHomeLocationPreview(forceRefresh: true);
   }
 
   Future<void> refreshForAuthenticatedSession() async {
     debugPrint(
       'ProfileController.refreshForAuthenticatedSession: refreshing profile session',
     );
+    final serviceLocationToKeep = _storedServiceableServiceLocation;
     statusMessage.value = null;
     addressLoadError.value = null;
     requiresAddressRelogin.value = false;
     _syncProfileForm();
+    unawaited(syncNotificationPreference());
     await loadProfileSummary();
     await loadAddresses();
+    if (serviceLocationToKeep != null) {
+      await _restoreAuthenticatedServiceAreaLocation(serviceLocationToKeep);
+      return;
+    }
     if (activeAddress == null) {
       await _resolveHomeLocationPreview(forceRefresh: true);
     }
@@ -232,6 +316,7 @@ class ProfileController extends GetxController {
       );
       final user = await _tryUpdateProfileRemote(localUser) ?? localUser;
       await _storage.write(_currentUserStorageKey, user.toJson());
+      _profileRevision.value++;
       debugPrint(
         'ProfileController.saveProfile: saved profile name=${user.name} phone=${user.phone}',
       );
@@ -262,6 +347,7 @@ class ProfileController extends GetxController {
       final user = UserModel.fromJson(userRaw);
       if (user.id.isNotEmpty || user.phone.isNotEmpty) {
         await _storage.write(_currentUserStorageKey, user.toJson());
+        _profileRevision.value++;
         _syncProfileForm();
       }
       walletBalance.value =
@@ -314,7 +400,7 @@ class ProfileController extends GetxController {
       ),
       'notifications' => (
         'Notifications',
-        'Notification preferences will be available shortly.',
+        'Use the notification switch in Profile to control order and package update alerts.',
       ),
       'suggest' => (
         'Suggest Products',
@@ -428,16 +514,90 @@ class ProfileController extends GetxController {
 
   Future<void> deleteAccount() async {
     debugPrint('ProfileController.deleteAccount: delete requested');
+    if (isDeletingAccount.value) return;
+    if (!hasBackendSession) {
+      statusMessage.value = 'Please log in again before deleting your account.';
+      return;
+    }
+    if (!Get.isRegistered<ApiService>()) {
+      statusMessage.value =
+          'Account deletion is not available right now. Please try again.';
+      return;
+    }
+
+    isDeletingAccount.value = true;
+    statusMessage.value = null;
     try {
-      if (Get.isRegistered<ApiService>()) {
-        await Get.find<ApiService>().delete(
-          endpoint: ApiConstants.deleteAccount,
-        );
-      }
+      await Get.find<ApiService>().delete(endpoint: ApiConstants.deleteAccount);
+      await logout();
+    } on ApiException catch (error) {
+      debugPrint('ProfileController.deleteAccount API failed: $error');
+      statusMessage.value = error.message.isNotEmpty
+          ? error.message
+          : 'Account deletion failed. Please try again.';
+    } on TimeoutException {
+      statusMessage.value =
+          'Account deletion request timed out. Please try again.';
+    } on http.ClientException {
+      statusMessage.value =
+          'Internet connection issue. Account was not deleted.';
     } catch (error) {
       debugPrint('ProfileController.deleteAccount API failed: $error');
+      statusMessage.value =
+          'Account deletion failed. Please try again or contact support.';
+    } finally {
+      isDeletingAccount.value = false;
     }
-    await logout();
+  }
+
+  Future<void> syncNotificationPreference() async {
+    try {
+      if (Get.isRegistered<PushNotificationService>()) {
+        notificationsEnabled.value = await Get.find<PushNotificationService>()
+            .areNotificationsEnabled();
+        return;
+      }
+      notificationsEnabled.value =
+          _storage.read<bool>(
+            PushNotificationService.notificationsDisabledStorageKey,
+          ) !=
+          true;
+    } catch (error) {
+      debugPrint('ProfileController.syncNotificationPreference failed: $error');
+      notificationsEnabled.value = false;
+    }
+  }
+
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    if (isUpdatingNotifications.value) return;
+    isUpdatingNotifications.value = true;
+    statusMessage.value = null;
+    try {
+      final service = await _pushNotificationService();
+      if (enabled) {
+        final allowed = await service.enableNotifications();
+        notificationsEnabled.value = allowed;
+        statusMessage.value = allowed
+            ? 'Order and package notifications are turned on.'
+            : 'Notifications were not allowed. You can enable them from device settings.';
+        return;
+      }
+
+      await service.disableNotifications();
+      notificationsEnabled.value = false;
+      statusMessage.value = 'Order and package notifications are turned off.';
+    } finally {
+      isUpdatingNotifications.value = false;
+    }
+  }
+
+  Future<PushNotificationService> _pushNotificationService() async {
+    if (Get.isRegistered<PushNotificationService>()) {
+      return Get.find<PushNotificationService>();
+    }
+    final service = Get.put(PushNotificationService(), permanent: true);
+    await service.init();
+    return service;
   }
 
   Future<void> loadAddresses() async {
@@ -449,7 +609,7 @@ class ProfileController extends GetxController {
     if (!hasBackendSession) {
       addresses.clear();
       addressLoadError.value =
-          'Login session missing hai. Apne saved addresses dekhne ke liye dobara login karo.';
+          'Login session is missing. Please log in again to view your saved addresses.';
       requiresAddressRelogin.value = true;
       isLoadingAddresses.value = false;
       return;
@@ -469,23 +629,35 @@ class ProfileController extends GetxController {
         _restoreLocalAddresses();
         addressLoadError.value = error.message.isNotEmpty
             ? error.message
-            : 'Addresses abhi load nahi ho rahe. Dobara try karo.';
+            : 'Addresses are not loading right now. Please try again.';
       }
     } on http.ClientException {
       _restoreLocalAddresses();
       addressLoadError.value =
-          'Internet issue ki wajah se addresses sync nahi ho sake.';
+          'Addresses could not be synced because of an internet issue.';
     } on TimeoutException {
       _restoreLocalAddresses();
-      addressLoadError.value =
-          'Address request timeout ho gayi. Dobara try karo.';
+      addressLoadError.value = 'Address request timed out. Please try again.';
     } catch (error) {
       debugPrint('ProfileController.loadAddresses failed: $error');
       _restoreLocalAddresses();
       addressLoadError.value =
-          'Addresses abhi load nahi ho pa rahe. Dobara try karo.';
+          'Addresses could not be loaded right now. Please try again.';
     } finally {
       isLoadingAddresses.value = false;
+    }
+  }
+
+  void _restoreGuestCatalogContext() {
+    final stored = _storedSelectedAddress;
+    if (stored == null) return;
+    if (_isTransientLocationAddress(stored)) {
+      selectedAddressId.value = null;
+      return;
+    }
+    selectedAddressId.value = stored.id;
+    if (stored.address.trim().isNotEmpty) {
+      liveLocationAddress.value = stored.address.trim();
     }
   }
 
@@ -527,7 +699,8 @@ class ProfileController extends GetxController {
     final phone = addressPhoneController.text.trim();
     var addressLine = addressLineController.text.trim();
     if (fullName.isEmpty || phone.length < 10 || addressLine.isEmpty) {
-      statusMessage.value = 'Name, valid phone aur address zaroor enter karo.';
+      statusMessage.value =
+          'Enter a name, a valid phone number, and an address.';
       return;
     }
 
@@ -619,16 +792,15 @@ class ProfileController extends GetxController {
       }
       statusMessage.value = error.message.isNotEmpty
           ? error.message
-          : 'Address save nahi ho saka. Dobara try karo.';
+          : 'Address could not be saved. Please try again.';
     } on http.ClientException {
       statusMessage.value =
-          'Internet issue ki wajah se address save nahi ho saka.';
+          'Address could not be saved because of an internet issue.';
     } on TimeoutException {
-      statusMessage.value =
-          'Address save request timeout ho gayi. Dobara try karo.';
+      statusMessage.value = 'Address save request timed out. Please try again.';
     } catch (error) {
       debugPrint('ProfileController.saveAddress failed: $error');
-      statusMessage.value = 'Address save nahi ho saka. Dobara try karo.';
+      statusMessage.value = 'Address could not be saved. Please try again.';
     }
   }
 
@@ -714,14 +886,117 @@ class ProfileController extends GetxController {
     );
 
     selectedAddressId.value = temporaryAddress.id;
+    _clearSavedAddressSelection();
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(temporaryAddress);
     liveLocationAddress.value = normalizedAddress;
-    await _updateUserLocation(temporaryAddress);
+    unawaited(_updateUserLocation(temporaryAddress));
     final vendorId = await _tryResolveVendor(temporaryAddress);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedServiceLocationSessionStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(temporaryAddress.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _storage.write(
+        _selectedServiceLocationSessionStorageKey,
+        AppSessionScope.id,
+      );
+      await _persistSelectedAddress(
+        temporaryAddress.copyWith(vendorId: vendorId),
+      );
     }
+    unawaited(_refreshCatalogAfterAddressChange());
+  }
+
+  Future<void> applyBlockedServiceAreaLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String placeId = '',
+  }) async {
+    final normalizedAddress = address.trim().isNotEmpty
+        ? address.trim()
+        : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedServiceLocationSessionStorageKey);
+      await _storage.write(_selectedLocationServiceableStorageKey, false);
+      unawaited(_refreshCatalogAfterAddressChange());
+      return;
+    }
+
+    final user = currentUser;
+    final blockedAddress = AddressModel(
+      id: 'blocked-service-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : 'Customer',
+      contactNumber: user?.phone ?? '',
+      address: normalizedAddress,
+      latitude: latitude,
+      longitude: longitude,
+      placeId: placeId.trim(),
+      isSelected: true,
+    );
+
+    selectedAddressId.value = blockedAddress.id;
+    _clearSavedAddressSelection();
+    liveLocationAddress.value = normalizedAddress;
+    await _storage.remove(_selectedVendorIdStorageKey);
+    await _storage.remove(_selectedServiceLocationSessionStorageKey);
+    await _storage.write(_selectedLocationServiceableStorageKey, false);
+    await _persistSelectedAddress(blockedAddress);
+    unawaited(_refreshCatalogAfterAddressChange());
+  }
+
+  Future<void> _restoreAuthenticatedServiceAreaLocation(
+    AddressModel address,
+  ) async {
+    final normalizedAddress = address.address.trim();
+    final user = currentUser;
+    final selectedVendorId = _storedSelectedVendorId ?? address.vendorId.trim();
+    final restoredAddress = address.copyWith(
+      id: address.id.trim().isNotEmpty ? address.id.trim() : 'service-location',
+      fullName: user?.name.trim().isNotEmpty == true
+          ? user!.name.trim()
+          : (address.fullName.trim().isNotEmpty
+                ? address.fullName.trim()
+                : 'Customer'),
+      contactNumber: user?.phone.trim().isNotEmpty == true
+          ? user!.phone.trim()
+          : address.contactNumber,
+      address: normalizedAddress,
+      vendorId: selectedVendorId,
+      isSelected: true,
+    );
+
+    selectedAddressId.value = restoredAddress.id;
+    _clearSavedAddressSelection();
+    liveLocationAddress.value = normalizedAddress;
+    await _storage.write(_selectedLocationServiceableStorageKey, true);
+    await _storage.write(
+      _selectedServiceLocationSessionStorageKey,
+      AppSessionScope.id,
+    );
+    if (selectedVendorId.trim().isNotEmpty) {
+      await _storage.write(_selectedVendorIdStorageKey, selectedVendorId);
+      await _persistSelectedAddress(restoredAddress);
+    } else {
+      await _persistSelectedAddress(restoredAddress);
+      final resolvedVendorId = await _tryResolveVendor(restoredAddress);
+      if (resolvedVendorId != null) {
+        await _persistSelectedAddress(
+          restoredAddress.copyWith(vendorId: resolvedVendorId),
+        );
+      }
+    }
+    unawaited(_updateUserLocation(restoredAddress));
     await _refreshCatalogAfterAddressChange();
   }
 
@@ -735,6 +1010,8 @@ class ProfileController extends GetxController {
         selectedAddressId.value = null;
         await _storage.remove(_selectedAddressStorageKey);
         await _storage.remove(_selectedVendorIdStorageKey);
+        await _storage.remove(_selectedServiceLocationSessionStorageKey);
+        await _storage.remove(_selectedLocationServiceableStorageKey);
         await _resolveHomeLocationPreview(forceRefresh: true);
       }
       await _persistAddresses();
@@ -750,10 +1027,10 @@ class ProfileController extends GetxController {
       }
       statusMessage.value = error.message.isNotEmpty
           ? error.message
-          : 'Address delete nahi ho saka. Dobara try karo.';
+          : 'Address could not be deleted. Please try again.';
     } on http.ClientException {
       statusMessage.value =
-          'Internet issue ki wajah se address delete nahi ho saka.';
+          'Address could not be deleted because of an internet issue.';
     }
   }
 
@@ -865,7 +1142,9 @@ class ProfileController extends GetxController {
 
   List<AddressModel> _applySelectedState(List<AddressModel> source) {
     final stored = _storedSelectedAddress;
-    if (stored == null) return _clearSelectedFlags(source);
+    if (stored == null || _isTransientLocationAddress(stored)) {
+      return _clearSelectedFlags(source);
+    }
 
     selectedAddressId.value = stored.id;
     return source
@@ -876,24 +1155,6 @@ class ProfileController extends GetxController {
   List<AddressModel> _clearSelectedFlags(List<AddressModel> source) {
     selectedAddressId.value = null;
     return source.map((item) => item.copyWith(isSelected: false)).toList();
-  }
-
-  Future<void> _clearStartupSelectedAddressContext() async {
-    selectedAddressId.value = null;
-    await _storage.remove(_selectedAddressStorageKey);
-    await _storage.remove(_selectedVendorIdStorageKey);
-
-    final rawList =
-        _storage.read<List<dynamic>>(_addressStorageKey) ?? <dynamic>[];
-    if (rawList.isEmpty) return;
-
-    final cleaned = rawList
-        .whereType<Map>()
-        .map((item) => AddressModel.fromJson(Map<String, dynamic>.from(item)))
-        .map((item) => item.copyWith(isSelected: false))
-        .map((item) => item.toJson())
-        .toList();
-    await _storage.write(_addressStorageKey, cleaned);
   }
 
   void _restoreLocalAddresses() {
@@ -932,12 +1193,15 @@ class ProfileController extends GetxController {
       final locationLabel = resolved?.trim().isNotEmpty == true
           ? resolved!.trim()
           : '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      if (activeAddress != null) return;
       liveLocationAddress.value = locationLabel;
-      await _applyLiveLocationCatalogContext(
-        address: locationLabel,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+      if (hasBackendSession) {
+        await _applyLiveLocationCatalogContext(
+          address: locationLabel,
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+      }
     } catch (error) {
       debugPrint('ProfileController._resolveHomeLocationPreview: $error');
     } finally {
@@ -950,6 +1214,9 @@ class ProfileController extends GetxController {
     required double latitude,
     required double longitude,
   }) async {
+    final selected = activeAddress;
+    if (selected != null && selected.id != 'live-location') return;
+
     final user = currentUser;
     final liveAddress = AddressModel(
       id: 'live-location',
@@ -964,12 +1231,18 @@ class ProfileController extends GetxController {
     );
 
     selectedAddressId.value = liveAddress.id;
+    _clearSavedAddressSelection();
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(liveAddress);
+    await _storage.remove(_selectedServiceLocationSessionStorageKey);
     await _updateUserLocation(liveAddress);
     final vendorId = await _tryResolveVendor(liveAddress);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(liveAddress.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _persistSelectedAddress(liveAddress.copyWith(vendorId: vendorId));
     }
     await _refreshCatalogAfterAddressChange();
   }
@@ -978,16 +1251,32 @@ class ProfileController extends GetxController {
     await _storage.write(_selectedAddressStorageKey, address.toJson());
   }
 
+  bool _isTransientLocationAddress(AddressModel address) {
+    return _transientLocationAddressIds.contains(address.id.trim());
+  }
+
+  void _clearSavedAddressSelection() {
+    if (addresses.isEmpty) return;
+    addresses.assignAll(
+      addresses.map((item) => item.copyWith(isSelected: false)).toList(),
+    );
+  }
+
   Future<String?> _applySelectedAddressContext(AddressModel address) async {
     selectedAddressId.value = address.id;
     await _storage.remove(_selectedVendorIdStorageKey);
-    await _persistSelectedAddress(address);
+    await _storage.remove(_selectedServiceLocationSessionStorageKey);
     liveLocationAddress.value = address.address;
     await _updateUserLocation(address);
 
     final vendorId = await _tryResolveVendor(address);
     if (vendorId == null) {
       await _storage.remove(_selectedVendorIdStorageKey);
+      await _storage.remove(_selectedLocationServiceableStorageKey);
+      await _persistSelectedAddress(address.copyWith(vendorId: ''));
+    } else {
+      await _storage.write(_selectedLocationServiceableStorageKey, true);
+      await _persistSelectedAddress(address.copyWith(vendorId: vendorId));
     }
 
     await _refreshCatalogAfterAddressChange();
@@ -1041,13 +1330,15 @@ class ProfileController extends GetxController {
     if (Get.isRegistered<CatalogRepository>()) {
       Get.find<CatalogRepository>().invalidateProductScope();
     }
+    final categoriesController = Get.isRegistered<CategoriesController>()
+        ? Get.find<CategoriesController>()
+        : null;
+    categoriesController?.invalidateProductScope();
     if (Get.isRegistered<DashboardController>()) {
       await Get.find<DashboardController>().loadCatalog(force: true);
     }
-    if (Get.isRegistered<CategoriesController>()) {
-      await Get.find<CategoriesController>().reloadSelectedCategory(
-        force: true,
-      );
+    if (categoriesController != null) {
+      await categoriesController.reloadSelectedCategory(force: true);
     }
   }
 
@@ -1071,7 +1362,7 @@ class ProfileController extends GetxController {
   void _markAddressSessionExpired() {
     addresses.clear();
     addressLoadError.value =
-        'Session expire ho gayi hai. Backend addresses dekhne ke liye dobara login karo.';
+        'Session expired. Please log in again to view backend addresses.';
     requiresAddressRelogin.value = true;
   }
 
@@ -1102,7 +1393,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }
@@ -1132,14 +1423,42 @@ class ProfileController extends GetxController {
         response: response,
       );
     }
-    return parsed.copyWith(isSelected: address.isSelected);
+    return _withSubmittedAddressFallback(
+      parsed,
+      address,
+    ).copyWith(isSelected: address.isSelected);
+  }
+
+  AddressModel _withSubmittedAddressFallback(
+    AddressModel saved,
+    AddressModel submitted,
+  ) {
+    return saved.copyWith(
+      fullName: saved.fullName.trim().isNotEmpty
+          ? saved.fullName
+          : submitted.fullName,
+      contactNumber: saved.contactNumber.trim().isNotEmpty
+          ? saved.contactNumber
+          : submitted.contactNumber,
+      address: saved.address.trim().isNotEmpty
+          ? saved.address
+          : submitted.address,
+      latitude: saved.latitude ?? submitted.latitude,
+      longitude: saved.longitude ?? submitted.longitude,
+      placeId: saved.placeId.trim().isNotEmpty
+          ? saved.placeId
+          : submitted.placeId,
+      vendorId: saved.vendorId.trim().isNotEmpty
+          ? saved.vendorId
+          : submitted.vendorId,
+    );
   }
 
   Future<void> _deleteAddressRemote(String id) async {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }
@@ -1151,6 +1470,10 @@ class ProfileController extends GetxController {
     if (address.latitude == null || address.longitude == null) return null;
     try {
       final radiusKm = await _productRadiusKm();
+      final token = _storage.read<String>('accessToken');
+      final headers = (token != null && token.isNotEmpty)
+          ? {'Authorization': 'Bearer $token'}
+          : null;
       final response = await Get.find<ApiService>().get(
         endpoint: ApiConstants.resolveVendor,
         query: {
@@ -1158,6 +1481,8 @@ class ProfileController extends GetxController {
           'longitude': address.longitude,
           'radiusKm': radiusKm,
         },
+        authenticated: false,
+        headers: headers,
       );
       final vendorIds = _resolveNearbyVendorIds(response, radiusKm);
       if (vendorIds.isNotEmpty) {
@@ -1186,6 +1511,10 @@ class ProfileController extends GetxController {
     Map<String, dynamic> response,
     double radiusKm,
   ) {
+    if (_explicitlyOutsideRadius(response)) {
+      return const [];
+    }
+
     final vendors = _extractVendorMaps(response);
     if (vendors.isNotEmpty) {
       final nearbyVendors = vendors.where((vendor) {
@@ -1230,6 +1559,27 @@ class ProfileController extends GetxController {
       if (response['result'] is Map) (response['result'] as Map)['vendor_id'],
       _vendorIdentifier(nearestVendor),
     ]);
+  }
+
+  bool _explicitlyOutsideRadius(Map<String, dynamic> response) {
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : const <String, dynamic>{};
+    final result = response['result'] is Map
+        ? Map<String, dynamic>.from(response['result'] as Map)
+        : const <String, dynamic>{};
+
+    for (final source in [response, data, result]) {
+      final within = source['withinServiceRadius'] ?? source['within_radius'];
+      if (within == false || within.toString().toLowerCase() == 'false') {
+        return true;
+      }
+      final count = _numberFrom(source['count'] ?? source['vendorCount']);
+      if (count != null && count <= 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _extractVendorMaps(Map<String, dynamic> response) {
@@ -1299,7 +1649,7 @@ class ProfileController extends GetxController {
     if (!Get.isRegistered<ApiService>()) {
       throw ApiException(
         statusCode: 500,
-        message: 'API Service Available Nahi Hai.',
+        message: 'API service is not available.',
         response: const {},
       );
     }

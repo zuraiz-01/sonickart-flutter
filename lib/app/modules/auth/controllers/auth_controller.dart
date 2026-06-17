@@ -9,6 +9,7 @@ import 'package:get_storage/get_storage.dart';
 
 import '../../../core/services/firebase_bootstrap.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -92,14 +93,14 @@ class AuthController extends GetxController {
   String? validatePhone(String? value) {
     final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) {
-      return 'Phone number required hai.';
+      return 'Phone number is required.';
     }
     final normalized =
         (digits.length == phoneDigitLength + 1 && digits.startsWith('0'))
         ? digits.substring(1)
         : digits;
     if (normalized.length != phoneDigitLength) {
-      return 'Valid 10 digit mobile number enter karo.';
+      return 'Enter a valid 10-digit mobile number.';
     }
     return null;
   }
@@ -107,7 +108,7 @@ class AuthController extends GetxController {
   String? validateOtp(String? value) {
     final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
     if (digits.length != 6) {
-      return 'Valid 6 digit OTP enter karo.';
+      return 'Enter a valid 6-digit OTP.';
     }
     return null;
   }
@@ -143,7 +144,7 @@ class AuthController extends GetxController {
     if (!(loginFormKey.currentState?.validate() ?? false)) {
       AppSnackBar.show(
         'Invalid Number',
-        'Valid 10 digit mobile number enter karo.',
+        'Enter a valid 10-digit mobile number.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -197,7 +198,7 @@ class AuthController extends GetxController {
         phoneDigitLength) {
       AppSnackBar.show(
         'Invalid Number',
-        'Mobile number incomplete hai. Number dobara enter karo.',
+        'Mobile number is incomplete. Enter the number again.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -215,9 +216,7 @@ class AuthController extends GetxController {
       }
 
       if (_verificationId == null || _verificationId!.trim().isEmpty) {
-        throw AuthFlowException(
-          'OTP session expire ho gayi. Dobara OTP request karo.',
-        );
+        throw AuthFlowException('OTP session expired. Request a new OTP.');
       }
 
       final credential = PhoneAuthProvider.credential(
@@ -228,7 +227,7 @@ class AuthController extends GetxController {
       final user = result.user ?? _firebaseAuth.currentUser;
       if (user == null) {
         throw AuthFlowException(
-          'Verification successful hui lekin user session nahi mila.',
+          'Verification succeeded, but the user session was not found.',
         );
       }
       await _completeBackendLogin(user);
@@ -327,7 +326,7 @@ class AuthController extends GetxController {
       _otpRequestWatchdog?.cancel();
       AppSnackBar.show(
         'OTP Failed',
-        'Firebase OTP start nahi ho saka. Dobara try karo.',
+        'Firebase OTP could not be started. Please try again.',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -460,7 +459,7 @@ class AuthController extends GetxController {
       _otpRequestWatchdog?.cancel();
       AppSnackBar.show(
         'OTP Failed',
-        'Firebase OTP start nahi ho saka. Dobara try karo.',
+        'Firebase OTP could not be started. Please try again.',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -479,14 +478,14 @@ class AuthController extends GetxController {
 
     if (verifiedPhone.isEmpty || verifiedPhone != expectedPhone) {
       throw AuthFlowException(
-        'Verified phone entered number se match nahi karta. Dobara OTP request karo.',
+        'Verified phone does not match the entered number. Request OTP again.',
       );
     }
 
     final firebaseIdToken = await user.getIdToken(true);
     if (firebaseIdToken == null || firebaseIdToken.trim().isEmpty) {
       throw AuthFlowException(
-        'Firebase verification token nahi mila. Dobara try karo.',
+        'Firebase verification token was not received. Please try again.',
       );
     }
 
@@ -510,6 +509,16 @@ class AuthController extends GetxController {
 
     resetOtpFlow();
     Get.offAllNamed(AppRoutes.dashboard);
+    _scheduleAuthenticatedServiceAreaRecheck();
+  }
+
+  void _scheduleAuthenticatedServiceAreaRecheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!Get.isRegistered<ServiceAreaGateController>()) return;
+      final serviceGateController = Get.find<ServiceAreaGateController>();
+      if (serviceGateController.preserveSelectedServiceableLocation()) return;
+      unawaited(serviceGateController.ensureChecked(force: true));
+    });
   }
 
   bool _ensureFirebaseReady() {
@@ -586,9 +595,9 @@ class AuthController extends GetxController {
       case 'session-expired':
         return 'The OTP has expired. Please request a new OTP.';
       case 'too-many-requests':
-        return 'Firebase ne is phone/app/IP ko temporarily throttle kar diya hai. Thori der wait karo, ya development me Firebase Console ka test phone number use karo.';
+        return 'Firebase has temporarily throttled this phone, app, or IP. Wait a while, or use a Firebase Console test phone number during development.';
       case 'missing-client-identifier':
-        return '${_firebaseSetupGuidance()} Fresh google-services.json replace karke app uninstall/reinstall karo.';
+        return '${_firebaseSetupGuidance()} Replace google-services.json with a fresh copy, then uninstall and reinstall the app.';
       default:
         return error.message ??
             'Firebase verification failed. Please try again.';
@@ -609,29 +618,29 @@ class AuthController extends GetxController {
   }
 
   String _browserStateRecoveryMessage() {
-    return 'Browser reCAPTCHA state lose ho gayi. Android app me browser fallback use nahi hona chahiye; Firebase Android app ki SHA keys aur fresh google-services.json check karo.';
+    return 'Browser reCAPTCHA state was lost. Browser fallback should not be used in the Android app; check Firebase Android SHA keys and use a fresh google-services.json.';
   }
 
   String _firebaseSetupGuidance() {
     if (kIsWeb) {
-      return 'Ye project web Firebase phone auth ke liye configured nahi hai. Android app par test karo.';
+      return 'This project is not configured for web Firebase phone auth. Test on the Android app.';
     }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         final initError = FirebaseBootstrap.lastError;
         final base =
-            'Android Firebase config check karo: package `com.sonickart` ke debug/release SHA-1 aur SHA-256 Firebase Console me add hone chahiye. Fresh google-services.json download karke app uninstall/reinstall karo.';
+            'Check Android Firebase config: add the debug/release SHA-1 and SHA-256 for package `com.sonickart` in Firebase Console. Download a fresh google-services.json, then uninstall and reinstall the app.';
         if (initError != null) {
           return '$base Init error: $initError';
         }
         return base;
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        return 'Apple platforms ke liye `ios/Runner/GoogleService-Info.plist` abhi missing hai. Firebase console se plist download karke Runner target me add karo.';
+        return '`ios/Runner/GoogleService-Info.plist` is missing for Apple platforms. Download the plist from Firebase Console and add it to the Runner target.';
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        return 'Phone auth ko desktop par test mat karo. Android device/emulator use karo jahan Firebase auth configured hai.';
+        return 'Do not test phone auth on desktop. Use an Android device or emulator where Firebase Auth is configured.';
       case TargetPlatform.fuchsia:
         return 'Firebase is not configured for this platform.';
     }
@@ -658,7 +667,7 @@ class AuthController extends GetxController {
       isSendingOtp.value = false;
       AppSnackBar.show(
         'OTP Not Sent',
-        'Firebase app verification complete nahi hui. SHA-1/SHA-256 Firebase Console me add karke fresh google-services.json lagao, phir app reinstall karo.',
+        'Firebase app verification did not complete. Add SHA-1/SHA-256 in Firebase Console, use a fresh google-services.json, then reinstall the app.',
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 8),
       );

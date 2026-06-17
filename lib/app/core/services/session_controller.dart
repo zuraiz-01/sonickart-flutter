@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../utils/auth_guard.dart';
 import '../../routes/app_routes.dart';
-import '../../theme/app_colors.dart';
 
 class SessionController extends GetxController {
   SessionController(this._storage);
@@ -21,6 +21,10 @@ class SessionController extends GetxController {
     isSessionExpiredVisible.value = false;
     await _clearSession();
     Get.offAllNamed(AppRoutes.login);
+  }
+
+  Future<void> clearSessionSilently() async {
+    await _clearSession();
   }
 
   Future<void> _clearSession() async {
@@ -56,90 +60,8 @@ class SessionExpiredOverlay extends StatelessWidget {
           if (controller.isSessionExpiredVisible.value)
             Positioned.fill(
               child: Material(
-                color: Colors.black.withValues(alpha: 0.6),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 350),
-                    child: Container(
-                      width: MediaQuery.sizeOf(context).width * 0.8,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x4D000000),
-                            blurRadius: 12,
-                            offset: Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 24),
-                            color: AppColors.primary,
-                            child: Center(
-                              child: Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: AppColors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Color(0x33000000),
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  Icons.schedule_rounded,
-                                  size: 48,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 24,
-                            ),
-                            child: Text(
-                              'Please login again',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppColors.black,
-                                fontSize: 16,
-                                height: 1.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: controller.loginAgain,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: AppColors.white,
-                                  minimumSize: const Size.fromHeight(48),
-                                ),
-                                child: const Text('OK'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                color: Colors.black.withValues(alpha: 0.45),
+                child: LoginRequiredDialog(onConfirm: controller.loginAgain),
               ),
             ),
         ],

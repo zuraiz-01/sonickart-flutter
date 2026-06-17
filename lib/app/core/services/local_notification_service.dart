@@ -45,6 +45,7 @@ class LocalNotificationService extends GetxService {
           'notificationTitle',
           'notification_title',
         ]) ??
+        message.notification?.title ??
         copy?.title;
     final body =
         _firstMessageText(data, const [
@@ -53,21 +54,70 @@ class LocalNotificationService extends GetxService {
           'notificationBody',
           'notification_body',
         ]) ??
+        message.notification?.body ??
         copy?.body;
     if (title == null && body == null) return;
 
-    DartPluginRegistrant.ensureInitialized();
-    final service = LocalNotificationService();
-    await service.init();
-    final notificationId = orderNumber.isNotEmpty
-        ? orderNumber.hashCode.abs().remainder(100000)
-        : DateTime.now().millisecondsSinceEpoch.remainder(100000);
-    await service.show(
-      title: title ?? 'SonicKart',
-      body: body ?? 'You have a new update.',
-      payload: _encodePayload(data, package: isPackage),
-      notificationId: notificationId,
-    );
+    try {
+      DartPluginRegistrant.ensureInitialized();
+      final plugin = FlutterLocalNotificationsPlugin();
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      );
+      const initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+        macOS: iosSettings,
+      );
+      await plugin.initialize(settings: initSettings);
+
+      final android = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          defaultChannelId,
+          defaultChannelName,
+          description: defaultChannelDescription,
+          importance: Importance.high,
+        ),
+      );
+
+      final notificationId = orderNumber.isNotEmpty
+          ? orderNumber.hashCode.abs().remainder(100000)
+          : DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      await plugin.show(
+        id: notificationId,
+        title: title ?? 'SonicKart',
+        body: body ?? 'You have a new update.',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            defaultChannelId,
+            defaultChannelName,
+            channelDescription: defaultChannelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@drawable/ic_stat_sonickart_notification',
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: _encodePayload(data, package: isPackage),
+      );
+    } catch (error) {
+      debugPrint(
+        'LocalNotificationService.showRemoteMessageFromBackground failed: $error',
+      );
+    }
   }
 
   Future<LocalNotificationService> init() async {
@@ -77,9 +127,9 @@ class LocalNotificationService extends GetxService {
       '@mipmap/ic_launcher',
     );
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
     );
     const settings = InitializationSettings(
       android: androidSettings,
@@ -136,13 +186,23 @@ class LocalNotificationService extends GetxService {
       channelDescription: channelDescription,
       importance: importance,
       priority: priority,
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_stat_sonickart_notification',
     );
-    final details = NotificationDetails(android: androidDetails);
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: iosDetails,
+    );
 
     try {
       await _plugin.show(
-        id: notificationId ??
+        id:
+            notificationId ??
             DateTime.now().millisecondsSinceEpoch.remainder(100000),
         title: title.trim().isEmpty ? 'SonicKart' : title.trim(),
         body: body.trim().isEmpty ? 'You have a new update.' : body.trim(),

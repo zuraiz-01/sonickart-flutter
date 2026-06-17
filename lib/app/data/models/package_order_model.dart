@@ -842,6 +842,40 @@ class PackageOrderModel {
   final String receiverPhone;
   final Map<String, dynamic> raw;
 
+  int? get deliveryRating {
+    final parsed = _intOrNull(
+      raw['rating'] ??
+          raw['deliveryRating'] ??
+          raw['delivery_rating'] ??
+          raw['deliveryPartnerRating'] ??
+          raw['delivery_partner_rating'],
+    );
+    if (parsed == null || parsed < 1 || parsed > 5) return null;
+    return parsed;
+  }
+
+  String get deliveryRatingFeedback {
+    return _firstString([
+      raw['ratingFeedback'],
+      raw['rating_feedback'],
+      raw['deliveryFeedback'],
+      raw['delivery_feedback'],
+      raw['feedback'],
+    ]);
+  }
+
+  DateTime? get deliveryRatedAt {
+    final value =
+        raw['ratedAt'] ??
+        raw['rated_at'] ??
+        raw['deliveryRatedAt'] ??
+        raw['delivery_rated_at'];
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value?.toString() ?? '');
+  }
+
+  bool get hasDeliveryRating => deliveryRating != null;
+
   Map<String, dynamic> toJson() {
     final dropCount = _maxInt([
       dropAddresses.length,
@@ -935,7 +969,11 @@ class PackageOrderModel {
       }
     }
 
-    return {
+    final rating = deliveryRating;
+    final feedback = deliveryRatingFeedback;
+    final ratedAt = deliveryRatedAt;
+
+    final payload = <String, dynamic>{
       'id': id,
       'orderId': id,
       'orderType': 'package',
@@ -979,6 +1017,25 @@ class PackageOrderModel {
       'createdAt': createdAt.toIso8601String(),
       'raw': raw,
     };
+
+    if (rating != null) {
+      payload['rating'] = rating;
+      payload['deliveryRating'] = rating;
+      payload['delivery_rating'] = rating;
+    }
+    if (feedback.isNotEmpty) {
+      payload['ratingFeedback'] = feedback;
+      payload['rating_feedback'] = feedback;
+      payload['deliveryFeedback'] = feedback;
+      payload['delivery_feedback'] = feedback;
+    }
+    if (ratedAt != null) {
+      final submittedAt = ratedAt.toIso8601String();
+      payload['ratedAt'] = submittedAt;
+      payload['rated_at'] = submittedAt;
+    }
+
+    return payload;
   }
 
   factory PackageOrderModel.fromJson(Map<String, dynamic> json) {
@@ -1099,7 +1156,7 @@ class PackageOrderModel {
         (inferredDropCount > 0 ? inferredDropCount : 1);
 
     // FIX: agar backend currentDropIndex na bheje,
-    // to dropStatuses se next pending drop calculate hoga.
+    // The next pending drop is calculated from dropStatuses.
     final calculatedDropIndex = _calculateCurrentDropIndex(dropStatuses);
 
     final currentDropIndex = _clampDropIndex(
@@ -1543,7 +1600,7 @@ class PackageOrderModel {
   }
 
   static String _status(Map<String, dynamic> json) {
-    final primary = _normalizeStatus(json['status']?.toString());
+    final primary = _normalizePrimaryStatus(json['status']?.toString());
 
     final delivery = _normalizeStatus(
       (json['deliveryStatus'] ?? json['delivery_status'])?.toString(),
@@ -1574,14 +1631,33 @@ class PackageOrderModel {
         : packageStatus;
 
     if (!hasExplicitCancellation) {
+      if (_isCompletionStatus(primary)) {
+        return _canonicalCompletionStatus(primary);
+      }
+
+      final hasCompletionEvidence = _hasCompletionEvidence(json);
       for (final status in [safeDelivery, safePackageStatus]) {
-        if (status.isNotEmpty && status != 'cancelled') return status;
+        if (status.isEmpty || status == 'cancelled') {
+          continue;
+        }
+        if (_isCompletionStatus(status)) {
+          if (hasCompletionEvidence) return _canonicalCompletionStatus(status);
+          continue;
+        }
+        return status;
       }
     }
 
-    if (primary == 'delivered') return primary;
-    if (safeDelivery == 'delivered') return safeDelivery;
-    if (safePackageStatus == 'delivered') return safePackageStatus;
+    if (_isCompletionStatus(primary)) {
+      return _canonicalCompletionStatus(primary);
+    }
+    if (_isCompletionStatus(safeDelivery) && _hasCompletionEvidence(json)) {
+      return _canonicalCompletionStatus(safeDelivery);
+    }
+    if (_isCompletionStatus(safePackageStatus) &&
+        _hasCompletionEvidence(json)) {
+      return _canonicalCompletionStatus(safePackageStatus);
+    }
     if (safeDelivery == 'cancelled' && hasExplicitCancellation) {
       return safeDelivery;
     }
@@ -1589,11 +1665,87 @@ class PackageOrderModel {
       return safePackageStatus;
     }
     if (primary.isNotEmpty && primary != 'pending') return primary;
-    if (safeDelivery.isNotEmpty) return safeDelivery;
-    if (safePackageStatus.isNotEmpty) return safePackageStatus;
+    if (safeDelivery.isNotEmpty && !_isCompletionStatus(safeDelivery)) {
+      return safeDelivery;
+    }
+    if (safePackageStatus.isNotEmpty &&
+        !_isCompletionStatus(safePackageStatus)) {
+      return safePackageStatus;
+    }
     if (primary.isNotEmpty) return primary;
 
     return 'pending';
+  }
+
+  static String _normalizePrimaryStatus(String? value) {
+    final normalized = _normalizeStatus(value);
+    return const {'success', 'ok'}.contains(normalized) ? '' : normalized;
+  }
+
+  static bool _isCompletionStatus(String status) {
+    return const {
+      'delivered',
+      'completed',
+      'complete',
+      'finished',
+      'done',
+    }.contains(status);
+  }
+
+  static String _canonicalCompletionStatus(String status) {
+    return status == 'delivered' ? 'delivered' : 'completed';
+  }
+
+  static bool _hasCompletionEvidence(Map<String, dynamic> json) {
+    if (json['isDelivered'] == true ||
+        json['delivered'] == true ||
+        json['isCompleted'] == true ||
+        json['completed'] == true) {
+      return true;
+    }
+
+    if (_firstString([
+      json['deliveredAt'],
+      json['delivered_at'],
+      json['completedAt'],
+      json['completed_at'],
+      json['deliveryCompletedAt'],
+      json['delivery_completed_at'],
+    ]).isNotEmpty) {
+      return true;
+    }
+
+    final dropLocations = _locationMaps(
+      json['dropLocations'] ?? json['drop_locations'] ?? json['drops'],
+    );
+    final dropStatuses =
+        _dropStrings(
+              json['dropStatuses'] ?? json['drop_statuses'],
+              dropLocations,
+              const ['dropStatus', 'drop_status', 'status', 'delivery_status'],
+            )
+            .map(_normalizeStatus)
+            .where((status) => status.isNotEmpty)
+            .toList(growable: false);
+
+    final totalDrops = _intOrNull(json['totalDrops'] ?? json['total_drops']);
+    final hasEveryDropStatus =
+        totalDrops == null ||
+        totalDrops <= 0 ||
+        dropStatuses.length >= totalDrops;
+    if (dropStatuses.isNotEmpty &&
+        hasEveryDropStatus &&
+        dropStatuses.every(_isCompletionStatus)) {
+      return true;
+    }
+
+    final currentDropIndex = _intOrNull(
+      json['currentDropIndex'] ?? json['current_drop_index'],
+    );
+    return totalDrops != null &&
+        totalDrops > 0 &&
+        currentDropIndex != null &&
+        currentDropIndex >= totalDrops;
   }
 
   static String _normalizeStatus(String? value) {
