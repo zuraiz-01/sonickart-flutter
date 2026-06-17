@@ -25,7 +25,7 @@ class CatalogRepository {
   static const _defaultFeaturedProductsLimit = 8;
   static const _lastKnownLocationTimeout = Duration(milliseconds: 800);
   static const _deviceLocationTimeout = Duration(seconds: 8);
-  static const _featuredCategoryFetchTimeout = Duration(seconds: 8);
+  static const _featuredCategoryFetchTimeout = Duration(seconds: 15);
   static const _selectedLocationServiceableKey = 'selectedLocationServiceable';
   static const _selectedServiceLocationSessionKey =
       AppSessionScope.selectedServiceLocationSessionKey;
@@ -58,6 +58,27 @@ class CatalogRepository {
     _subcategoryCache.clear();
     _subcategoryLoadFutures.clear();
     _visibleProductsById.clear();
+  }
+
+  String activeProductScopeCacheKey() {
+    final storedSelectedAddress = _selectedAddress;
+    final selectedAddress = _isStaleServiceLocation(storedSelectedAddress)
+        ? null
+        : storedSelectedAddress;
+    final vendors = _uniqueVendorIds([
+      ...(_selectedVendorId?.split(',') ?? const []),
+      selectedAddress?.vendorId,
+    ])..sort();
+    String coordinate(double? value) =>
+        value == null ? '-' : value.toStringAsFixed(5);
+
+    return [
+      _storage.read(_selectedLocationServiceableKey)?.toString() ?? 'unknown',
+      selectedAddress?.id.trim() ?? '',
+      coordinate(selectedAddress?.latitude),
+      coordinate(selectedAddress?.longitude),
+      vendors.join(','),
+    ].join('|');
   }
 
   Future<List<CategoryModel>> fetchCategories() async {
@@ -210,7 +231,10 @@ class CatalogRepository {
             _fetchProductsByCategoryForVendor(categoryId, vendorId, context),
       ),
     );
-    return _dedupeProducts(lists.expand((items) => items));
+    final scopedVendorSet = scopedVendorIds.toSet();
+    return _dedupeProducts(lists.expand((items) => items))
+        .where((product) => _isProductInVendorScope(product, scopedVendorSet))
+        .toList();
   }
 
   Future<List<ProductModel>> searchProducts(String query) async {
@@ -273,15 +297,23 @@ class CatalogRepository {
     }
 
     final context = await _resolveProductContext();
+    if (context.vendorIds.isEmpty) {
+      debugPrint(
+        'CatalogRepository.fetchFeaturedProducts: no vendorIds in active location scope',
+      );
+      return const [];
+    }
+
     debugPrint(
-      'CatalogRepository.fetchFeaturedProducts: context has ${context.vendorIds.length} vendorIds, radius=${context.radiusKm}, categories=${categories.length}',
+      'CatalogRepository.fetchFeaturedProducts: categories=${categories.length} '
+      'vendors=${context.vendorIds.length} radius=${context.radiusKm} '
+      'lat=${context.latitude} lng=${context.longitude}',
     );
 
     final random = Random();
     final target = max(1, _featuredProductsLimit);
-
-    final categoryPool = [...categories]..shuffle(random);
     final productMap = <String, ProductModel>{};
+    final scopedVendorSet = context.vendorIds.toSet();
 
     Future<List<ProductModel>> loadCategoryProducts(
       CategoryModel category,
@@ -313,26 +345,31 @@ class CatalogRepository {
     ) {
       final randomized = [...products]..shuffle(random);
       for (final product in randomized) {
-        if (productMap.length >= target) break;
-        if (product.id.isEmpty || productMap.containsKey(product.id)) {
-          continue;
-        }
+        if (product.id.isEmpty || productMap.containsKey(product.id)) continue;
         if (_isRemovedProduct(product.raw)) continue;
+        if (!_isProductInVendorScope(product, scopedVendorSet)) continue;
         productMap[product.id] = _withCategoryMeta(product, category);
       }
     }
 
+    final categoryPool = [...categories]..shuffle(random);
     final firstPassCategories = categoryPool
         .take(min(categoryPool.length, target))
         .toList(growable: false);
-    for (final category in firstPassCategories) {
-      if (productMap.length >= target) break;
-      appendUniqueProducts(category, await loadCategoryProducts(category));
+    final firstPassResults = await Future.wait(
+      firstPassCategories.map((category) async {
+        return (
+          category: category,
+          products: await loadCategoryProducts(category),
+        );
+      }),
+    );
+    for (final result in firstPassResults) {
+      appendUniqueProducts(result.category, result.products);
     }
 
     if (productMap.length < target) {
-      final fallbackCategories = [...categories]..shuffle(random);
-      for (final category in fallbackCategories) {
+      for (final category in categoryPool.skip(firstPassCategories.length)) {
         if (productMap.length >= target) break;
         appendUniqueProducts(category, await loadCategoryProducts(category));
       }
@@ -510,7 +547,12 @@ class CatalogRepository {
               ),
             ),
           )
-          .where((item) => item.id.isNotEmpty && !_isRemovedProduct(item.raw))
+          .where(
+            (item) =>
+                item.id.isNotEmpty &&
+                !_isRemovedProduct(item.raw) &&
+                _matchesCategory(item, categoryId),
+          )
           .toList();
       debugPrint(
         'CatalogRepository._fetchProductsByCategoryForVendor: '
@@ -675,30 +717,15 @@ class CatalogRepository {
     debugPrint(
       'CatalogRepository._resolveProductContext: storedVendorIds=$storedVendorIds, scopedLat=$scopedLatitude, scopedLng=$scopedLongitude',
     );
-    final canTrustServiceLocationVendorScope =
-        _isCurrentSessionServiceLocation(selectedAddress) &&
-        _storage.read(_selectedLocationServiceableKey) == true &&
-        storedVendorIds.isNotEmpty;
-    if (canTrustServiceLocationVendorScope) {
-      debugPrint(
-        'CatalogRepository._resolveProductContext: using stored service-location vendor scope=$storedVendorIds',
-      );
-      return ProductCatalogContext(
-        vendorIds: storedVendorIds,
-        latitude: scopedLatitude,
-        longitude: scopedLongitude,
-        radiusKm: _productRadiusKm,
-      );
-    }
-
-    final canTrustSelectedAddressVendorScope =
+    final canTrustActiveSelectedVendorScope =
         selectedAddress != null &&
         selectedAddress.id.trim().isNotEmpty &&
-        !_isTransientLocationAddress(selectedAddress) &&
-        storedVendorIds.isNotEmpty;
-    if (canTrustSelectedAddressVendorScope) {
+        storedVendorIds.isNotEmpty &&
+        (_storage.read(_selectedLocationServiceableKey) == true ||
+            !_isTransientLocationAddress(selectedAddress));
+    if (canTrustActiveSelectedVendorScope) {
       debugPrint(
-        'CatalogRepository._resolveProductContext: using stored selected-address vendor scope=$storedVendorIds',
+        'CatalogRepository._resolveProductContext: using stored selected-location vendor scope=$storedVendorIds',
       );
       return ProductCatalogContext(
         vendorIds: storedVendorIds,
@@ -734,7 +761,14 @@ class CatalogRepository {
       );
     }
 
-    final resolvedVendorIds = await _resolveVendorIds(lat, lng);
+    var resolvedVendorIds = await _resolveVendorIds(lat, lng);
+    if (resolvedVendorIds.isEmpty && storedVendorIds.isNotEmpty) {
+      debugPrint(
+        'CatalogRepository._resolveProductContext: GPS resolved 0 vendors, '
+        'falling back to stored vendorIds=$storedVendorIds',
+      );
+      resolvedVendorIds = storedVendorIds;
+    }
     debugPrint(
       'CatalogRepository._resolveProductContext: resolved vendorIds=$resolvedVendorIds',
     );
@@ -929,6 +963,19 @@ class CatalogRepository {
             .trim()
             .toLowerCase();
     return status == 'deleted' || status == 'removed' || status == 'archived';
+  }
+
+  bool _matchesCategory(ProductModel product, String categoryId) {
+    final expected = categoryId.trim().toLowerCase();
+    if (expected.isEmpty) return true;
+    final actual = product.categoryId.trim().toLowerCase();
+    return actual.isEmpty || actual == expected;
+  }
+
+  bool _isProductInVendorScope(ProductModel product, Set<String> vendorIds) {
+    if (vendorIds.isEmpty) return false;
+    final productVendorIds = _collectVendorIds(product.raw, product.vendorId);
+    return productVendorIds.any(vendorIds.contains);
   }
 
   List<String> _collectVendorIds(

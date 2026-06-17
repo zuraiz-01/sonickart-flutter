@@ -1330,13 +1330,15 @@ class ProfileController extends GetxController {
     if (Get.isRegistered<CatalogRepository>()) {
       Get.find<CatalogRepository>().invalidateProductScope();
     }
+    final categoriesController = Get.isRegistered<CategoriesController>()
+        ? Get.find<CategoriesController>()
+        : null;
+    categoriesController?.invalidateProductScope();
     if (Get.isRegistered<DashboardController>()) {
       await Get.find<DashboardController>().loadCatalog(force: true);
     }
-    if (Get.isRegistered<CategoriesController>()) {
-      await Get.find<CategoriesController>().reloadSelectedCategory(
-        force: true,
-      );
+    if (categoriesController != null) {
+      await categoriesController.reloadSelectedCategory(force: true);
     }
   }
 

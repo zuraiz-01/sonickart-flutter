@@ -19,10 +19,12 @@ void main() {
         .setMockMethodCallHandler(pathProviderChannel, (_) async {
           return '.dart_tool/test_storage/profile_controller';
         });
+    await GetStorage.init();
     await GetStorage.init(storageContainer);
   });
 
   tearDown(() async {
+    await GetStorage().erase();
     await GetStorage(storageContainer).erase();
     Get.reset();
     Get.testMode = false;

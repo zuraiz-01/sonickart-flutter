@@ -31,8 +31,9 @@ class CategoriesController extends GetxController {
   static const categoryListItemExtent = 124.0;
   static const _productLoadTimeout = Duration(seconds: 24);
   static const _subcategoryLoadTimeout = Duration(seconds: 10);
+  static const _cacheTtl = Duration(minutes: 2);
 
-  final _productCache = <String, List<ProductModel>>{};
+  final _productCache = <String, _TimedCacheEntry<List<ProductModel>>>{};
   final _productLoadFutures = <String, Future<List<ProductModel>>>{};
   final _subcategoryCache = <String, List<ProductSubcategoryModel>>{};
   final _subcategoryLoadFutures =
@@ -44,7 +45,6 @@ class CategoriesController extends GetxController {
   String? _pendingCategoryId;
   String? _preferredVendorId;
 
-  int _productCacheGeneration = 0;
   String? _lastResolvedProductCacheKey;
   String? _currentlyLoadingProductCacheKey;
 
@@ -53,7 +53,7 @@ class CategoriesController extends GetxController {
     if (selected == null) return const [];
 
     final options = subcategories.toList(growable: true);
-    if (options.isNotEmpty && _mixedProducts(categoryProducts).isNotEmpty) {
+    if (_mixedProducts(categoryProducts).isNotEmpty) {
       options.insert(0, ProductSubcategoryModel.mixed(categoryId: selected.id));
     }
     return options;
@@ -190,7 +190,7 @@ class CategoriesController extends GetxController {
       _preferredVendorId = preferredVendorId;
       _productCache.clear();
       _productLoadFutures.clear();
-      _productCacheGeneration++;
+      _repository.invalidateProductScope();
 
       _lastResolvedProductCacheKey = null;
       _currentlyLoadingProductCacheKey = null;
@@ -259,21 +259,25 @@ class CategoriesController extends GetxController {
         isProductsLoading.value;
   }
 
+  void invalidateProductScope() {
+    _productCache.clear();
+    _productLoadFutures.clear();
+    _subcategoryCache.clear();
+    _subcategoryLoadFutures.clear();
+    _repository.invalidateProductScope();
+    _lastResolvedProductCacheKey = null;
+    _currentlyLoadingProductCacheKey = null;
+    _productsRequestId++;
+    productsResolved.value = false;
+  }
+
   Future<void> reloadSelectedCategory({bool force = false}) async {
     final category = selectedCategory.value;
-    if (category == null) return;
-
     if (force) {
-      _productCache.clear();
-      _productLoadFutures.clear();
-      _subcategoryCache.clear();
-      _subcategoryLoadFutures.clear();
-      _productCacheGeneration++;
-      _lastResolvedProductCacheKey = null;
-      _currentlyLoadingProductCacheKey = null;
+      invalidateProductScope();
       selectedSubcategory.value = null;
-      productsResolved.value = false;
     }
+    if (category == null) return;
 
     await loadProducts(category.id, force: force);
   }
@@ -298,14 +302,15 @@ class CategoriesController extends GetxController {
       return;
     }
 
-    final cached = force ? null : _productCache[cacheKey];
+    final cachedEntry = force ? null : _productCache[cacheKey];
+    final hasValidCache = cachedEntry != null && !cachedEntry.isExpired;
 
-    if (cached != null) {
+    if (hasValidCache) {
       final cachedSubcategories =
           _subcategoryCache[categoryId] ??
           selectedCategory.value?.subcategories;
       _applyLoadedCategoryContent(
-        loadedProducts: cached,
+        loadedProducts: cachedEntry.value,
         loadedSubcategories:
             cachedSubcategories ?? const <ProductSubcategoryModel>[],
       );
@@ -391,25 +396,24 @@ class CategoriesController extends GetxController {
     if (force) {
       _productCache.remove(cacheKey);
       _productLoadFutures.remove(cacheKey);
-      _productCacheGeneration++;
+      _repository.invalidateProductScope();
     }
 
     final cached = _productCache[cacheKey];
-    if (!force && cached != null) return Future.value(cached);
+    if (!force && cached != null && !cached.isExpired) {
+      return Future.value(cached.value);
+    }
 
     final inFlight = _productLoadFutures[cacheKey];
     if (!force && inFlight != null) return inFlight;
 
-    final generation = _productCacheGeneration;
     final future = _repository
         .fetchProductsByCategory(
           categoryId,
           preferredVendorId: _preferredVendorId,
         )
         .then((result) {
-          if (generation == _productCacheGeneration) {
-            _productCache[cacheKey] = result;
-          }
+          _productCache[cacheKey] = _TimedCacheEntry(result);
           return result;
         });
 
@@ -619,7 +623,11 @@ class CategoriesController extends GetxController {
   }
 
   String _productCacheKey(String categoryId) {
-    return '$categoryId|${_preferredVendorId ?? ''}';
+    return [
+      categoryId,
+      _preferredVendorId ?? '',
+      _repository.activeProductScopeCacheKey(),
+    ].join('|');
   }
 
   bool _isCurrentProductRequest(int requestId, String categoryId) {
@@ -724,4 +732,14 @@ class CategoriesController extends GetxController {
 
     super.onClose();
   }
+}
+
+class _TimedCacheEntry<T> {
+  _TimedCacheEntry(this.value) : _cachedAt = DateTime.now();
+
+  final T value;
+  final DateTime _cachedAt;
+
+  bool get isExpired =>
+      DateTime.now().difference(_cachedAt) > CategoriesController._cacheTtl;
 }

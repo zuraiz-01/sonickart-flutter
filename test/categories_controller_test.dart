@@ -2,7 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:sonic_cart/app/core/constants/api_constants.dart';
 import 'package:sonic_cart/app/core/network/api_service.dart';
+import 'package:sonic_cart/app/data/models/address_model.dart';
 import 'package:sonic_cart/app/data/models/category_model.dart';
 import 'package:sonic_cart/app/data/models/product_model.dart';
 import 'package:sonic_cart/app/data/models/product_subcategory_model.dart';
@@ -89,4 +91,118 @@ void main() {
     expect(options[1].name, 'Baby Food');
     expect(options[2].name, 'Diapers');
   });
+
+  test('shows Other Products when category has only direct products', () {
+    final storage = GetStorage(storageContainer);
+    final controller = CategoriesController(
+      CatalogRepository(ApiService(storage: storage), storage: storage),
+    );
+
+    controller.selectedCategory.value = const CategoryModel(
+      id: 'cat-1',
+      name: 'Snacks',
+      emoji: '',
+    );
+    controller.categoryProducts.assignAll([
+      const ProductModel(
+        id: 'p-1',
+        categoryId: 'cat-1',
+        name: 'Direct Product',
+        description: '',
+        unit: '1 pc',
+        price: '10',
+        mrp: '12',
+        emoji: '',
+      ),
+    ]);
+
+    final options = controller.visibleSubcategoryOptions;
+
+    expect(options, hasLength(1));
+    expect(options.first.isMixed, isTrue);
+    expect(options.first.name, 'Other Products');
+  });
+
+  test(
+    'category product cache follows selected vendor scope changes',
+    () async {
+      final storage = GetStorage(storageContainer);
+      await _writeSelectedScope(storage, 'vendor-a');
+      final api = _CategoryFakeApiService(storage);
+      final controller = CategoriesController(
+        CatalogRepository(api, storage: storage),
+      );
+      controller.selectedCategory.value = const CategoryModel(
+        id: 'cat-1',
+        name: 'Grocery',
+        emoji: '',
+      );
+
+      await controller.loadProducts('cat-1');
+
+      expect(controller.categoryProducts.map((item) => item.vendorId), [
+        'vendor-a',
+      ]);
+
+      await _writeSelectedScope(storage, 'vendor-b');
+      await controller.loadProducts('cat-1');
+
+      expect(controller.categoryProducts.map((item) => item.vendorId), [
+        'vendor-b',
+      ]);
+      expect(api.productVendorIds, ['vendor-a', 'vendor-b']);
+    },
+  );
+}
+
+Future<void> _writeSelectedScope(GetStorage storage, String vendorId) async {
+  await storage.write('selectedLocationServiceable', true);
+  await storage.write('selectedVendorId', vendorId);
+  await storage.write(
+    'selectedAddress',
+    AddressModel(
+      id: 'addr-$vendorId',
+      fullName: 'Customer',
+      contactNumber: '',
+      address: 'Address $vendorId',
+      latitude: 24.8607,
+      longitude: 67.0011,
+      vendorId: vendorId,
+      isSelected: true,
+    ).toJson(),
+  );
+}
+
+class _CategoryFakeApiService extends ApiService {
+  _CategoryFakeApiService(GetStorage storage) : super(storage: storage);
+
+  final productVendorIds = <String?>[];
+
+  @override
+  Future<Map<String, dynamic>> get({
+    required String endpoint,
+    Map<String, dynamic>? query,
+    bool authenticated = true,
+    Map<String, String>? headers,
+  }) async {
+    if (endpoint == ApiConstants.productsByCategory('cat-1')) {
+      final vendorId = query?['vendorId']?.toString();
+      productVendorIds.add(vendorId);
+      return {
+        'products': [
+          {
+            'id': 'product-$vendorId',
+            'categoryId': 'cat-1',
+            'name': 'Scoped product $vendorId',
+            'description': '',
+            'unit': '1 pc',
+            'price': '10',
+            'mrp': '12',
+            'vendorId': vendorId,
+          },
+        ],
+      };
+    }
+    return const {};
+  }
 }

@@ -191,7 +191,7 @@ class _SubcategoryThumb extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.productImageFill,
-        shape: BoxShape.circle,
+        borderRadius: BorderRadius.circular(12.rpx),
         border: Border.all(
           color: AppColors.isDarkMode
               ? AppColors.accent
@@ -243,7 +243,7 @@ class OtherProductsLogo extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF001033) : AppColors.productImageFill,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(12.rpx),
           border: Border.all(
             color: isDark
                 ? AppColors.accent
