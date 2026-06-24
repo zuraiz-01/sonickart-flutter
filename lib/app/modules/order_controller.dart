@@ -68,6 +68,7 @@ class OrderController extends GetxController {
   final _ratedOrderIds = <String>{};
   final _dismissedRatingOrderIds = <String>{};
   final _ratingSubmissionOrderIds = <String>{};
+  final _partnerHydrationInFlight = <String>{};
   bool _isRatingPromptVisible = false;
   String? _ratingPromptOrderId;
 
@@ -611,7 +612,35 @@ class OrderController extends GetxController {
     if (order.id.isEmpty) {
       return;
     }
-    await _upsertOrder(order);
+    final updated = await _upsertOrder(order);
+    await _hydrateAcceptedOrderPartner(updated);
+  }
+
+  Future<void> _hydrateAcceptedOrderPartner(OrderModel order) async {
+    final status = _normalizeLocalStatus(order.status);
+    if (!const {'accepted', 'assigned', 'confirmed'}.contains(status)) return;
+    if (_hasDeliveryPartnerContact(order)) return;
+
+    final identifiers = _orderIdentifiers(order);
+    if (identifiers.isEmpty) return;
+    final hydrationKey = identifiers.first;
+    if (!_partnerHydrationInFlight.add(hydrationKey)) return;
+
+    try {
+      for (final id in identifiers) {
+        final detailed = await _tryFetchOrderById(id);
+        if (detailed == null) continue;
+        await _upsertOrder(detailed, notifyStatusChange: false);
+        return;
+      }
+    } finally {
+      _partnerHydrationInFlight.remove(hydrationKey);
+    }
+  }
+
+  bool _hasDeliveryPartnerContact(OrderModel order) {
+    return deliveryPartnerNameFor(order).isNotEmpty &&
+        deliveryPartnerPhoneFor(order).isNotEmpty;
   }
 
   OrderModel? _findExistingOrderForPayload(Map<String, dynamic> payload) {
@@ -1170,15 +1199,6 @@ class OrderController extends GetxController {
       couponCodeController.clear();
       deliveryNoteController.clear();
       couponFeedback.value = null;
-      unawaited(
-        _notifyAction(
-          'Order Placed',
-          'Your order has been placed successfully.',
-          category: 'order',
-        ).catchError((error) {
-          debugPrint('OrderController.placeOrder notification failed: $error');
-        }),
-      );
       await cart.clearCart(notify: false);
       Get.offNamed(
         AppRoutes.orderSuccess,
@@ -2614,9 +2634,7 @@ class OrderController extends GetxController {
   }
 
   String deliveryPartnerNameFor(OrderModel order) {
-    final partner = order.raw['deliveryPartner'] is Map
-        ? Map<String, dynamic>.from(order.raw['deliveryPartner'] as Map)
-        : const <String, dynamic>{};
+    final partner = _deliveryPartnerMap(order);
     return _firstNonEmpty([
           partner['name'],
           partner['fullName'],
@@ -2624,11 +2642,51 @@ class OrderController extends GetxController {
           partner['firstName'],
           partner['lastName'],
           order.raw['deliveryPersonName'],
+          order.raw['delivery_person_name'],
           order.raw['riderName'],
+          order.raw['rider_name'],
           order.raw['driverName'],
+          order.raw['driver_name'],
           order.raw['deliveryPartnerName'],
+          order.raw['delivery_partner_name'],
         ]) ??
         '';
+  }
+
+  String deliveryPartnerPhoneFor(OrderModel order) {
+    final partner = _deliveryPartnerMap(order);
+    return _firstNonEmpty([
+          partner['phone'],
+          partner['contactNumber'],
+          partner['contact_number'],
+          partner['mobile'],
+          partner['phoneNumber'],
+          partner['phone_number'],
+          order.raw['deliveryPartnerPhone'],
+          order.raw['delivery_partner_phone'],
+          order.raw['deliveryPersonPhone'],
+          order.raw['delivery_person_phone'],
+          order.raw['riderPhone'],
+          order.raw['rider_phone'],
+          order.raw['driverPhone'],
+          order.raw['driver_phone'],
+        ]) ??
+        '';
+  }
+
+  Map<String, dynamic> _deliveryPartnerMap(OrderModel order) {
+    for (final value in [
+      order.raw['deliveryPartner'],
+      order.raw['delivery_partner'],
+      order.raw['deliveryPerson'],
+      order.raw['delivery_person'],
+      order.raw['rider'],
+      order.raw['driver'],
+      order.raw['partner'],
+    ]) {
+      if (value is Map) return Map<String, dynamic>.from(value);
+    }
+    return const {};
   }
 
   Future<void> _notifyAction(

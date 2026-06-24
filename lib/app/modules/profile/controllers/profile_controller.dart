@@ -74,6 +74,7 @@ class ProfileController extends GetxController {
   final addressPhoneController = TextEditingController();
   final addressLineController = TextEditingController();
   Timer? _addressSuggestionDebounce;
+  Future<void>? _bootstrapFuture;
 
   UserModel? get currentUser {
     final rawUser = _storage.read(_currentUserStorageKey);
@@ -225,7 +226,15 @@ class ProfileController extends GetxController {
   void onInit() {
     super.onInit();
     debugPrint('ProfileController.onInit: profile flow started');
-    unawaited(_bootstrapProfile());
+    _bootstrapFuture ??= _bootstrapProfile();
+    unawaited(_bootstrapFuture);
+  }
+
+  Future<void> ensureCatalogContextReady() async {
+    final bootstrapFuture = _bootstrapFuture;
+    if (bootstrapFuture != null) {
+      await bootstrapFuture;
+    }
   }
 
   Future<void> _bootstrapProfile() async {
@@ -906,7 +915,7 @@ class ProfileController extends GetxController {
         temporaryAddress.copyWith(vendorId: vendorId),
       );
     }
-    unawaited(_refreshCatalogAfterAddressChange());
+    await _refreshCatalogAfterAddressChange();
   }
 
   Future<void> applyBlockedServiceAreaLocation({
@@ -927,7 +936,7 @@ class ProfileController extends GetxController {
       await _storage.remove(_selectedVendorIdStorageKey);
       await _storage.remove(_selectedServiceLocationSessionStorageKey);
       await _storage.write(_selectedLocationServiceableStorageKey, false);
-      unawaited(_refreshCatalogAfterAddressChange());
+      await _refreshCatalogAfterAddressChange();
       return;
     }
 
@@ -952,7 +961,7 @@ class ProfileController extends GetxController {
     await _storage.remove(_selectedServiceLocationSessionStorageKey);
     await _storage.write(_selectedLocationServiceableStorageKey, false);
     await _persistSelectedAddress(blockedAddress);
-    unawaited(_refreshCatalogAfterAddressChange());
+    await _refreshCatalogAfterAddressChange();
   }
 
   Future<void> _restoreAuthenticatedServiceAreaLocation(

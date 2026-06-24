@@ -58,7 +58,7 @@ class DistanceMatrixResult {
 
 class LocationLookupService {
   static const String _googleMapsApiKey =
-      'AIzaSyB5dcpM7PWKnErsIQjyzEG9CUxup0Ysuxs';
+      'AIzaSyBFCpSF0bW2Z8UWxoN0Y_fefdwzI3Wlej0';
   static const String _geocodeBaseUrl =
       'https://maps.googleapis.com/maps/api/geocode/json';
   static const String _placeAutocompleteUrl =

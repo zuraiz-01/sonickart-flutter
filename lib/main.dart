@@ -29,8 +29,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     debugPrint('DartPluginRegistrant.ensureInitialized() done');
     await FirebaseBootstrap.initialize();
     debugPrint('FirebaseBootstrap.initialize() done');
-    await LocalNotificationService.showRemoteMessageFromBackground(message);
-    debugPrint('showRemoteMessageFromBackground() done');
+    if (message.notification == null) {
+      await LocalNotificationService.showRemoteMessageFromBackground(message);
+      debugPrint('showRemoteMessageFromBackground() done');
+    } else {
+      debugPrint(
+        'Background local notification skipped; FCM system notification handles this message.',
+      );
+    }
   } catch (error, stack) {
     debugPrint('BACKGROUND HANDLER ERROR: $error');
     debugPrint('STACK: $stack');

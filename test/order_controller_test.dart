@@ -2,6 +2,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:sonic_cart/app/core/constants/api_constants.dart';
+import 'package:sonic_cart/app/core/network/api_service.dart';
 import 'package:sonic_cart/app/data/models/order_model.dart';
 import 'package:sonic_cart/app/modules/order_controller.dart';
 
@@ -155,6 +157,29 @@ void main() {
       expect(deliveryPersonLocation['latitude'], 25.1122);
       expect(deliveryPersonLocation['longitude'], 67.3344);
     });
+
+    test(
+      'accepted realtime update immediately hydrates partner name and phone',
+      () async {
+        final storage = GetStorage(storageContainer);
+        final api = _AcceptedOrderApiService(storage);
+        Get.put<ApiService>(api);
+        final controller = OrderController(storage);
+        addTearDown(controller.onClose);
+        controller.orders.assignAll([_baseOrderWithoutDeliveryLocation()]);
+
+        await controller.handleRealtimeOrderPayload({
+          'orderId': 'ORD1',
+          'deliveryStatus': 'accepted',
+        });
+
+        final updated = controller.findOrderById('ORD1')!;
+        expect(updated.status, 'accepted');
+        expect(controller.deliveryPartnerNameFor(updated), 'Ahmed Rider');
+        expect(controller.deliveryPartnerPhoneFor(updated), '03001234567');
+        expect(api.orderDetailRequests, 1);
+      },
+    );
   });
 }
 
@@ -194,4 +219,36 @@ OrderModel _baseOrderWithDeliveryLocation() {
       },
     },
   );
+}
+
+class _AcceptedOrderApiService extends ApiService {
+  _AcceptedOrderApiService(GetStorage storage) : super(storage: storage);
+
+  int orderDetailRequests = 0;
+
+  @override
+  Future<Map<String, dynamic>> get({
+    required String endpoint,
+    Map<String, dynamic>? query,
+    bool authenticated = true,
+    Map<String, String>? headers,
+  }) async {
+    if (endpoint == ApiConstants.orderById('ORD1')) {
+      orderDetailRequests += 1;
+      return {
+        'id': 'ORD1',
+        'orderId': 'ORD1',
+        'deliveryStatus': 'accepted',
+        'deliveryAddress': 'Customer drop address',
+        'totalPrice': 500,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+        'deliveryPartner': {
+          'id': 'partner-1',
+          'name': 'Ahmed Rider',
+          'phone': '03001234567',
+        },
+      };
+    }
+    return const {};
+  }
 }

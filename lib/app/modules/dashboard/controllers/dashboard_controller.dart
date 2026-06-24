@@ -206,7 +206,7 @@ class DashboardController extends GetxController {
       }
 
       if (!force) {
-        await _ensureGuestServiceAreaChecked();
+        await _ensureInitialCatalogContextReady();
       }
 
       if (!_isCurrentCatalogLoad(requestId)) return;
@@ -263,9 +263,12 @@ class DashboardController extends GetxController {
     return requestId == _catalogLoadRequestId;
   }
 
-  Future<void> _ensureGuestServiceAreaChecked() async {
-    if (Get.isRegistered<ProfileController>() &&
-        Get.find<ProfileController>().hasBackendSession) {
+  Future<void> _ensureInitialCatalogContextReady() async {
+    final profileController = Get.isRegistered<ProfileController>()
+        ? Get.find<ProfileController>()
+        : null;
+    if (profileController?.hasBackendSession == true) {
+      await profileController!.ensureCatalogContextReady();
       return;
     }
     if (!Get.isRegistered<ServiceAreaGateController>()) return;

@@ -3,15 +3,21 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
+import '../../../core/services/service_area_gate_controller.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/models/product_subcategory_model.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../profile/controllers/profile_controller.dart';
 
 class CategoriesController extends GetxController {
-  CategoriesController(this._repository);
+  CategoriesController(
+    this._repository, {
+    Future<void> Function()? initialCatalogContextReady,
+  }) : _initialCatalogContextReady = initialCatalogContextReady;
 
   final CatalogRepository _repository;
+  final Future<void> Function()? _initialCatalogContextReady;
 
   final categories = <CategoryModel>[].obs;
   final products = <ProductModel>[].obs;
@@ -75,9 +81,32 @@ class CategoriesController extends GetxController {
     debugPrint('CategoriesController.onInit: starting category flow');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _applyRouteArguments(Get.arguments);
-      unawaited(loadCategories());
+      unawaited(initializeCatalog());
     });
+  }
+
+  Future<void> initializeCatalog({Object? arguments}) async {
+    _applyRouteArguments(arguments ?? Get.arguments);
+    final readinessOverride = _initialCatalogContextReady;
+    if (readinessOverride != null) {
+      await readinessOverride();
+    } else {
+      await _ensureInitialCatalogContextReady();
+    }
+    await loadCategories();
+  }
+
+  Future<void> _ensureInitialCatalogContextReady() async {
+    final profileController = Get.isRegistered<ProfileController>()
+        ? Get.find<ProfileController>()
+        : null;
+    if (profileController?.hasBackendSession == true) {
+      await profileController!.ensureCatalogContextReady();
+      return;
+    }
+    if (Get.isRegistered<ServiceAreaGateController>()) {
+      await Get.find<ServiceAreaGateController>().ensureChecked();
+    }
   }
 
   void openFromRouteArguments(Object? arguments) {
@@ -91,7 +120,7 @@ class CategoriesController extends GetxController {
       if (categoryId == null || categoryId.isEmpty) return;
 
       if (categories.isEmpty) {
-        unawaited(loadCategories());
+        unawaited(initializeCatalog(arguments: arguments));
         return;
       }
 

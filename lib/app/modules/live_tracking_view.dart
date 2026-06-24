@@ -7,6 +7,7 @@ import 'package:sonic_cart/app/core/utils/responsive.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../core/utils/phone_dialer.dart';
 import '../data/models/order_model.dart';
 import '../core/widgets/delivery_rating_dialog.dart';
 import '../core/widgets/live_tracking_bike_marker_icon.dart';
@@ -297,6 +298,10 @@ class _TrackingBody extends StatelessWidget {
           _LiveStatusCard(order: order),
           SizedBox(height: 16.hpx),
         ],
+        if (shouldShowDeliveryPartnerContact(order)) ...[
+          _DeliveryPartnerPhoneCard(order: order),
+          SizedBox(height: 16.hpx),
+        ],
         _OrderSummaryCard(order: order),
         SizedBox(height: 16.hpx),
         _OrderedItemsCard(order: order),
@@ -342,6 +347,87 @@ class _TrackingBody extends StatelessWidget {
 
     if (reason == null || reason.trim().isEmpty) return;
     await controller.cancelOrder(order, reason: reason);
+  }
+}
+
+class _DeliveryPartnerPhoneCard extends StatelessWidget {
+  const _DeliveryPartnerPhoneCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = _deliveryPartnerPhone(order);
+    final name = _deliveryPartnerName(order);
+
+    return _SectionCard(
+      padding: EdgeInsets.all(16.rpx),
+      child: Row(
+        children: [
+          Container(
+            width: 48.rpx,
+            height: 48.rpx,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.phone_in_talk_rounded,
+              color: AppColors.primary,
+              size: 23.rpx,
+            ),
+          ),
+          SizedBox(width: 13.wpx),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Delivery Partner',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.spx,
+                  ),
+                ),
+                if (name.isNotEmpty) ...[
+                  SizedBox(height: 2.hpx),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.spx,
+                    ),
+                  ),
+                ],
+                SizedBox(height: 3.hpx),
+                Text(
+                  phone,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 17.spx,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 10.wpx),
+          IconButton.filled(
+            onPressed: () => PhoneDialer.open(phone),
+            tooltip: 'Call delivery partner',
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.white,
+            ),
+            icon: Icon(Icons.call_rounded, size: 21.rpx),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -417,6 +503,109 @@ class _DeliveryAddressCard extends StatelessWidget {
       ),
     );
   }
+}
+
+bool shouldShowDeliveryPartnerContact(OrderModel order) {
+  if (_deliveryPartnerPhone(order).isEmpty) return false;
+  final status = _normalizedDeliveryStatus(order.status);
+  return const {
+    'accepted',
+    'assigned',
+    'confirmed',
+    'picked_up',
+    'in_transit',
+    'arriving',
+    'out_for_delivery',
+  }.contains(status);
+}
+
+({String name, String phone}) deliveryPartnerContact(OrderModel order) {
+  return (
+    name: _deliveryPartnerName(order),
+    phone: _deliveryPartnerPhone(order),
+  );
+}
+
+String _deliveryPartnerPhone(OrderModel order) {
+  final partner = _deliveryPartner(order);
+  return _firstNonEmptyText([
+    partner['phone'],
+    partner['contactNumber'],
+    partner['contact_number'],
+    partner['mobile'],
+    partner['phoneNumber'],
+    partner['phone_number'],
+    order.raw['deliveryPartnerPhone'],
+    order.raw['delivery_partner_phone'],
+    order.raw['deliveryPersonPhone'],
+    order.raw['delivery_person_phone'],
+    order.raw['riderPhone'],
+    order.raw['rider_phone'],
+    order.raw['driverPhone'],
+    order.raw['driver_phone'],
+  ]);
+}
+
+String _deliveryPartnerName(OrderModel order) {
+  final partner = _deliveryPartner(order);
+  return _firstNonEmptyText([
+    partner['name'],
+    partner['fullName'],
+    partner['full_name'],
+    partner['driverName'],
+    order.raw['deliveryPartnerName'],
+    order.raw['delivery_partner_name'],
+    order.raw['deliveryPersonName'],
+    order.raw['delivery_person_name'],
+    order.raw['riderName'],
+    order.raw['rider_name'],
+    order.raw['driverName'],
+    order.raw['driver_name'],
+  ]);
+}
+
+Map<String, dynamic> _deliveryPartner(OrderModel order) {
+  for (final value in [
+    order.raw['deliveryPartner'],
+    order.raw['delivery_partner'],
+    order.raw['deliveryPerson'],
+    order.raw['delivery_person'],
+    order.raw['rider'],
+    order.raw['driver'],
+    order.raw['partner'],
+  ]) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+  }
+  return const {};
+}
+
+String _firstNonEmptyText(List<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  return '';
+}
+
+String _normalizedDeliveryStatus(String status) {
+  final normalized = status.trim().toLowerCase().replaceAll(
+    RegExp(r'[-\s]+'),
+    '_',
+  );
+  final compact = normalized.replaceAll('_', '');
+  if (compact == 'picked' ||
+      compact == 'pickup' ||
+      compact == 'pickedup' ||
+      compact == 'orderpickedup') {
+    return 'picked_up';
+  }
+  if (compact == 'intransit' ||
+      compact == 'transit' ||
+      compact == 'orderintransit') {
+    return 'in_transit';
+  }
+  if (compact == 'outfordelivery') return 'out_for_delivery';
+  return normalized;
 }
 
 class _LiveStatusCard extends StatelessWidget {

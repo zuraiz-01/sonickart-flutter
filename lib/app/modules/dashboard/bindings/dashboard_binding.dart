@@ -69,14 +69,14 @@ class DashboardBinding extends Bindings {
     if (!Get.isRegistered<ProfileController>()) {
       Get.put(ProfileController(GetStorage()), permanent: true);
     }
-    if (!Get.isRegistered<CategoriesController>()) {
-      Get.put(CategoriesController(Get.find()), permanent: true);
-    }
     if (!Get.isRegistered<ServiceAreaGateController>()) {
       Get.put(
         ServiceAreaGateController(serviceAreaGateService: Get.find()),
         permanent: true,
       );
+    }
+    if (!Get.isRegistered<CategoriesController>()) {
+      Get.put(CategoriesController(Get.find()), permanent: true);
     }
     if (!Get.isRegistered<OrderSocketService>()) {
       Get.put(OrderSocketService(), permanent: true).init();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -153,6 +155,33 @@ void main() {
       expect(api.productVendorIds, ['vendor-a', 'vendor-b']);
     },
   );
+
+  test('initial product request waits until vendor scope is ready', () async {
+    final storage = GetStorage(storageContainer);
+    final api = _CategoryFakeApiService(storage);
+    final scopeReady = Completer<void>();
+    final controller = CategoriesController(
+      CatalogRepository(api, storage: storage),
+      initialCatalogContextReady: () => scopeReady.future,
+    );
+    final initialization = controller.initializeCatalog();
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(api.categoryRequestCount, 0);
+    expect(api.productVendorIds, isEmpty);
+    expect(controller.productsResolved.value, isFalse);
+
+    await _writeSelectedScope(storage, 'vendor-first-open');
+    scopeReady.complete();
+    await initialization;
+
+    expect(api.categoryRequestCount, 1);
+    expect(api.productVendorIds, ['vendor-first-open']);
+    expect(controller.categoryProducts, hasLength(1));
+    expect(controller.categoryProducts.single.vendorId, 'vendor-first-open');
+    expect(controller.productsResolved.value, isTrue);
+  });
 }
 
 Future<void> _writeSelectedScope(GetStorage storage, String vendorId) async {
@@ -177,6 +206,7 @@ class _CategoryFakeApiService extends ApiService {
   _CategoryFakeApiService(GetStorage storage) : super(storage: storage);
 
   final productVendorIds = <String?>[];
+  int categoryRequestCount = 0;
 
   @override
   Future<Map<String, dynamic>> get({
@@ -185,6 +215,14 @@ class _CategoryFakeApiService extends ApiService {
     bool authenticated = true,
     Map<String, String>? headers,
   }) async {
+    if (endpoint == ApiConstants.categories) {
+      categoryRequestCount += 1;
+      return {
+        'categories': [
+          {'id': 'cat-1', 'name': 'Grocery'},
+        ],
+      };
+    }
     if (endpoint == ApiConstants.productsByCategory('cat-1')) {
       final vendorId = query?['vendorId']?.toString();
       productVendorIds.add(vendorId);

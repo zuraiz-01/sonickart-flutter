@@ -8,7 +8,7 @@
 {
   self.moduleName = @"SonicKart";
   // You can add your custom initial props in the dictionary below.
-  [GMSServices provideAPIKey:@"AIzaSyB5dcpM7PWKnErsIQjyzEG9CUxup0Ysuxs"];
+  [GMSServices provideAPIKey:@"AIzaSyBFCpSF0bW2Z8UWxoN0Y_fefdwzI3Wlej0"];
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
 

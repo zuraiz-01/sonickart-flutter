@@ -1,4 +1,4 @@
-export const GOOGLE_MAP_API = 'AIzaSyB5dcpM7PWKnErsIQjyzEG9CUxup0Ysuxs';
+export const GOOGLE_MAP_API = 'AIzaSyBFCpSF0bW2Z8UWxoN0Y_fefdwzI3Wlej0';
 import { Platform } from 'react-native';
 
 /**
