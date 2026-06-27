@@ -91,11 +91,12 @@ class CustomerSocketNotificationService extends GetxService {
     final isPackage =
         type?.toLowerCase().contains('package') == true ||
         _isPackagePayload(map);
+    final trackingNumber = _trackingNumber(map, package: isPackage);
     final copy = status == null
         ? null
         : orderStatusNotificationCopy(
             status: status,
-            orderNumber: _trackingNumber(map, package: isPackage),
+            orderNumber: trackingNumber,
             package: isPackage,
           );
     final title =
@@ -106,8 +107,22 @@ class CustomerSocketNotificationService extends GetxService {
         copy?.body ??
         _firstText(map, ['message', 'body', 'notificationBody']) ??
         'Your ${isPackage ? 'package' : 'order'} has a new update.';
+    final dedupeKey = LocalNotificationService.statusDedupeKey(
+      package: isPackage,
+      status: status,
+      trackingNumber: trackingNumber,
+      title: title,
+      body: body,
+    );
 
-    Get.find<LocalNotificationService>().show(title: title, body: body);
+    Get.find<LocalNotificationService>().show(
+      title: title,
+      body: body,
+      notificationId: LocalNotificationService.notificationIdForDedupeKey(
+        dedupeKey,
+      ),
+      dedupeKey: dedupeKey,
+    );
   }
 
   Map<String, dynamic>? _asMap(Object? value) {

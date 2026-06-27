@@ -78,7 +78,8 @@ class OrderController extends GetxController {
 
   String get deliveryRecipient {
     final auth = _authController;
-    final selected = selectedCheckoutAddress.value;
+    final selected =
+        _profileSyncedCheckoutAddress ?? selectedCheckoutAddress.value;
     if (selected?.fullName.trim().isNotEmpty == true) {
       return selected!.fullName.trim();
     }
@@ -100,6 +101,80 @@ class OrderController extends GetxController {
     return selectedCheckoutAddress.value?.address.trim().isNotEmpty == true
         ? selectedCheckoutAddress.value!.address.trim()
         : deliveryAddressController.text.trim();
+  }
+
+  AddressModel? get _profileSyncedCheckoutAddress {
+    final selected = selectedCheckoutAddress.value;
+    if (selected == null) return null;
+
+    final latest = _latestProfileAddressFor(selected);
+    if (latest == null) return selected;
+    return _mergeCheckoutAddress(selected, latest);
+  }
+
+  AddressModel? _latestProfileAddressFor(AddressModel selected) {
+    final profileController = _profileController;
+    if (profileController == null) return null;
+
+    final activeAddress = profileController.activeAddress;
+    if (activeAddress != null &&
+        _isSameCheckoutAddress(selected, activeAddress)) {
+      return activeAddress;
+    }
+
+    return profileController.addresses.firstWhereOrNull(
+      (item) => _isSameCheckoutAddress(selected, item),
+    );
+  }
+
+  AddressModel _mergeCheckoutAddress(
+    AddressModel selected,
+    AddressModel latest,
+  ) {
+    return selected.copyWith(
+      fullName: latest.fullName.trim().isNotEmpty
+          ? latest.fullName.trim()
+          : selected.fullName,
+      contactNumber: latest.contactNumber.trim().isNotEmpty
+          ? latest.contactNumber.trim()
+          : selected.contactNumber,
+      address: latest.address.trim().isNotEmpty
+          ? latest.address.trim()
+          : selected.address,
+      latitude: latest.latitude ?? selected.latitude,
+      longitude: latest.longitude ?? selected.longitude,
+      placeId: latest.placeId.trim().isNotEmpty
+          ? latest.placeId
+          : selected.placeId,
+      vendorId: latest.vendorId.trim().isNotEmpty
+          ? latest.vendorId
+          : selected.vendorId,
+      isSelected: true,
+    );
+  }
+
+  bool _isSameCheckoutAddress(AddressModel first, AddressModel second) {
+    final firstId = first.id.trim();
+    final secondId = second.id.trim();
+    if (firstId.isNotEmpty && secondId.isNotEmpty) {
+      return firstId == secondId;
+    }
+
+    final firstAddress = first.address.trim().toLowerCase();
+    final secondAddress = second.address.trim().toLowerCase();
+    return firstAddress.isNotEmpty && firstAddress == secondAddress;
+  }
+
+  bool _hasCheckoutAddressChanged(AddressModel current, AddressModel next) {
+    return current.id != next.id ||
+        current.fullName != next.fullName ||
+        current.contactNumber != next.contactNumber ||
+        current.address != next.address ||
+        current.latitude != next.latitude ||
+        current.longitude != next.longitude ||
+        current.placeId != next.placeId ||
+        current.vendorId != next.vendorId ||
+        current.isSelected != next.isSelected;
   }
 
   double freeDeliveryAmountLeft(List<CartItemModel> items) {
@@ -194,7 +269,13 @@ class OrderController extends GetxController {
     final currentSelection = selectedCheckoutAddress.value;
     if (_hasManualCheckoutAddress &&
         currentSelection?.address.trim().isNotEmpty == true) {
-      deliveryAddressController.text = currentSelection!.address.trim();
+      final syncedSelection =
+          _profileSyncedCheckoutAddress ?? currentSelection!;
+      if (_hasCheckoutAddressChanged(currentSelection!, syncedSelection)) {
+        selectedCheckoutAddress.value = syncedSelection;
+        selectedCheckoutAddress.refresh();
+      }
+      deliveryAddressController.text = syncedSelection.address.trim();
       return;
     }
 
@@ -1293,7 +1374,15 @@ class OrderController extends GetxController {
 
   Future<AddressModel> _ensureAddressContext() async {
     await preloadCheckoutContext();
-    var address = selectedCheckoutAddress.value;
+    var address =
+        _profileSyncedCheckoutAddress ?? selectedCheckoutAddress.value;
+    final currentSelection = selectedCheckoutAddress.value;
+    if (address != null &&
+        (currentSelection == null ||
+            _hasCheckoutAddressChanged(currentSelection, address))) {
+      selectedCheckoutAddress.value = address;
+      selectedCheckoutAddress.refresh();
+    }
 
     if (address == null) {
       final rawAddress = deliveryAddressController.text.trim();
@@ -2728,6 +2817,13 @@ class OrderController extends GetxController {
     final message = existing == null
         ? 'Your order ${order.id} has been sent.'
         : 'Your order ${order.id} is ${_statusTitle(status).toLowerCase()}.';
+    final dedupeKey = LocalNotificationService.statusDedupeKey(
+      package: false,
+      status: status,
+      identifiers: _orderIdentifiers(order),
+      title: title,
+      body: message,
+    );
     if (Get.isRegistered<LocalNotificationService>()) {
       Get.find<LocalNotificationService>().show(
         title: title,
@@ -2735,6 +2831,10 @@ class OrderController extends GetxController {
         channelId: 'sonickart_order_updates',
         channelName: 'Order updates',
         channelDescription: 'Product order status notifications',
+        notificationId: LocalNotificationService.notificationIdForDedupeKey(
+          dedupeKey,
+        ),
+        dedupeKey: dedupeKey,
       );
     }
 

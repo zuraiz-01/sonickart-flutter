@@ -4,8 +4,10 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:sonic_cart/app/core/constants/api_constants.dart';
 import 'package:sonic_cart/app/core/network/api_service.dart';
+import 'package:sonic_cart/app/data/models/address_model.dart';
 import 'package:sonic_cart/app/data/models/order_model.dart';
 import 'package:sonic_cart/app/modules/order_controller.dart';
+import 'package:sonic_cart/app/modules/profile/controllers/profile_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,55 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, null);
   });
+
+  test(
+    'checkout recipient uses updated saved address name for selected address',
+    () async {
+      final storage = GetStorage(storageContainer);
+      final profile = ProfileController(storage);
+      Get.put<ProfileController>(profile);
+
+      final controller = OrderController(storage);
+      addTearDown(controller.onClose);
+
+      const oldSelectedAddress = AddressModel(
+        id: 'addr-1',
+        fullName: 'Old Customer',
+        contactNumber: '0300000000',
+        address: 'Old street',
+        latitude: 24.95,
+        longitude: 67.05,
+        isSelected: true,
+      );
+      final updatedAddress = oldSelectedAddress.copyWith(
+        fullName: 'New Customer',
+        contactNumber: '0311111111',
+        address: 'Updated street',
+      );
+
+      controller.selectedCheckoutAddress.value = oldSelectedAddress;
+      controller.deliveryAddressController.text = oldSelectedAddress.address;
+      profile.addresses.assignAll([updatedAddress]);
+      profile.selectedAddressId.value = updatedAddress.id;
+
+      expect(controller.deliveryRecipient, 'New Customer');
+
+      await controller.preloadCheckoutContext();
+
+      expect(
+        controller.selectedCheckoutAddress.value?.fullName,
+        'New Customer',
+      );
+      expect(
+        controller.selectedCheckoutAddress.value?.contactNumber,
+        '0311111111',
+      );
+      expect(
+        controller.selectedCheckoutAddress.value?.address,
+        'Updated street',
+      );
+    },
+  );
 
   group('OrderController realtime tracking updates', () {
     test(

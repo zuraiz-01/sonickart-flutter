@@ -41,7 +41,9 @@ class PushNotificationService extends GetxService {
         sound: true,
       );
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        debugPrint('PushNotificationService: Notifications permission denied by user');
+        debugPrint(
+          'PushNotificationService: Notifications permission denied by user',
+        );
       }
 
       await _setForegroundPresentationOptions();
@@ -209,11 +211,12 @@ class PushNotificationService extends GetxService {
         defaultTargetPlatform == TargetPlatform.iOS &&
         message.notification != null;
     final status = _status(data);
+    final trackingNumber = _trackingNumber(data, package: isPackage);
     final copy = status == null
         ? null
         : orderStatusNotificationCopy(
             status: status,
-            orderNumber: _trackingNumber(data, package: isPackage),
+            orderNumber: trackingNumber,
             package: isPackage,
           );
     final title =
@@ -235,6 +238,14 @@ class PushNotificationService extends GetxService {
         copy?.body;
     if (title == null && body == null) return;
 
+    final dedupeKey = LocalNotificationService.statusDedupeKey(
+      package: isPackage,
+      status: status,
+      trackingNumber: trackingNumber,
+      title: title,
+      body: body,
+    );
+
     _recordInAppNotification(
       title: title ?? (isPackage ? 'Package update' : 'Order update'),
       body: body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
@@ -246,17 +257,28 @@ class PushNotificationService extends GetxService {
         Get.find<LocalNotificationService>().show(
           title: title ?? (isPackage ? 'Package update' : 'Order update'),
           body:
-              body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
+              body ??
+              'You have a new ${isPackage ? 'package' : 'order'} update.',
           payload: _encodePayload(data, package: isPackage),
+          notificationId: LocalNotificationService.notificationIdForDedupeKey(
+            dedupeKey,
+          ),
+          dedupeKey: dedupeKey,
         );
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (Get.isRegistered<LocalNotificationService>()) {
             Get.find<LocalNotificationService>().show(
               title: title ?? (isPackage ? 'Package update' : 'Order update'),
-              body: body ??
+              body:
+                  body ??
                   'You have a new ${isPackage ? 'package' : 'order'} update.',
               payload: _encodePayload(data, package: isPackage),
+              notificationId:
+                  LocalNotificationService.notificationIdForDedupeKey(
+                    dedupeKey,
+                  ),
+              dedupeKey: dedupeKey,
             );
           }
         });
