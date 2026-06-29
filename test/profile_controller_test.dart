@@ -239,7 +239,34 @@ void main() {
   });
 
   test(
-    'home greeting uses logged-in customer name before address name',
+    'home greeting uses selected address name before logged-in customer name',
+    () async {
+      final storage = GetStorage(storageContainer);
+      await storage.write('accessToken', 'token');
+      await storage.write('isLoggedIn', true);
+      await storage.write('currentUser', {
+        'id': 'user-1',
+        'name': 'Ali Raza',
+        'phone': '03000000000',
+      });
+
+      final controller = ProfileController(storage);
+      controller.addresses.assignAll([
+        const AddressModel(
+          id: 'addr-1',
+          fullName: 'Delivery Contact',
+          contactNumber: '03000000000',
+          address: 'Saved address',
+          isSelected: true,
+        ),
+      ]);
+
+      expect(controller.dashboardPrimaryLabel, 'Hi, Delivery Contact');
+    },
+  );
+
+  test(
+    'home greeting falls back to logged-in customer name for generic address name',
     () async {
       final storage = GetStorage(storageContainer);
       await storage.write('accessToken', 'token');

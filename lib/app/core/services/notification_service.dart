@@ -23,13 +23,43 @@ class NotificationService extends GetxService {
     required String title,
     required String message,
     String category = 'general',
+    String? dedupeKey,
+    Duration dedupeWindow = const Duration(minutes: 2),
   }) async {
+    final normalizedTitle = title.trim();
+    final normalizedMessage = message.trim();
+    final normalizedCategory = category.trim().isEmpty
+        ? 'general'
+        : category.trim();
+    final normalizedDedupeKey =
+        dedupeKey?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final signature = normalizedDedupeKey?.isNotEmpty == true
+        ? normalizedDedupeKey!
+        : _notificationSignature(
+            title: normalizedTitle,
+            message: normalizedMessage,
+            category: normalizedCategory,
+          );
+    final now = DateTime.now();
+    final duplicate = notifications.firstWhereOrNull((item) {
+      if (now.difference(item.createdAt) > dedupeWindow) return false;
+      return (item.dedupeKey ??
+              _notificationSignature(
+                title: item.title,
+                message: item.message,
+                category: item.category,
+              )) ==
+          signature;
+    });
+    if (duplicate != null) return;
+
     final notification = AppNotification(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: title.trim(),
-      message: message.trim(),
-      category: category.trim().isEmpty ? 'general' : category.trim(),
-      createdAt: DateTime.now(),
+      title: normalizedTitle,
+      message: normalizedMessage,
+      category: normalizedCategory,
+      createdAt: now,
+      dedupeKey: signature,
     );
     notifications.insert(0, notification);
     if (notifications.length > _maxItems) {
@@ -69,6 +99,20 @@ class NotificationService extends GetxService {
       notifications.map((item) => item.toJson()).toList(),
     );
   }
+
+  String _notificationSignature({
+    required String title,
+    required String message,
+    required String category,
+  }) {
+    return [
+      category,
+      title,
+      message,
+    ].map((value) {
+      return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    }).join('|');
+  }
 }
 
 class AppNotification {
@@ -79,6 +123,7 @@ class AppNotification {
     required this.category,
     required this.createdAt,
     this.isRead = false,
+    this.dedupeKey,
   });
 
   final String id;
@@ -87,6 +132,7 @@ class AppNotification {
   final String category;
   final DateTime createdAt;
   final bool isRead;
+  final String? dedupeKey;
 
   AppNotification copyWith({bool? isRead}) {
     return AppNotification(
@@ -96,6 +142,7 @@ class AppNotification {
       category: category,
       createdAt: createdAt,
       isRead: isRead ?? this.isRead,
+      dedupeKey: dedupeKey,
     );
   }
 
@@ -107,6 +154,7 @@ class AppNotification {
       'category': category,
       'createdAt': createdAt.toIso8601String(),
       'isRead': isRead,
+      if (dedupeKey != null && dedupeKey!.isNotEmpty) 'dedupeKey': dedupeKey,
     };
   }
 
@@ -120,6 +168,7 @@ class AppNotification {
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
       isRead: json['isRead'] == true,
+      dedupeKey: json['dedupeKey']?.toString(),
     );
   }
 }

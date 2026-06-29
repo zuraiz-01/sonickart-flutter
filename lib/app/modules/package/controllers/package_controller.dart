@@ -3250,12 +3250,23 @@ class PackageController extends GetxController {
       final title = 'Package ${_statusTitle(status)}';
       final message =
           'Your package order ${nextOrder.id} is ${_statusTitle(status).toLowerCase()}.';
+      final dedupeKey = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: status,
+        identifiers: _orderIdentifiers(nextOrder),
+        title: title,
+        body: message,
+      );
       Get.find<LocalNotificationService>().show(
         title: title,
         body: message,
         channelId: 'sonickart_package_updates',
         channelName: 'Package updates',
         channelDescription: 'Package order status notifications',
+        notificationId: LocalNotificationService.notificationIdForDedupeKey(
+          dedupeKey,
+        ),
+        dedupeKey: dedupeKey,
       );
     }
 

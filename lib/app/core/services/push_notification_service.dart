@@ -250,6 +250,7 @@ class PushNotificationService extends GetxService {
       title: title ?? (isPackage ? 'Package update' : 'Order update'),
       body: body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
       package: isPackage,
+      dedupeKey: dedupeKey,
     );
 
     if (!isIosSystemNotification) {
@@ -296,6 +297,15 @@ class PushNotificationService extends GetxService {
 
   void _handleNotificationData(Map<String, dynamic> data) {
     final isPackage = _isPackagePayload(data);
+    final status = _navigationStatus(data);
+    final trackingNumber = _trackingNumber(data, package: isPackage);
+    final dedupeKey = LocalNotificationService.statusDedupeKey(
+      package: isPackage,
+      status: status,
+      trackingNumber: trackingNumber,
+      title: data['title']?.toString(),
+      body: data['body']?.toString() ?? data['message']?.toString(),
+    );
     final title =
         _firstText(data, const [
           'title',
@@ -311,7 +321,12 @@ class PushNotificationService extends GetxService {
           'notification_body',
         ]) ??
         'You have a new ${isPackage ? 'package' : 'order'} update.';
-    _recordInAppNotification(title: title, body: body, package: isPackage);
+    _recordInAppNotification(
+      title: title,
+      body: body,
+      package: isPackage,
+      dedupeKey: dedupeKey,
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_routeWhenReady(data));
@@ -336,13 +351,17 @@ class PushNotificationService extends GetxService {
     required String title,
     required String body,
     required bool package,
+    String? dedupeKey,
   }) {
     if (!Get.isRegistered<NotificationService>()) return;
     final now = DateTime.now();
     _recentRecords.removeWhere(
       (_, recordedAt) => now.difference(recordedAt).inMinutes >= 2,
     );
-    final signature = '${package ? 'package' : 'order'}|$title|$body';
+    final normalizedDedupeKey = dedupeKey?.trim().toLowerCase();
+    final signature = normalizedDedupeKey?.isNotEmpty == true
+        ? normalizedDedupeKey!
+        : '${package ? 'package' : 'order'}|$title|$body';
     if (_recentRecords.containsKey(signature)) return;
     _recentRecords[signature] = now;
 
@@ -351,6 +370,7 @@ class PushNotificationService extends GetxService {
         title: title,
         message: body,
         category: package ? 'package' : 'order',
+        dedupeKey: dedupeKey,
       ),
     );
   }
@@ -371,6 +391,7 @@ class PushNotificationService extends GetxService {
     final type = data['type']?.toString().toLowerCase();
     final isPackage = _isPackagePayload(data);
     final orderId = _trackingNumber(data, package: isPackage);
+    final status = _navigationStatus(data);
 
     if (isPackage || type == 'package') {
       Get.toNamed(
@@ -380,7 +401,14 @@ class PushNotificationService extends GetxService {
       return;
     }
 
-    if (type == 'order' || _status(data) != null || orderId.isNotEmpty) {
+    if (type == 'order' || status != null || orderId.isNotEmpty) {
+      if (_opensLiveTracking(status)) {
+        Get.toNamed(
+          AppRoutes.liveTracking,
+          arguments: orderId.isEmpty ? null : {'orderId': orderId},
+        );
+        return;
+      }
       Get.toNamed(
         AppRoutes.customerOrderDetails,
         arguments: orderId.isEmpty ? null : {'orderId': orderId},
@@ -389,6 +417,51 @@ class PushNotificationService extends GetxService {
     }
 
     Get.toNamed(AppRoutes.notifications);
+  }
+
+  String? _navigationStatus(Map<String, dynamic> data) {
+    final explicit = _status(data);
+    if (explicit != null && explicit.trim().isNotEmpty) return explicit;
+
+    final typeStatus = _firstText(data, const [
+      'type',
+      'notificationType',
+      'notification_type',
+      'event',
+      'eventType',
+      'event_type',
+    ]);
+    if (typeStatus != null && typeStatus.trim().isNotEmpty) {
+      return typeStatus;
+    }
+
+    final textStatus = [
+      _firstText(data, const ['title', 'notificationTitle']),
+      _firstText(data, const ['body', 'message', 'notificationBody']),
+    ].whereType<String>().join(' ');
+    return textStatus.trim().isEmpty ? null : textStatus;
+  }
+
+  bool _opensLiveTracking(String? status) {
+    final raw = status?.trim().toLowerCase() ?? '';
+    final compact = raw.replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    final normalized = normalizeNotificationStatus(raw);
+    if (compact.contains('accept')) return true;
+    if (compact.contains('confirmed')) return true;
+    if (compact.contains('assigned')) return true;
+    if (compact.contains('pickedup')) return true;
+    if (compact.contains('outfordelivery')) return true;
+    if (compact.contains('ontheway')) return true;
+    if (compact.contains('intransit')) return true;
+    return const {
+      'accepted',
+      'assigned',
+      'confirmed',
+      'picked_up',
+      'in_transit',
+      'out_for_delivery',
+      'on_the_way',
+    }.contains(normalized);
   }
 
   void _bindLocalNotificationTaps() {

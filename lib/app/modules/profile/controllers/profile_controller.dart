@@ -121,6 +121,10 @@ class ProfileController extends GetxController {
 
   String get dashboardPrimaryLabel {
     _profileRevision.value;
+    final selectedName = activeAddress?.fullName.trim() ?? '';
+    if (selectedName.isNotEmpty && !_isGenericCustomerName(selectedName)) {
+      return 'Hi, $selectedName';
+    }
     if (hasBackendSession || _storage.read('isLoggedIn') == true) {
       final displayName = _customerDisplayName(currentUser);
       if (displayName.isNotEmpty) {

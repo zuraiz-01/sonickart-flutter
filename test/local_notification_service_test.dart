@@ -37,5 +37,27 @@ void main() {
         LocalNotificationService.notificationIdForDedupeKey(explicit),
       );
     });
+
+    test('package local and remote status updates share one key', () {
+      final local = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'picked_up',
+        identifiers: const ['PKG000158'],
+        title: 'Package Picked Up',
+        body: 'Your package order PKG000158 is picked up.',
+      );
+      final remote = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'picked_up',
+        trackingNumber: '158',
+      );
+
+      expect(local, isNotNull);
+      expect(local, remote);
+      expect(
+        LocalNotificationService.notificationIdForDedupeKey(local),
+        LocalNotificationService.notificationIdForDedupeKey(remote),
+      );
+    });
   });
 }

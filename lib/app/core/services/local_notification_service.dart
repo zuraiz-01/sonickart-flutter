@@ -188,7 +188,18 @@ class LocalNotificationService extends GetxService {
     String? dedupeKey,
     Duration dedupeWindow = const Duration(minutes: 2),
   }) async {
-    if (_shouldSuppressDuplicate(dedupeKey, dedupeWindow)) return;
+    final normalizedTitle = title.trim().isEmpty ? 'SonicKart' : title.trim();
+    final normalizedBody = body.trim().isEmpty
+        ? 'You have a new update.'
+        : body.trim();
+    final effectiveDedupeKey =
+        dedupeKey ??
+        [
+          channelId,
+          normalizedTitle,
+          normalizedBody,
+        ].map((value) => value.trim().toLowerCase()).join('|');
+    if (_shouldSuppressDuplicate(effectiveDedupeKey, dedupeWindow)) return;
 
     if (!_initialized) {
       await init();
@@ -219,9 +230,10 @@ class LocalNotificationService extends GetxService {
       await _plugin.show(
         id:
             notificationId ??
+            notificationIdForDedupeKey(effectiveDedupeKey) ??
             DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        title: title.trim().isEmpty ? 'SonicKart' : title.trim(),
-        body: body.trim().isEmpty ? 'You have a new update.' : body.trim(),
+        title: normalizedTitle,
+        body: normalizedBody,
         notificationDetails: details,
         payload: payload,
       );

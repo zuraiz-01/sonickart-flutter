@@ -96,8 +96,6 @@ class DashboardController extends GetxController {
   Worker? _ratingWorker;
   int _catalogLoadRequestId = 0;
 
-  bool _isChangingTab = false;
-
   final searchHints = const [
     'Search "sweets"',
     'Search "milk"',
@@ -120,17 +118,8 @@ class DashboardController extends GetxController {
 
     if (targetIndex == 4 && !requireAuth()) return;
 
-    if (_isChangingTab) return;
-
-    _isChangingTab = true;
-
-    try {
-      _prepareForTabChange(targetIndex, allowSameTabRefresh: false);
-      currentIndex.value = targetIndex;
-      _afterTabSelected(targetIndex);
-    } finally {
-      _isChangingTab = false;
-    }
+    currentIndex.value = targetIndex;
+    _runTabSideEffects(targetIndex, allowSameTabRefresh: false);
   }
 
   void setTabFromNavigation(int index) {
@@ -142,15 +131,32 @@ class DashboardController extends GetxController {
 
     if (targetIndex == 4 && !requireAuth()) return;
 
-    _prepareForTabChange(targetIndex, allowSameTabRefresh: true);
     currentIndex.value = targetIndex;
-    _afterTabSelected(targetIndex);
+    _runTabSideEffects(targetIndex, allowSameTabRefresh: true);
   }
 
   void refreshCurrentTab() {
     final index = _normalizeDashboardIndex(currentIndex.value);
-    _prepareForTabChange(index, allowSameTabRefresh: true);
-    _afterTabSelected(index);
+    _runTabSideEffects(index, allowSameTabRefresh: true);
+  }
+
+  void _runTabSideEffects(
+    int index, {
+    required bool allowSameTabRefresh,
+  }) {
+    try {
+      _prepareForTabChange(index, allowSameTabRefresh: allowSameTabRefresh);
+    } catch (error, stackTrace) {
+      debugPrint('DashboardController.changeTab cleanup failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    try {
+      _afterTabSelected(index);
+    } catch (error, stackTrace) {
+      debugPrint('DashboardController.changeTab side effect failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   void _prepareForTabChange(
