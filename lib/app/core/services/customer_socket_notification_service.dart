@@ -107,10 +107,18 @@ class CustomerSocketNotificationService extends GetxService {
         copy?.body ??
         _firstText(map, ['message', 'body', 'notificationBody']) ??
         'Your ${isPackage ? 'package' : 'order'} has a new update.';
+    if (shouldSuppressOrderStatusNotification(
+      package: isPackage,
+      status: status,
+      text: [title, body],
+    )) {
+      return;
+    }
     final dedupeKey = LocalNotificationService.statusDedupeKey(
       package: isPackage,
       status: status,
       trackingNumber: trackingNumber,
+      identifiers: _trackingIdentifiers(map, package: isPackage),
       title: title,
       body: body,
     );
@@ -199,6 +207,33 @@ class CustomerSocketNotificationService extends GetxService {
           package ? [...packageKeys, ...orderKeys] : orderKeys,
         ) ??
         '';
+  }
+
+  List<String> _trackingIdentifiers(
+    Map<String, dynamic>? map, {
+    required bool package,
+  }) {
+    if (map == null) return const [];
+    const packageKeys = [
+      'packageOrderId',
+      'package_order_id',
+      'packageId',
+      'package_id',
+      'delivery_code',
+    ];
+    const orderKeys = [
+      'orderNumber',
+      'order_number',
+      'orderId',
+      'order_id',
+      'id',
+      '_id',
+    ];
+    return (package ? [...packageKeys, ...orderKeys] : orderKeys)
+        .map((key) => map[key]?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
   }
 
   void disconnect() {

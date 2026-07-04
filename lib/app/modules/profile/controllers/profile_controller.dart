@@ -13,7 +13,6 @@ import '../../../data/models/user_model.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/app_session_scope.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -253,6 +252,12 @@ class ProfileController extends GetxController {
 
     await loadAddresses();
     await loadProfileSummary();
+    if (activeAddress == null) {
+      await _resolveHomeLocationPreview(
+        forceRefresh: true,
+        refreshCatalog: false,
+      );
+    }
   }
 
   Future<void> refreshForAuthenticatedSession() async {
@@ -871,6 +876,7 @@ class ProfileController extends GetxController {
     required double latitude,
     required double longitude,
     String placeId = '',
+    bool refreshCatalog = true,
   }) async {
     final normalizedAddress = address.trim();
     if (normalizedAddress.isEmpty ||
@@ -919,7 +925,9 @@ class ProfileController extends GetxController {
         temporaryAddress.copyWith(vendorId: vendorId),
       );
     }
-    await _refreshCatalogAfterAddressChange();
+    if (refreshCatalog) {
+      await _refreshCatalogAfterAddressChange();
+    }
   }
 
   Future<void> applyBlockedServiceAreaLocation({
@@ -1183,7 +1191,10 @@ class ProfileController extends GetxController {
     );
   }
 
-  Future<void> _resolveHomeLocationPreview({bool forceRefresh = false}) async {
+  Future<void> _resolveHomeLocationPreview({
+    bool forceRefresh = false,
+    bool refreshCatalog = true,
+  }) async {
     if ((!forceRefresh && activeAddress != null) ||
         !_locationLookupService.isConfigured) {
       return;
@@ -1213,6 +1224,7 @@ class ProfileController extends GetxController {
           address: locationLabel,
           latitude: position.latitude,
           longitude: position.longitude,
+          refreshCatalog: refreshCatalog,
         );
       }
     } catch (error) {
@@ -1226,6 +1238,7 @@ class ProfileController extends GetxController {
     required String address,
     required double latitude,
     required double longitude,
+    bool refreshCatalog = true,
   }) async {
     final selected = activeAddress;
     if (selected != null && selected.id != 'live-location') return;
@@ -1257,7 +1270,9 @@ class ProfileController extends GetxController {
       await _storage.write(_selectedLocationServiceableStorageKey, true);
       await _persistSelectedAddress(liveAddress.copyWith(vendorId: vendorId));
     }
-    await _refreshCatalogAfterAddressChange();
+    if (refreshCatalog) {
+      await _refreshCatalogAfterAddressChange();
+    }
   }
 
   Future<void> _persistSelectedAddress(AddressModel address) async {
@@ -1736,13 +1751,5 @@ class ProfileController extends GetxController {
     if (category != 'address') {
       AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
     }
-    if (!Get.isRegistered<NotificationService>()) return;
-    unawaited(
-      Get.find<NotificationService>().record(
-        title: title,
-        message: message,
-        category: category,
-      ),
-    );
   }
 }

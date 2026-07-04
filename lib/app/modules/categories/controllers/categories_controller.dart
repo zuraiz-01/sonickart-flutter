@@ -14,7 +14,10 @@ class CategoriesController extends GetxController {
   CategoriesController(
     this._repository, {
     Future<void> Function()? initialCatalogContextReady,
-  }) : _initialCatalogContextReady = initialCatalogContextReady;
+    Duration initialCatalogContextTimeout =
+        _defaultInitialCatalogContextTimeout,
+  }) : _initialCatalogContextReady = initialCatalogContextReady,
+       _initialCatalogContextTimeout = initialCatalogContextTimeout;
 
   final CatalogRepository _repository;
   final Future<void> Function()? _initialCatalogContextReady;
@@ -35,9 +38,11 @@ class CategoriesController extends GetxController {
   final productGridScrollController = ScrollController();
 
   static const categoryListItemExtent = 124.0;
+  static const _defaultInitialCatalogContextTimeout = Duration(seconds: 10);
   static const _productLoadTimeout = Duration(seconds: 24);
   static const _subcategoryLoadTimeout = Duration(seconds: 10);
   static const _cacheTtl = Duration(minutes: 2);
+  final Duration _initialCatalogContextTimeout;
 
   final _productCache = <String, _TimedCacheEntry<List<ProductModel>>>{};
   final _productLoadFutures = <String, Future<List<ProductModel>>>{};
@@ -46,6 +51,8 @@ class CategoriesController extends GetxController {
       <String, Future<List<ProductSubcategoryModel>>>{};
 
   Future<void>? _categoriesLoadFuture;
+  Future<void>? _initialCatalogContextReadyFuture;
+  bool _initialCatalogContextResolved = false;
 
   int _productsRequestId = 0;
   String? _pendingCategoryId;
@@ -88,11 +95,18 @@ class CategoriesController extends GetxController {
   Future<void> initializeCatalog({Object? arguments}) async {
     _applyRouteArguments(arguments ?? Get.arguments);
     final readinessOverride = _initialCatalogContextReady;
-    if (readinessOverride != null) {
-      await readinessOverride();
-    } else {
-      await _ensureInitialCatalogContextReady();
-    }
+    _initialCatalogContextResolved = false;
+    _initialCatalogContextReadyFuture =
+        (readinessOverride ?? _ensureInitialCatalogContextReady)()
+            .catchError((Object error, StackTrace stackTrace) {
+              debugPrint(
+                'CategoriesController.initializeCatalog: context wait failed $error',
+              );
+              debugPrintStack(stackTrace: stackTrace);
+            })
+            .whenComplete(() {
+              _initialCatalogContextResolved = true;
+            });
     await loadCategories();
   }
 
@@ -312,6 +326,10 @@ class CategoriesController extends GetxController {
   }
 
   Future<void> loadProducts(String categoryId, {bool force = false}) async {
+    if (!force) {
+      await _waitForInitialCatalogContextReady();
+    }
+
     final cacheKey = _productCacheKey(categoryId);
 
     debugPrint(
@@ -414,6 +432,51 @@ class CategoriesController extends GetxController {
         }
       }
     }
+  }
+
+  Future<void> _waitForInitialCatalogContextReady() async {
+    if (_initialCatalogContextResolved) return;
+    final future = _initialCatalogContextReadyFuture;
+    if (future == null) return;
+
+    isProductsLoading.value = true;
+    isSubcategoriesLoading.value = true;
+    productsResolved.value = false;
+    try {
+      await future.timeout(_initialCatalogContextTimeout);
+    } on TimeoutException {
+      debugPrint(
+        'CategoriesController.loadProducts: service-area context timed out; '
+        'continuing with direct product-scope resolution.',
+      );
+      _retrySelectedCategoryWhenContextReady(future);
+    } catch (error, stackTrace) {
+      debugPrint(
+        'CategoriesController.loadProducts: service-area context failed $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _initialCatalogContextResolved = true;
+    }
+  }
+
+  void _retrySelectedCategoryWhenContextReady(Future<void> future) {
+    unawaited(
+      future
+          .then((_) {
+            if (isClosed || isProductsLoading.value) return;
+            if (categoryProducts.isNotEmpty) return;
+            final category = selectedCategory.value;
+            if (category == null) return;
+            unawaited(loadProducts(category.id, force: true));
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            debugPrint(
+              'CategoriesController.loadProducts: late context retry failed $error',
+            );
+            debugPrintStack(stackTrace: stackTrace);
+          }),
+    );
   }
 
   Future<List<ProductModel>> _loadProductsForCategory(

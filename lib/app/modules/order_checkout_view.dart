@@ -151,110 +151,113 @@ class _OrderCheckoutViewState extends State<OrderCheckoutView> {
     }
 
     _showingAddressConfirmation = true;
-    await Get.dialog<void>(
-      Dialog(
-        backgroundColor: AppColors.white,
-        insetPadding: EdgeInsets.symmetric(horizontal: 24.wpx),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18.rpx),
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 50.rpx,
-                height: 50.rpx,
-                decoration: BoxDecoration(
-                  color: AppColors.muted,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.location_on_rounded,
-                  color: AppColors.price,
-                  size: 25.spx,
-                ),
-              ),
-              SizedBox(height: 12.hpx),
-              Text(
-                'Confirm Delivery Address',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18.spx,
-                ),
-              ),
-              SizedBox(height: 8.hpx),
-              _ConfirmationAddressCard(
-                recipient: controller.deliveryRecipient,
-                address: controller.deliveryAddressPreview,
-              ),
-              SizedBox(height: 18.hpx),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => unawaited(
-                        _handleAddressChangeFromConfirmation(context),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.22),
-                        ),
-                        minimumSize: Size(0, 44.hpx),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9.rpx),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 14.spx,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      child: const Text('Change'),
-                    ),
+    try {
+      await Get.dialog<void>(
+        Dialog(
+          backgroundColor: AppColors.white,
+          insetPadding: EdgeInsets.symmetric(horizontal: 24.wpx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18.rpx),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 50.rpx,
+                  height: 50.rpx,
+                  decoration: BoxDecoration(
+                    color: AppColors.muted,
+                    shape: BoxShape.circle,
                   ),
-                  SizedBox(width: 10.wpx),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        _showingAddressConfirmation = false;
-                        Get.back();
-                        Future<void>.delayed(
-                          const Duration(milliseconds: 90),
-                          () {
-                            if (mounted) {
-                              unawaited(_showPaymentOptions());
-                            }
-                          },
-                        );
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.buttonFill,
-                        foregroundColor: AppColors.onButtonFill,
-                        minimumSize: Size(0, 44.hpx),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9.rpx),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 14.spx,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      child: const Text('Confirm'),
-                    ),
+                  child: Icon(
+                    Icons.location_on_rounded,
+                    color: AppColors.price,
+                    size: 25.spx,
                   ),
-                ],
-              ),
-            ],
+                ),
+                SizedBox(height: 12.hpx),
+                Text(
+                  'Confirm Delivery Address',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18.spx,
+                  ),
+                ),
+                SizedBox(height: 8.hpx),
+                _ConfirmationAddressCard(
+                  recipient: controller.deliveryRecipient,
+                  address: controller.deliveryAddressPreview,
+                ),
+                SizedBox(height: 18.hpx),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => unawaited(
+                          _handleAddressChangeFromConfirmation(context),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.22),
+                          ),
+                          minimumSize: Size(0, 44.hpx),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9.rpx),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14.spx,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        child: const Text('Change'),
+                      ),
+                    ),
+                    SizedBox(width: 10.wpx),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          _showingAddressConfirmation = false;
+                          Get.back();
+                          Future<void>.delayed(
+                            const Duration(milliseconds: 90),
+                            () {
+                              if (mounted) {
+                                unawaited(_showPaymentOptions());
+                              }
+                            },
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.buttonFill,
+                          foregroundColor: AppColors.onButtonFill,
+                          minimumSize: Size(0, 44.hpx),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9.rpx),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14.spx,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        child: const Text('Confirm'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      barrierColor: AppColors.black.withValues(alpha: 0.45),
-    );
-    _showingAddressConfirmation = false;
+        barrierColor: AppColors.black.withValues(alpha: 0.45),
+      );
+    } finally {
+      _showingAddressConfirmation = false;
+    }
   }
 
   Future<void> _handleAddressChangeFromConfirmation(
@@ -295,90 +298,93 @@ class _OrderCheckoutViewState extends State<OrderCheckoutView> {
     }
 
     _showingPaymentOptions = true;
-    await Get.dialog<void>(
-      Dialog(
-        backgroundColor: AppColors.white,
-        insetPadding: EdgeInsets.symmetric(horizontal: 28.wpx),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18.rpx),
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Choose Payment\nMethod',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18.spx,
-                  height: 1.25,
+    try {
+      await Get.dialog<void>(
+        Dialog(
+          backgroundColor: AppColors.white,
+          insetPadding: EdgeInsets.symmetric(horizontal: 28.wpx),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18.rpx),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18.wpx, 20.hpx, 18.wpx, 16.hpx),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Choose Payment\nMethod',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18.spx,
+                    height: 1.25,
+                  ),
                 ),
-              ),
-              SizedBox(height: 18.hpx),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: Get.back,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.22),
+                SizedBox(height: 18.hpx),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: Get.back,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.22),
+                          ),
+                          minimumSize: Size(0, 44.hpx),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9.rpx),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14.spx,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        minimumSize: Size(0, 44.hpx),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9.rpx),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 14.spx,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  SizedBox(width: 10.wpx),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: controller.isPlacingOrder.value
-                          ? null
-                          : () {
-                              controller.selectPaymentMode('COD');
-                              Get.back();
-                              unawaited(controller.placeOrder());
-                            },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.buttonFill,
-                        foregroundColor: AppColors.onButtonFill,
-                        minimumSize: Size(0, 44.hpx),
-                        padding: EdgeInsets.symmetric(horizontal: 8.wpx),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9.rpx),
-                        ),
-                        textStyle: TextStyle(
-                          fontSize: 13.spx,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      child: const Text(
-                        'Cash On Delivery',
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
+                        child: const Text('Cancel'),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    SizedBox(width: 10.wpx),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: controller.isPlacingOrder.value
+                            ? null
+                            : () {
+                                controller.selectPaymentMode('COD');
+                                Get.back();
+                                unawaited(controller.placeOrder());
+                              },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.buttonFill,
+                          foregroundColor: AppColors.onButtonFill,
+                          minimumSize: Size(0, 44.hpx),
+                          padding: EdgeInsets.symmetric(horizontal: 8.wpx),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9.rpx),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 13.spx,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        child: const Text(
+                          'Cash On Delivery',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      barrierColor: AppColors.black.withValues(alpha: 0.45),
-    );
-    _showingPaymentOptions = false;
+        barrierColor: AppColors.black.withValues(alpha: 0.45),
+      );
+    } finally {
+      _showingPaymentOptions = false;
+    }
   }
 }
 

@@ -156,32 +156,60 @@ void main() {
     },
   );
 
-  test('initial product request waits until vendor scope is ready', () async {
+  test(
+    'initial category list loads while product request waits for vendor scope',
+    () async {
+      final storage = GetStorage(storageContainer);
+      final api = _CategoryFakeApiService(storage);
+      final scopeReady = Completer<void>();
+      final controller = CategoriesController(
+        CatalogRepository(api, storage: storage),
+        initialCatalogContextReady: () => scopeReady.future,
+      );
+      final initialization = controller.initializeCatalog();
+
+      await _pumpUntil(() => api.categoryRequestCount == 1);
+
+      expect(api.categoryRequestCount, 1);
+      expect(controller.categories, hasLength(1));
+      expect(api.productVendorIds, isEmpty);
+      expect(controller.productsResolved.value, isFalse);
+
+      await _writeSelectedScope(storage, 'vendor-first-open');
+      scopeReady.complete();
+      await initialization;
+
+      expect(api.categoryRequestCount, 1);
+      expect(api.productVendorIds, ['vendor-first-open']);
+      expect(controller.categoryProducts, hasLength(1));
+      expect(controller.categoryProducts.single.vendorId, 'vendor-first-open');
+      expect(controller.productsResolved.value, isTrue);
+    },
+  );
+
+  test('initial product loader stops if vendor scope wait hangs', () async {
     final storage = GetStorage(storageContainer);
     final api = _CategoryFakeApiService(storage);
-    final scopeReady = Completer<void>();
     final controller = CategoriesController(
       CatalogRepository(api, storage: storage),
-      initialCatalogContextReady: () => scopeReady.future,
+      initialCatalogContextReady: () => Completer<void>().future,
+      initialCatalogContextTimeout: const Duration(milliseconds: 1),
     );
-    final initialization = controller.initializeCatalog();
 
-    await Future<void>.delayed(Duration.zero);
+    await controller.initializeCatalog();
 
-    expect(api.categoryRequestCount, 0);
-    expect(api.productVendorIds, isEmpty);
-    expect(controller.productsResolved.value, isFalse);
-
-    await _writeSelectedScope(storage, 'vendor-first-open');
-    scopeReady.complete();
-    await initialization;
-
-    expect(api.categoryRequestCount, 1);
-    expect(api.productVendorIds, ['vendor-first-open']);
-    expect(controller.categoryProducts, hasLength(1));
-    expect(controller.categoryProducts.single.vendorId, 'vendor-first-open');
+    expect(controller.categories, hasLength(1));
+    expect(controller.isProductsLoading.value, isFalse);
+    expect(controller.isSubcategoriesLoading.value, isFalse);
     expect(controller.productsResolved.value, isTrue);
   });
+}
+
+Future<void> _pumpUntil(bool Function() condition, {int attempts = 20}) async {
+  for (var i = 0; i < attempts; i += 1) {
+    if (condition()) return;
+    await Future<void>.delayed(Duration.zero);
+  }
 }
 
 Future<void> _writeSelectedScope(GetStorage storage, String vendorId) async {

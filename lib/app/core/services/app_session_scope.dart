@@ -13,8 +13,15 @@ class AppSessionScope {
     if (existing != null && existing.isNotEmpty) {
       return existing;
     }
-    final fresh = DateTime.now().microsecondsSinceEpoch.toString();
-    box.write(_sessionIdKey, fresh);
+    return startNewSession();
+  }
+
+  static String startNewSession({String? id}) {
+    final normalized = id?.trim();
+    final fresh = normalized != null && normalized.isNotEmpty
+        ? normalized
+        : DateTime.now().microsecondsSinceEpoch.toString();
+    GetStorage().write(_sessionIdKey, fresh);
     return fresh;
   }
 

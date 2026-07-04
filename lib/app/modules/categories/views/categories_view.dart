@@ -64,6 +64,7 @@ class CategoriesView extends GetView<CategoriesController> {
                         ? Center(child: CircularProgressIndicator())
                         : ListView.builder(
                             controller: controller.categoryListScrollController,
+                            padding: EdgeInsets.only(bottom: 112.hpx),
                             itemExtent:
                                 CategoriesController.categoryListItemExtent,
                             itemCount: controller.categories.length,

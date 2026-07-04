@@ -8,6 +8,7 @@ import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
 
 import 'app/core/services/firebase_bootstrap.dart';
+import 'app/core/services/app_session_scope.dart';
 import 'app/core/services/local_notification_service.dart';
 import 'app/core/services/push_notification_service.dart';
 import 'app/core/services/session_controller.dart';
@@ -47,6 +48,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
+  AppSessionScope.startNewSession();
   await _initializeFirebase();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   if (!Get.isRegistered<AppThemeController>()) {

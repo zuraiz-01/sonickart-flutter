@@ -2043,6 +2043,8 @@ class PackageController extends GetxController {
   final selectedOrder = Rxn<PackageOrderModel>();
   final needsRatingForOrder = Rxn<PackageOrderModel>();
   final _ratedOrderIds = <String>{};
+  bool _isRatingPromptVisible = false;
+  String? _ratingPromptOrderId;
 
   final pickupLatitude = Rxn<double>();
   final pickupLongitude = Rxn<double>();
@@ -2592,11 +2594,8 @@ class PackageController extends GetxController {
       }
       await _upsertOrder(order);
       selectedOrder.value = order;
-      final label = order.packageOrderType == 'receive'
-          ? 'Package Receive Order Placed'
-          : 'Package Order Placed';
-      await _notifyAction(
-        label,
+      _showSnack(
+        'Package Booked',
         'Your package order has been placed successfully.',
       );
       resetDraft(keepOrders: true);
@@ -3246,38 +3245,9 @@ class PackageController extends GetxController {
     final previousStatus = _normalizeStatus(existing.status);
     if (previousStatus == status) return;
 
-    if (Get.isRegistered<LocalNotificationService>()) {
-      final title = 'Package ${_statusTitle(status)}';
-      final message =
-          'Your package order ${nextOrder.id} is ${_statusTitle(status).toLowerCase()}.';
-      final dedupeKey = LocalNotificationService.statusDedupeKey(
-        package: true,
-        status: status,
-        identifiers: _orderIdentifiers(nextOrder),
-        title: title,
-        body: message,
-      );
-      Get.find<LocalNotificationService>().show(
-        title: title,
-        body: message,
-        channelId: 'sonickart_package_updates',
-        channelName: 'Package updates',
-        channelDescription: 'Package order status notifications',
-        notificationId: LocalNotificationService.notificationIdForDedupeKey(
-          dedupeKey,
-        ),
-        dedupeKey: dedupeKey,
-      );
-    }
-
-    final wasDelivered =
-        previousStatus == 'delivered' || previousStatus == 'completed';
-    if (!wasDelivered &&
-        (status == 'delivered' || status == 'completed') &&
-        !nextOrder.hasDeliveryRating &&
-        !_ratedOrderIds.contains(nextOrder.id) &&
-        !_ratedOrderIds.containsAll(_orderIdentifiers(nextOrder))) {
-      needsRatingForOrder.value = nextOrder;
+    final wasDelivered = _isCompletionStatus(previousStatus);
+    if (!wasDelivered && _isCompletionStatus(status)) {
+      requestDeliveryRatingIfNeeded(nextOrder);
     }
   }
 
@@ -3300,16 +3270,6 @@ class PackageController extends GetxController {
       'prepared',
       'ready',
     }.contains(status);
-  }
-
-  String _statusTitle(String status) {
-    final normalized = status == 'picked' ? 'picked_up' : status;
-    return normalized
-        .replaceAll('_', ' ')
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
-        .join(' ');
   }
 
   PackageOrderModel _protectStatusRegression(
@@ -3946,20 +3906,31 @@ class PackageController extends GetxController {
 
   Future<void> _notifyAction(String title, String message) async {
     _showSnack(title, message);
+    const category = 'package';
+    final dedupeKey = [
+      category,
+      title,
+      message,
+    ].map((value) => value.trim().toLowerCase()).join('|');
+
     if (Get.isRegistered<NotificationService>()) {
       await Get.find<NotificationService>().record(
         title: title,
         message: message,
-        category: 'package',
+        category: category,
+        dedupeKey: dedupeKey,
       );
     }
+
     if (Get.isRegistered<LocalNotificationService>()) {
       await Get.find<LocalNotificationService>().show(
         title: title,
         body: message,
-        channelId: 'sonickart_package_updates',
-        channelName: 'Package updates',
-        channelDescription: 'Package order notifications',
+        channelId: LocalNotificationService.defaultChannelId,
+        channelName: LocalNotificationService.defaultChannelName,
+        channelDescription: 'Package order status notifications',
+        payload: 'packages',
+        dedupeKey: dedupeKey,
       );
     }
   }
@@ -3967,6 +3938,42 @@ class PackageController extends GetxController {
   void _showDistanceExceeded(double distanceKm) {
     exceedingDistanceKm.value = distanceKm;
     isDistanceExceededVisible.value = true;
+  }
+
+  bool canRequestDeliveryRating(PackageOrderModel order) {
+    if (!_isCompletionStatus(order.status)) return false;
+    if (order.hasDeliveryRating) return false;
+    final identifiers = _orderIdentifiers(order);
+    if (identifiers.isEmpty) return false;
+    if (identifiers.any(_ratedOrderIds.contains)) return false;
+    return true;
+  }
+
+  void requestDeliveryRatingIfNeeded(PackageOrderModel order) {
+    if (_isRatingPromptVisible) return;
+    if (!canRequestDeliveryRating(order)) return;
+    needsRatingForOrder.value = null;
+    needsRatingForOrder.value = order;
+  }
+
+  bool beginDeliveryRatingPrompt(PackageOrderModel order) {
+    if (!canRequestDeliveryRating(order)) return false;
+    final identifiers = _orderIdentifiers(order);
+    final promptId = identifiers.isNotEmpty ? identifiers.first : order.id;
+    if (_isRatingPromptVisible &&
+        _ratingPromptOrderId != null &&
+        _ratingPromptOrderId == promptId) {
+      return false;
+    }
+    if (_isRatingPromptVisible) return false;
+    _isRatingPromptVisible = true;
+    _ratingPromptOrderId = promptId;
+    return true;
+  }
+
+  void endDeliveryRatingPrompt() {
+    _isRatingPromptVisible = false;
+    _ratingPromptOrderId = null;
   }
 
   Future<void> submitDeliveryRating({

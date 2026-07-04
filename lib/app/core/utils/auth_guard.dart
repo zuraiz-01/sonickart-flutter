@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../modules/auth/controllers/auth_controller.dart';
 import '../../routes/app_routes.dart';
 import 'responsive.dart';
+
+bool _loginRequiredDialogVisible = false;
 
 /// Checks if the user is authenticated before allowing an action.
 /// If not authenticated, shows a login prompt dialog.
@@ -12,17 +16,32 @@ bool requireAuth() {
   final authController = Get.find<AuthController>();
   if (authController.isLoggedIn) return true;
 
-  Get.dialog(
-    LoginRequiredDialog(
-      onConfirm: () {
-        Get.back();
-        Get.toNamed(AppRoutes.login);
-      },
-    ),
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+  if (_loginRequiredDialogVisible || Get.isDialogOpen == true) {
+    return false;
+  }
+
+  _loginRequiredDialogVisible = true;
+  unawaited(
+    Get.dialog<void>(
+      LoginRequiredDialog(onConfirm: _closeLoginPromptAndNavigate),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+    ).whenComplete(() {
+      _loginRequiredDialogVisible = false;
+    }),
   );
 
   return false;
+}
+
+void _closeLoginPromptAndNavigate() {
+  if (Get.isDialogOpen == true) {
+    Get.back<void>();
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (Get.currentRoute == AppRoutes.login) return;
+    Get.toNamed(AppRoutes.login);
+  });
 }
 
 class LoginRequiredDialog extends StatelessWidget {

@@ -43,6 +43,12 @@ class ServiceAreaGateController extends GetxController {
 
   bool get isBlocked => blockedResult.value != null;
 
+  bool get shouldRefreshLiveLocationOnAppOpen {
+    final selectedAddress = _storedSelectedAddress;
+    if (selectedAddress == null) return true;
+    return _isTransientCatalogAddress(selectedAddress);
+  }
+
   bool preserveSelectedServiceableLocation() {
     final selectedAddress = _serviceableSelectedAddress;
     if (selectedAddress == null) return false;
@@ -230,6 +236,7 @@ class ServiceAreaGateController extends GetxController {
         latitude: latitude,
         longitude: longitude,
         placeId: placeId,
+        refreshCatalog: true,
       );
       if (!_isLatestLocationRequest(version)) return;
       blockedResult.value = null;
@@ -259,6 +266,7 @@ class ServiceAreaGateController extends GetxController {
           address: result.locationLabel,
           latitude: latitude,
           longitude: longitude,
+          refreshCatalog: false,
         );
       }
       return;
@@ -298,6 +306,7 @@ class ServiceAreaGateController extends GetxController {
     required double latitude,
     required double longitude,
     String placeId = '',
+    bool refreshCatalog = true,
   }) async {
     if (!Get.isRegistered<ProfileController>()) {
       await _persistCatalogLocation(
@@ -317,6 +326,7 @@ class ServiceAreaGateController extends GetxController {
       latitude: latitude,
       longitude: longitude,
       placeId: placeId,
+      refreshCatalog: refreshCatalog,
     );
   }
 
@@ -404,9 +414,8 @@ class ServiceAreaGateController extends GetxController {
     )) {
       return null;
     }
-    final raw = _storage.read(_selectedAddressStorageKey);
-    if (raw is! Map) return null;
-    final address = AddressModel.fromJson(Map<String, dynamic>.from(raw));
+    final address = _storedSelectedAddress;
+    if (address == null) return null;
     final id = address.id.trim();
     if (id != 'service-location') return null;
     if (address.address.trim().isEmpty ||
@@ -416,6 +425,20 @@ class ServiceAreaGateController extends GetxController {
       return null;
     }
     return address;
+  }
+
+  AddressModel? get _storedSelectedAddress {
+    final raw = _storage.read(_selectedAddressStorageKey);
+    if (raw is! Map) return null;
+    return AddressModel.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  bool _isTransientCatalogAddress(AddressModel address) {
+    return const {
+      'live-location',
+      'service-location',
+      'blocked-service-location',
+    }.contains(address.id.trim());
   }
 
   bool _isValidCoordinate(double latitude, double longitude) {

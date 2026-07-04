@@ -26,6 +26,36 @@ void main() {
     expect(liveTrackingDistanceKmForTesting(order), isNull);
   });
 
+  test('live tracking status copy updates after pickup', () {
+    expect(liveTrackingStatusTextForTesting('pending'), 'Order Placed');
+    expect(
+      liveTrackingStatusTextForTesting('waiting for pickup'),
+      'Order Placed',
+    );
+    expect(liveTrackingStatusTextForTesting('accepted'), 'Partner Assigned');
+    expect(
+      liveTrackingStatusTextForTesting('on the way to pickup'),
+      'Partner Assigned',
+    );
+    expect(liveTrackingStatusTextForTesting('picked_up'), 'Order on the way');
+    expect(liveTrackingStatusTextForTesting('on the way'), 'Order on the way');
+    expect(
+      liveTrackingStatusTextForTesting('on the way to delivery'),
+      'Order on the way',
+    );
+    expect(liveTrackingStatusTextForTesting('in_transit'), 'Order on the way');
+  });
+
+  test('live tracking status card does not show distance row', () {
+    final order = _trackingOrder(
+      status: 'in_transit',
+      deliveryPersonLocation: const {'latitude': 24.9, 'longitude': 67.1},
+    );
+
+    expect(liveTrackingDistanceKmForTesting(order), isNotNull);
+    expect(liveTrackingShowsDistanceRowForTesting(order), isFalse);
+  });
+
   test('accepted order shows delivery partner name and number', () {
     final order = _trackingOrder(
       status: 'accepted',

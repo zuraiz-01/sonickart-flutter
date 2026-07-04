@@ -59,5 +59,42 @@ void main() {
         LocalNotificationService.notificationIdForDedupeKey(remote),
       );
     });
+
+    test('package assigned aliases share one accepted key', () {
+      final assigned = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'assigned',
+        trackingNumber: 'PKG000158',
+      );
+      final partnerAssigned = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'delivery_partner_assigned',
+        trackingNumber: '158',
+      );
+      final inferred = LocalNotificationService.statusDedupeKey(
+        package: true,
+        title: 'Partner Assigned',
+        body: 'A delivery partner has been assigned to your package #158.',
+      );
+
+      expect(assigned, isNotNull);
+      expect(partnerAssigned, assigned);
+      expect(inferred, assigned);
+    });
+
+    test('package dedupe prefers numeric package code across aliases', () {
+      final fromIdList = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'delivery_partner_assigned',
+        identifiers: const ['package-object-without-number', 'PKG000158'],
+      );
+      final fromTracking = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'assigned',
+        trackingNumber: '158',
+      );
+
+      expect(fromIdList, fromTracking);
+    });
   });
 }

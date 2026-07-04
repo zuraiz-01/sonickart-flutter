@@ -679,7 +679,13 @@ class _CartEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 20.hpx),
             FilledButton(
-              onPressed: () => Get.toNamed(AppRoutes.categories),
+              onPressed: () {
+                if (Get.isRegistered<DashboardController>()) {
+                  openDashboardTab(1);
+                  return;
+                }
+                Get.toNamed(AppRoutes.categories);
+              },
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.buttonFill,
                 foregroundColor: AppColors.onButtonFill,

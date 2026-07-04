@@ -82,6 +82,37 @@ void main() {
     },
   );
 
+  group('OrderController delivery rating eligibility', () {
+    test('uses delivered deliveryStatus aliases for completed orders', () {
+      final controller = OrderController(GetStorage(storageContainer));
+      addTearDown(controller.onClose);
+      final base = _baseOrderWithoutDeliveryLocation();
+      final order = base.copyWith(
+        status: 'accepted',
+        raw: {...base.raw, 'status': 'accepted', 'deliveryStatus': 'delivered'},
+      );
+
+      expect(controller.canRequestDeliveryRating(order), isTrue);
+    });
+
+    test('stays hidden when delivery partner rating already exists', () {
+      final controller = OrderController(GetStorage(storageContainer));
+      addTearDown(controller.onClose);
+      final base = _baseOrderWithoutDeliveryLocation();
+      final order = base.copyWith(
+        status: 'accepted',
+        raw: {
+          ...base.raw,
+          'status': 'accepted',
+          'delivery_status': 'completed',
+          'deliveryRating': 5,
+        },
+      );
+
+      expect(controller.canRequestDeliveryRating(order), isFalse);
+    });
+  });
+
   group('OrderController realtime tracking updates', () {
     test(
       'keeps delivery destination when generic tracking coords arrive',

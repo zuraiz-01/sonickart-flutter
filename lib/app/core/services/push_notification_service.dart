@@ -27,6 +27,10 @@ class PushNotificationService extends GetxService {
   bool _initialized = false;
   String? _lastRegisteredToken;
   final _recentRecords = <String, DateTime>{};
+  bool _notificationNavigationInFlight = false;
+  Map<String, dynamic>? _pendingNotificationNavigation;
+  String? _lastNotificationNavigationSignature;
+  DateTime? _lastNotificationNavigationAt;
 
   Future<PushNotificationService> init() async {
     if (_initialized) return this;
@@ -220,28 +224,32 @@ class PushNotificationService extends GetxService {
             package: isPackage,
           );
     final title =
+        copy?.title ??
         message.notification?.title ??
-        _firstText(data, [
-          'title',
-          'notificationTitle',
-          'notification_title',
-        ]) ??
-        copy?.title;
+        _firstText(data, ['title', 'notificationTitle', 'notification_title']);
     final body =
+        copy?.body ??
         message.notification?.body ??
         _firstText(data, [
           'body',
           'message',
           'notificationBody',
           'notification_body',
-        ]) ??
-        copy?.body;
+        ]);
+    if (shouldSuppressOrderStatusNotification(
+      package: isPackage,
+      status: status,
+      text: [title, body],
+    )) {
+      return;
+    }
     if (title == null && body == null) return;
 
     final dedupeKey = LocalNotificationService.statusDedupeKey(
       package: isPackage,
       status: status,
       trackingNumber: trackingNumber,
+      identifiers: _trackingIdentifiers(data, package: isPackage),
       title: title,
       body: body,
     );
@@ -298,15 +306,25 @@ class PushNotificationService extends GetxService {
   void _handleNotificationData(Map<String, dynamic> data) {
     final isPackage = _isPackagePayload(data);
     final status = _navigationStatus(data);
+    final displayStatus = _status(data);
     final trackingNumber = _trackingNumber(data, package: isPackage);
+    final copy = displayStatus == null
+        ? null
+        : orderStatusNotificationCopy(
+            status: displayStatus,
+            orderNumber: trackingNumber,
+            package: isPackage,
+          );
     final dedupeKey = LocalNotificationService.statusDedupeKey(
       package: isPackage,
       status: status,
       trackingNumber: trackingNumber,
+      identifiers: _trackingIdentifiers(data, package: isPackage),
       title: data['title']?.toString(),
       body: data['body']?.toString() ?? data['message']?.toString(),
     );
     final title =
+        copy?.title ??
         _firstText(data, const [
           'title',
           'notificationTitle',
@@ -314,6 +332,7 @@ class PushNotificationService extends GetxService {
         ]) ??
         (isPackage ? 'Package update' : 'Order update');
     final body =
+        copy?.body ??
         _firstText(data, const [
           'body',
           'message',
@@ -321,16 +340,55 @@ class PushNotificationService extends GetxService {
           'notification_body',
         ]) ??
         'You have a new ${isPackage ? 'package' : 'order'} update.';
-    _recordInAppNotification(
-      title: title,
-      body: body,
+    if (!shouldSuppressOrderStatusNotification(
       package: isPackage,
-      dedupeKey: dedupeKey,
-    );
+      status: displayStatus,
+      text: [title, body],
+    )) {
+      _recordInAppNotification(
+        title: title,
+        body: body,
+        package: isPackage,
+        dedupeKey: dedupeKey,
+      );
+    }
 
+    _queueNotificationNavigation(data);
+  }
+
+  void _queueNotificationNavigation(Map<String, dynamic> data) {
+    _pendingNotificationNavigation = Map<String, dynamic>.from(data);
+    if (_notificationNavigationInFlight) return;
+
+    _notificationNavigationInFlight = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_routeWhenReady(data));
+      unawaited(_drainNotificationNavigationQueue());
     });
+  }
+
+  Future<void> _drainNotificationNavigationQueue() async {
+    try {
+      while (_pendingNotificationNavigation != null) {
+        final data = _pendingNotificationNavigation!;
+        _pendingNotificationNavigation = null;
+
+        if (_isDuplicateNotificationNavigation(data)) {
+          continue;
+        }
+
+        await _routeWhenReady(data);
+        _lastNotificationNavigationSignature = _navigationSignature(data);
+        _lastNotificationNavigationAt = DateTime.now();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('PushNotificationService navigation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _notificationNavigationInFlight = false;
+      if (_pendingNotificationNavigation != null) {
+        _queueNotificationNavigation(_pendingNotificationNavigation!);
+      }
+    }
   }
 
   Future<String?> _waitForApnsToken() async {
@@ -380,21 +438,28 @@ class PushNotificationService extends GetxService {
       await Future<void>.delayed(const Duration(milliseconds: 250));
       if (Get.key.currentState == null) continue;
       if (Get.currentRoute == AppRoutes.splash) continue;
-      _routeFromData(data);
+      await _routeFromData(data);
       return;
     }
 
-    _routeFromData(data);
+    if (Get.key.currentState == null) {
+      debugPrint('PushNotificationService: navigator not ready for tap route');
+      return;
+    }
+
+    await _routeFromData(data);
   }
 
-  void _routeFromData(Map<String, dynamic> data) {
+  Future<void> _routeFromData(Map<String, dynamic> data) async {
+    await _closeBlockingNavigationOverlays();
+
     final type = data['type']?.toString().toLowerCase();
     final isPackage = _isPackagePayload(data);
     final orderId = _trackingNumber(data, package: isPackage);
     final status = _navigationStatus(data);
 
     if (isPackage || type == 'package') {
-      Get.toNamed(
+      _pushNotificationRoute(
         AppRoutes.packageDetails,
         arguments: orderId.isEmpty ? null : {'orderId': orderId},
       );
@@ -403,20 +468,65 @@ class PushNotificationService extends GetxService {
 
     if (type == 'order' || status != null || orderId.isNotEmpty) {
       if (_opensLiveTracking(status)) {
-        Get.toNamed(
+        _pushNotificationRoute(
           AppRoutes.liveTracking,
           arguments: orderId.isEmpty ? null : {'orderId': orderId},
         );
         return;
       }
-      Get.toNamed(
+      _pushNotificationRoute(
         AppRoutes.customerOrderDetails,
         arguments: orderId.isEmpty ? null : {'orderId': orderId},
       );
       return;
     }
 
-    Get.toNamed(AppRoutes.notifications);
+    _pushNotificationRoute(AppRoutes.notifications);
+  }
+
+  Future<void> _closeBlockingNavigationOverlays() async {
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      var closed = false;
+      if (Get.isDialogOpen == true) {
+        Get.back<void>();
+        closed = true;
+      }
+      if (Get.isBottomSheetOpen == true) {
+        Get.back<void>();
+        closed = true;
+      }
+      if (!closed) return;
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+    }
+  }
+
+  void _pushNotificationRoute(String route, {Object? arguments}) {
+    if (Get.currentRoute == route) {
+      Get.offNamed(route, arguments: arguments);
+      return;
+    }
+    Get.toNamed(route, arguments: arguments);
+  }
+
+  bool _isDuplicateNotificationNavigation(Map<String, dynamic> data) {
+    final lastAt = _lastNotificationNavigationAt;
+    if (lastAt == null) return false;
+
+    final signature = _navigationSignature(data);
+    if (_lastNotificationNavigationSignature != signature) return false;
+
+    return DateTime.now().difference(lastAt) < const Duration(seconds: 1);
+  }
+
+  String _navigationSignature(Map<String, dynamic> data) {
+    final isPackage = _isPackagePayload(data);
+    final type = data['type']?.toString().trim().toLowerCase() ?? '';
+    final status = _navigationStatus(data)?.trim().toLowerCase() ?? '';
+    final orderId = _trackingNumber(
+      data,
+      package: isPackage,
+    ).trim().toLowerCase();
+    return '${isPackage ? 'package' : 'order'}|$type|$status|$orderId';
   }
 
   String? _navigationStatus(Map<String, dynamic> data) {
@@ -555,6 +665,32 @@ class PushNotificationService extends GetxService {
           package ? [...packageKeys, ...orderKeys] : orderKeys,
         ) ??
         '';
+  }
+
+  List<String> _trackingIdentifiers(
+    Map<String, dynamic> data, {
+    required bool package,
+  }) {
+    const packageKeys = [
+      'packageOrderId',
+      'package_order_id',
+      'packageId',
+      'package_id',
+      'delivery_code',
+    ];
+    const orderKeys = [
+      'orderNumber',
+      'order_number',
+      'orderId',
+      'order_id',
+      'id',
+      '_id',
+    ];
+    return (package ? [...packageKeys, ...orderKeys] : orderKeys)
+        .map((key) => data[key]?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
   }
 
   String _encodePayload(Map<String, dynamic> data, {required bool package}) {
