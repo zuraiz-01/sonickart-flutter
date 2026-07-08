@@ -114,6 +114,70 @@ void main() {
     },
   );
 
+  test('new app session makes previous service location stale', () async {
+    final firstSession = AppSessionScope.startNewSession(id: 'first-app-run');
+    await GetStorage().write('selectedLocationServiceable', true);
+    await GetStorage().write(
+      AppSessionScope.selectedServiceLocationSessionKey,
+      firstSession,
+    );
+    await GetStorage().write('selectedAddress', {
+      'id': 'service-location',
+      'fullName': 'Customer',
+      'contactNumber': '',
+      'address': 'Previous app run serviceable address',
+      'latitude': 24.8607,
+      'longitude': 67.0011,
+      'isSelected': true,
+    });
+
+    AppSessionScope.startNewSession(id: 'second-app-run');
+    final controller = ServiceAreaGateController(
+      serviceAreaGateService: _FakeServiceAreaGateService([
+        ServiceAreaGateResult.allowed(
+          locationLabel: 'Fresh app open live location',
+          latitude: 24.95,
+          longitude: 67.05,
+        ),
+      ]),
+    );
+    addTearDown(controller.onClose);
+
+    expect(controller.preserveSelectedServiceableLocation(), isFalse);
+    expect(controller.shouldRefreshLiveLocationOnAppOpen, isTrue);
+  });
+
+  test(
+    'saved selected address does not force live refresh on app open',
+    () async {
+      await GetStorage().write('selectedLocationServiceable', true);
+      await GetStorage().write('selectedAddress', {
+        'id': 'addr-1',
+        'fullName': 'Ali',
+        'contactNumber': '03000000000',
+        'address': 'Saved home address',
+        'latitude': 24.8607,
+        'longitude': 67.0011,
+        'isSelected': true,
+      });
+
+      final controller = ServiceAreaGateController(
+        serviceAreaGateService: _FakeServiceAreaGateService([
+          ServiceAreaGateResult.blocked(
+            reason: ServiceAreaBlockReason.outsideWorkingArea,
+            locationLabel: 'Different live location',
+            message: 'Service is not available here.',
+            latitude: 25.0,
+            longitude: 68.0,
+          ),
+        ]),
+      );
+      addTearDown(controller.onClose);
+
+      expect(controller.shouldRefreshLiveLocationOnAppOpen, isFalse);
+    },
+  );
+
   test('stale serviceable selected address is not preserved', () async {
     await GetStorage().write('selectedLocationServiceable', true);
     await GetStorage().write(

@@ -33,17 +33,18 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
   bool _refreshing = false;
   Timer? _trackingTimer;
   Worker? _ratingWorker;
+  final _dismissedRatingOrderIds = <String>{};
 
   @override
   void initState() {
     super.initState();
+    _setupRatingWorker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (orderId.trim().isNotEmpty) {
         socketService?.connectToOrder(controller, orderId);
       }
       unawaited(_refreshOrder());
       _startTracking();
-      _setupRatingWorker();
     });
   }
 
@@ -52,6 +53,8 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
       if (order == null || !mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        if (!_shouldPromptRating(order)) return;
+        if (!controller.beginDeliveryRatingPrompt(order)) return;
         _trackingTimer?.cancel();
         Get.dialog(
           DeliveryRatingDialog(
@@ -64,6 +67,11 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
                       rating: rating,
                       feedback: feedback,
                     ),
+            onRatingFlowComplete: () {
+              controller.endDeliveryRatingPrompt();
+              _dismissRatingFor(order);
+              _startTracking();
+            },
           ),
           barrierColor: Colors.black.withValues(alpha: 0.5),
         );
@@ -90,10 +98,32 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
     if (_refreshing || orderId.trim().isEmpty) return;
     setState(() => _refreshing = true);
     try {
-      await controller.refreshOrderDetails(orderId);
+      final refreshed = await controller.refreshOrderDetails(orderId);
+      final nextOrder = refreshed ?? _resolveOrder();
+      if (nextOrder != null && _shouldPromptRating(nextOrder)) {
+        controller.requestDeliveryRatingIfNeeded(nextOrder);
+      }
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
+  }
+
+  PackageOrderModel? _resolveOrder() {
+    return controller.findOrderById(orderId) ?? controller.selectedOrder.value;
+  }
+
+  bool _shouldPromptRating(PackageOrderModel order) {
+    if (!controller.canRequestDeliveryRating(order)) return false;
+    return !controller
+        .packageOrderIdentifiers(order)
+        .map(_normalizeRatingId)
+        .any(_dismissedRatingOrderIds.contains);
+  }
+
+  void _dismissRatingFor(PackageOrderModel order) {
+    _dismissedRatingOrderIds.addAll(
+      controller.packageOrderIdentifiers(order).map(_normalizeRatingId),
+    );
   }
 
   @override
@@ -101,7 +131,7 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
-        title: const Text('Package Order'),
+        title: const Text('Your Package'),
         centerTitle: true,
         actions: [
           _refreshing
@@ -123,8 +153,7 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
         ],
       ),
       body: Obx(() {
-        final PackageOrderModel? order =
-            controller.findOrderById(orderId) ?? controller.selectedOrder.value;
+        final PackageOrderModel? order = _resolveOrder();
         return order == null
             ? Center(
                 child: Text(
@@ -144,9 +173,11 @@ class _PackageOrderDetailsViewState extends State<PackageOrderDetailsView> {
                     _PackageSummaryCard(order: order),
                     SizedBox(height: 16.hpx),
                     _PackagePartnerCard(order: order),
-                    SizedBox(height: 16.hpx),
-                    _PackageLiveMapCard(order: order),
-                    SizedBox(height: 16.hpx),
+                    if (_shouldShowPackageLiveMap(order)) ...[
+                      SizedBox(height: 16.hpx),
+                      _PackageLiveMapCard(order: order),
+                      SizedBox(height: 16.hpx),
+                    ],
                     _PackageBillCard(order: order),
                     if (order.hasDeliveryRating) ...[
                       SizedBox(height: 16.hpx),
@@ -427,12 +458,6 @@ class _PackagePartnerCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    Text(
-                      _hasPickedUp(status) ? 'Package Picked Up' : 'On The Way',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -478,6 +503,7 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
   LatLng? _targetPartnerLoc;
   BitmapDescriptor? _partnerBikeIcon;
   Timer? _glideTimer;
+  String? _lastCameraKey;
 
   @override
   void initState() {
@@ -512,6 +538,7 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
       _displayedPartnerLoc = data.deliveryPersonLocation;
       _targetPartnerLoc = data.deliveryPersonLocation;
     }
+    _scheduleFitToBounds(data);
   }
 
   void _startGlide() {
@@ -584,9 +611,6 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
     final etaText = data.liveEtaMinutes == null
         ? widget.order.durationText
         : '${data.liveEtaMinutes} min';
-    final distanceText = data.liveDistanceKm == null
-        ? widget.order.distanceText
-        : '${data.liveDistanceKm!.toStringAsFixed(1)} km away';
 
     return _CardShell(
       padding: EdgeInsets.zero,
@@ -595,7 +619,7 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
           SizedBox(
             height: 285.hpx,
             child: ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(18.rpx)),
+              borderRadius: BorderRadius.circular(18.rpx),
               child: data.points.isEmpty
                   ? _MapFallback(
                       etaLabel: etaText.isEmpty ? 'Tracking' : etaText,
@@ -615,52 +639,11 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
                           mapToolbarEnabled: false,
                           onMapCreated: (controller) {
                             _mapController = controller;
-                            _fitBounds();
+                            _scheduleFitToBounds(data);
                           },
-                        ),
-                        Positioned(
-                          top: 12.hpx,
-                          left: 12.wpx,
-                          child: _MapStatusPill(
-                            label: etaText.isEmpty ? 'Live tracking' : etaText,
-                          ),
                         ),
                       ],
                     ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(16.rpx),
-            child: Row(
-              children: [
-                Icon(Icons.route_rounded, color: AppColors.primary),
-                SizedBox(width: 10.wpx),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _trackingLabel(_normalizedStatus(widget.order.status)),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      SizedBox(height: 3.hpx),
-                      Text(
-                        distanceText.isEmpty
-                            ? 'Tracking updates will appear here.'
-                            : distanceText,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -683,15 +666,46 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
 
   double _rad(double v) => v * pi / 180;
 
-  Future<void> _fitBounds() async {
+  void _scheduleFitToBounds(_PackageTrackingMapData data) {
+    if (_mapController == null || data.points.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_fitBounds(data));
+    });
+  }
+
+  Future<void> _fitBounds(_PackageTrackingMapData data) async {
     final controller = _mapController;
     if (controller == null) return;
-    final data = _PackageTrackingMapData.fromOrder(widget.order);
     final points = data.focusPoints;
-    if (points.length < 2) return;
-    await controller.animateCamera(
-      CameraUpdate.newLatLngBounds(_boundsFor(points), 56.rpx),
-    );
+    if (points.isEmpty) return;
+    final cameraKey = points
+        .map(
+          (point) =>
+              '${point.latitude.toStringAsFixed(5)},${point.longitude.toStringAsFixed(5)}',
+        )
+        .join('|');
+    if (_lastCameraKey == cameraKey) return;
+
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    if (!mounted) return;
+
+    try {
+      if (points.length == 1) {
+        await controller.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: points.first, zoom: 15),
+          ),
+        );
+      } else {
+        await controller.animateCamera(
+          CameraUpdate.newLatLngBounds(_boundsFor(points), 56.rpx),
+        );
+      }
+      _lastCameraKey = cameraKey;
+    } catch (_) {
+      // GoogleMap can reject camera updates before its native view is laid out.
+    }
   }
 
   LatLngBounds _boundsFor(List<LatLng> points) {
@@ -1166,47 +1180,6 @@ class _BillRow extends StatelessWidget {
   }
 }
 
-class _MapStatusPill extends StatelessWidget {
-  const _MapStatusPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 7.hpx),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.schedule, size: 16.rpx, color: AppColors.accent),
-            SizedBox(width: 6.wpx),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w800,
-                fontSize: 12.spx,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _MapFallback extends StatelessWidget {
   const _MapFallback({required this.etaLabel});
 
@@ -1258,25 +1231,75 @@ class _PackageTrackingMapData {
     return _PackageTrackingMapData(
       dropLocation:
           _currentDropCoordinate(order, raw) ??
+          _coordinateFrom(raw['currentDropLocation']) ??
+          _coordinateFrom(raw['current_drop_location']) ??
           _coordinateFrom(raw['dropLocation']) ??
+          _coordinateFrom(raw['drop_location']) ??
           _coordinateFrom(raw['deliveryLocation']) ??
+          _coordinateFrom(raw['delivery_location']) ??
           _coordinateFrom({
-            'latitude': order.dropLatitude,
-            'longitude': order.dropLongitude,
+            'latitude':
+                order.dropLatitude ??
+                raw['dropLatitude'] ??
+                raw['drop_latitude'] ??
+                raw['deliveryLatitude'] ??
+                raw['delivery_latitude'],
+            'longitude':
+                order.dropLongitude ??
+                raw['dropLongitude'] ??
+                raw['drop_longitude'] ??
+                raw['deliveryLongitude'] ??
+                raw['delivery_longitude'],
           }),
       pickupLocation:
           _coordinateFrom(raw['pickupLocation']) ??
+          _coordinateFrom(raw['pickup_location']) ??
           _coordinateFrom({
-            'latitude': order.pickupLatitude,
-            'longitude': order.pickupLongitude,
+            'latitude':
+                order.pickupLatitude ??
+                raw['pickupLatitude'] ??
+                raw['pickup_latitude'],
+            'longitude':
+                order.pickupLongitude ??
+                raw['pickupLongitude'] ??
+                raw['pickup_longitude'],
           }),
       deliveryPersonLocation:
           _coordinateFrom(raw['deliveryPersonLocation']) ??
+          _coordinateFrom(raw['delivery_person_location']) ??
           _coordinateFrom(partner['liveLocation']) ??
+          _coordinateFrom(partner['live_location']) ??
+          _coordinateFrom(partner['location']) ??
+          _coordinateFrom(partner['currentLocation']) ??
+          _coordinateFrom(partner['current_location']) ??
           _coordinateFrom(raw['riderLocation']) ??
+          _coordinateFrom(raw['rider_location']) ??
           _coordinateFrom(raw['driverLocation']) ??
+          _coordinateFrom(raw['driver_location']) ??
           _coordinateFrom(raw['partnerLocation']) ??
-          _coordinateFrom(raw['liveLocation']),
+          _coordinateFrom(raw['partner_location']) ??
+          _coordinateFrom(raw['liveLocation']) ??
+          _coordinateFrom(raw['live_location']) ??
+          _coordinateFrom({
+            'latitude':
+                raw['deliveryPartnerLatitude'] ??
+                raw['delivery_partner_latitude'] ??
+                raw['deliveryPersonLatitude'] ??
+                raw['delivery_person_latitude'] ??
+                raw['driverLatitude'] ??
+                raw['driver_latitude'] ??
+                raw['partnerLatitude'] ??
+                raw['partner_latitude'],
+            'longitude':
+                raw['deliveryPartnerLongitude'] ??
+                raw['delivery_partner_longitude'] ??
+                raw['deliveryPersonLongitude'] ??
+                raw['delivery_person_longitude'] ??
+                raw['driverLongitude'] ??
+                raw['driver_longitude'] ??
+                raw['partnerLongitude'] ??
+                raw['partner_longitude'],
+          }),
       hasAssigned: _hasAssignedPartner(order, status),
       hasPickedUp: _hasPickedUp(status),
     );
@@ -1496,12 +1519,55 @@ class _PackageTrackingMapData {
   static double _radians(double value) => value * pi / 180;
 }
 
+({
+  bool hasPickup,
+  bool hasDrop,
+  bool hasDeliveryPartner,
+  int focusPointCount,
+  double? liveDistanceKm,
+})
+packageTrackingMapDataForTesting(PackageOrderModel order) {
+  final data = _PackageTrackingMapData.fromOrder(order);
+  return (
+    hasPickup: data.pickupLocation != null,
+    hasDrop: data.dropLocation != null,
+    hasDeliveryPartner: data.deliveryPersonLocation != null,
+    focusPointCount: data.focusPoints.length,
+    liveDistanceKm: data.liveDistanceKm,
+  );
+}
+
+bool packageShouldShowLiveMapForTesting(PackageOrderModel order) {
+  return _shouldShowPackageLiveMap(order);
+}
+
+String packageStatusHeadingForTesting(String status) {
+  return _displayStatusHeading(_normalizedStatus(status));
+}
+
+String _normalizeRatingId(String value) => value.trim().toLowerCase();
+
 String _normalizedStatus(String status) {
   final normalized = status.trim().toLowerCase().replaceAll(
     RegExp(r'[-\s]+'),
     '_',
   );
   return normalized.isEmpty ? 'pending' : normalized;
+}
+
+bool _shouldShowPackageLiveMap(PackageOrderModel order) {
+  return !_isPackageDelivered(order);
+}
+
+bool _isPackageDelivered(PackageOrderModel order) {
+  final status = _normalizedStatus(order.status);
+  return const {
+    'delivered',
+    'completed',
+    'complete',
+    'finished',
+    'done',
+  }.contains(status);
 }
 
 bool _hasAssignedPartner(PackageOrderModel order, String status) {
@@ -1532,19 +1598,21 @@ bool _hasPickedUp(String status) {
   }.contains(status);
 }
 
-String _trackingLabel(String status) {
-  if (status == 'delivered' || status == 'completed') {
-    return 'Package Delivered';
-  }
-  if (_hasPickedUp(status)) return 'Delivery Partner Is Heading To Drop';
-  if (const {'assigned', 'confirmed', 'accepted'}.contains(status)) {
-    return 'Delivery Partner Is Heading To Pickup';
-  }
-  return 'Waiting For Delivery Partner';
-}
-
 String _displayStatusHeading(String status) {
-  if (status == 'pending') return 'Packing Your Package Order';
+  if (status == 'pending') return 'Package Booked';
+  if (const {
+    'assigned',
+    'confirmed',
+    'accepted',
+    'partner_assigned',
+    'delivery_assigned',
+    'delivery_partner_assigned',
+    'assigned_to_partner',
+    'rider_assigned',
+    'driver_assigned',
+  }.contains(status)) {
+    return 'Partner Assigned';
+  }
   final text = status.replaceAll(RegExp(r'[-_]+'), ' ').trim();
   if (text.isEmpty) return 'Package Order';
   return text

@@ -41,22 +41,29 @@ class LocalNotificationService extends GetxService {
             package: isPackage,
           );
     final title =
+        copy?.title ??
         _firstMessageText(data, const [
           'title',
           'notificationTitle',
           'notification_title',
         ]) ??
-        message.notification?.title ??
-        copy?.title;
+        message.notification?.title;
     final body =
+        copy?.body ??
         _firstMessageText(data, const [
           'body',
           'message',
           'notificationBody',
           'notification_body',
         ]) ??
-        message.notification?.body ??
-        copy?.body;
+        message.notification?.body;
+    if (shouldSuppressOrderStatusNotification(
+      package: isPackage,
+      status: status,
+      text: [title, body],
+    )) {
+      return;
+    }
     if (title == null && body == null) return;
 
     try {
@@ -445,12 +452,17 @@ class LocalNotificationService extends GetxService {
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
     return switch (normalized) {
-      'placed' ||
-      'pending' ||
+      'placed' || 'pending' || 'booked' => 'placed',
       'assigned' ||
       'confirmed' ||
-      'available' => 'placed',
-      'accept' || 'accepted' => 'accepted',
+      'accept' ||
+      'accepted' ||
+      'partner_assigned' ||
+      'delivery_assigned' ||
+      'delivery_partner_assigned' ||
+      'assigned_to_partner' ||
+      'rider_assigned' ||
+      'driver_assigned' => 'accepted',
       'pickup' || 'picked' || 'pickedup' || 'picked_up' => 'picked_up',
       'intransit' ||
       'in_transit' ||
@@ -468,12 +480,17 @@ class LocalNotificationService extends GetxService {
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
     if (text.trim().isEmpty) return null;
-    if (text.contains('accept')) {
+    if (text.contains('delivered') || text.contains('completed')) {
+      return 'delivered';
+    }
+    if (text.contains('accept') ||
+        text.contains('confirmed') ||
+        text.contains('assigned')) {
       return 'accepted';
     }
     if (text.contains('placed') ||
-        text.contains('assigned') ||
-        text.contains('confirmed')) {
+        text.contains('pending') ||
+        text.contains('booked')) {
       return 'placed';
     }
     if (text.contains('picked up') || text.contains('pickup')) {
@@ -484,13 +501,11 @@ class LocalNotificationService extends GetxService {
         text.contains('out for delivery')) {
       return 'in_transit';
     }
-    if (text.contains('delivered') || text.contains('completed')) {
-      return 'delivered';
-    }
     return null;
   }
 
   static String? _canonicalTrackingId(Iterable<String?> values) {
+    String? fallback;
     for (final value in values) {
       final raw = value?.trim();
       if (raw == null || raw.isEmpty) continue;
@@ -509,9 +524,9 @@ class LocalNotificationService extends GetxService {
         }
       }
 
-      return alphaNumeric;
+      fallback ??= alphaNumeric;
     }
-    return null;
+    return fallback;
   }
 
   static String? _trackingIdFromText(Iterable<String?> values) {

@@ -523,16 +523,8 @@ class _FeaturedProductCard extends StatelessWidget {
         : AppColors.border;
     final titleColor = isDark ? AppColors.textPrimary : AppColors.activeNav;
     return InkWell(
-      onTap: () => Get.toNamed(
-        AppRoutes.categories,
-        arguments: {
-          'categoryId': product.categoryId,
-          'categoryName':
-              product.raw['categoryName'] ?? product.raw['category_name'],
-          'productId': product.id,
-          'preferredVendorId': product.vendorId,
-        },
-      ),
+      onTap: () =>
+          Get.toNamed(AppRoutes.productDetail, arguments: {'product': product}),
       borderRadius: BorderRadius.circular(10.rpx),
       child: Container(
         height: 110.hpx,
@@ -751,8 +743,8 @@ class _HomeCategoryCard extends StatelessWidget {
         ? AppColors.accent.withValues(alpha: 0.72)
         : AppColors.border;
     return InkWell(
-      onTap: () => Get.toNamed(
-        AppRoutes.categories,
+      onTap: () => openDashboardTab(
+        1,
         arguments: {'categoryId': category.id, 'categoryName': category.name},
       ),
       borderRadius: BorderRadius.circular(12.rpx),

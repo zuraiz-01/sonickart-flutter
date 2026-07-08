@@ -14,6 +14,7 @@ import '../core/network/api_service.dart';
 import '../core/services/local_notification_service.dart';
 import '../core/services/location_lookup_service.dart';
 import '../core/services/notification_service.dart';
+import '../core/services/status_notification_copy.dart';
 import '../core/utils/auth_guard.dart';
 import '../core/widgets/app_snackbar.dart';
 import '../data/models/address_model.dart';
@@ -1888,11 +1889,27 @@ class OrderController extends GetxController {
       'address': address,
     };
     if (deliveryNote.trim().isNotEmpty) {
+      payload['deliveryInstructions'] = deliveryNote.trim();
       payload['deliveryNote'] = deliveryNote.trim();
       payload['delivery_note'] = deliveryNote.trim();
+      payload['delivery_notes'] = deliveryNote.trim();
+      payload['deliveryNotes'] = deliveryNote.trim();
+      payload['delivery_instructions'] = deliveryNote.trim();
+      payload['instructions'] = deliveryNote.trim();
+      payload['special_instructions'] = deliveryNote.trim();
+      payload['specialInstructions'] = deliveryNote.trim();
       payload['note'] = deliveryNote.trim();
       payload['notes'] = deliveryNote.trim();
       payload['deliveryPartnerNote'] = deliveryNote.trim();
+      payload['delivery_partner_note'] = deliveryNote.trim();
+      payload['customer_note'] = deliveryNote.trim();
+      payload['customerNote'] = deliveryNote.trim();
+      payload['customer_notes'] = deliveryNote.trim();
+      payload['customerNotes'] = deliveryNote.trim();
+      payload['order_note'] = deliveryNote.trim();
+      payload['orderNote'] = deliveryNote.trim();
+      payload['order_notes'] = deliveryNote.trim();
+      payload['orderNotes'] = deliveryNote.trim();
     }
     if (latitude != null && longitude != null) {
       payload['latitude'] = latitude;
@@ -2610,7 +2627,7 @@ class OrderController extends GetxController {
 
   bool canRequestDeliveryRating(OrderModel order) {
     if (!order.isProductOrder) return false;
-    final status = _normalizeLocalStatus(order.status);
+    final status = _deliveryRatingStatus(order);
     if (!{
       'delivered',
       'completed',
@@ -2626,6 +2643,21 @@ class OrderController extends GetxController {
     if (identifiers.any(_ratedOrderIds.contains)) return false;
     if (identifiers.any(_ratingSubmissionOrderIds.contains)) return false;
     return true;
+  }
+
+  String _deliveryRatingStatus(OrderModel order) {
+    return _normalizeLocalStatus(
+      _firstNonEmpty([
+            order.raw['deliveryStatus'],
+            order.raw['delivery_status'],
+            order.raw['delivery_status_text'],
+            order.raw['orderStatus'],
+            order.raw['order_status'],
+            order.raw['status'],
+            order.status,
+          ]) ??
+          order.status,
+    );
   }
 
   void requestDeliveryRatingIfNeeded(OrderModel order, {bool force = false}) {
@@ -2783,6 +2815,14 @@ class OrderController extends GetxController {
     String message, {
     required String category,
   }) async {
+    if (category != 'order' ||
+        shouldSuppressOrderStatusNotification(
+          package: false,
+          text: [title, message],
+        )) {
+      return;
+    }
+
     if (Get.isRegistered<NotificationService>()) {
       await Get.find<NotificationService>().record(
         title: title,
@@ -2811,23 +2851,23 @@ class OrderController extends GetxController {
         : _normalizeLocalStatus(existing.status);
     if (existing != null && previousStatus == status) return;
 
-    final title = existing == null
-        ? 'Order Sent'
-        : 'Order ${_statusTitle(status)}';
-    final message = existing == null
-        ? 'Your order ${order.id} has been sent.'
-        : 'Your order ${order.id} is ${_statusTitle(status).toLowerCase()}.';
+    final copy = orderStatusNotificationCopy(
+      status: status,
+      orderNumber: order.id,
+    );
+    if (copy == null) return;
+
     final dedupeKey = LocalNotificationService.statusDedupeKey(
       package: false,
       status: status,
       identifiers: _orderIdentifiers(order),
-      title: title,
-      body: message,
+      title: copy.title,
+      body: copy.body,
     );
     if (Get.isRegistered<LocalNotificationService>()) {
       Get.find<LocalNotificationService>().show(
-        title: title,
-        body: message,
+        title: copy.title,
+        body: copy.body,
         channelId: 'sonickart_order_updates',
         channelName: 'Order updates',
         channelDescription: 'Product order status notifications',
@@ -2846,33 +2886,10 @@ class OrderController extends GetxController {
   }
 
   bool _shouldNotifyProductStatus(String status) {
-    return const {
-      'placed',
-      'pending',
-      'sent',
-      'send',
-      'confirmed',
-      'accepted',
-      'assigned',
-      'picked_up',
-      'in_transit',
-      'arriving',
-      'out_for_delivery',
-      'delivered',
-      'completed',
-      'cancelled',
-      'prepared',
-      'ready',
-    }.contains(status);
-  }
-
-  String _statusTitle(String status) {
-    return status
-        .replaceAll('_', ' ')
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
-        .join(' ');
+    return !shouldSuppressOrderStatusNotification(
+      package: false,
+      status: status,
+    );
   }
 
   String _normalizeLocalStatus(String status) {

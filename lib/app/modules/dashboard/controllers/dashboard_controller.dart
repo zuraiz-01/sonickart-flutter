@@ -12,13 +12,15 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../routes/app_routes.dart';
 import '../../order_controller.dart';
 import '../../cart/controllers/cart_controller.dart';
+import '../../categories/controllers/categories_controller.dart';
 import '../../package/controllers/package_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
 bool _isDashboardTabNavigationRunning = false;
 int? _pendingDashboardTabIndex;
+Object? _pendingDashboardTabArguments;
 
-void openDashboardTab(int index) {
+void openDashboardTab(int index, {Object? arguments}) {
   final targetIndex = _normalizeDashboardIndex(index);
 
   if (targetIndex == 4 && !requireAuth()) return;
@@ -29,11 +31,13 @@ void openDashboardTab(int index) {
 
   if (Get.currentRoute == AppRoutes.dashboard) {
     _pendingDashboardTabIndex = null;
-    _setDashboardTabIfReady(targetIndex);
+    _pendingDashboardTabArguments = null;
+    _setDashboardTabIfReady(targetIndex, arguments: arguments);
     return;
   }
 
   _pendingDashboardTabIndex = targetIndex;
+  _pendingDashboardTabArguments = arguments;
   if (_isDashboardTabNavigationRunning) return;
 
   _isDashboardTabNavigationRunning = true;
@@ -45,7 +49,9 @@ Future<void> _runDashboardTabNavigation() async {
   try {
     while (_pendingDashboardTabIndex != null) {
       final targetIndex = _pendingDashboardTabIndex!;
+      final targetArguments = _pendingDashboardTabArguments;
       _pendingDashboardTabIndex = null;
+      _pendingDashboardTabArguments = null;
 
       if (Get.currentRoute != AppRoutes.dashboard) {
         await Get.offAllNamed(
@@ -54,7 +60,7 @@ Future<void> _runDashboardTabNavigation() async {
         );
       }
 
-      _setDashboardTabIfReady(targetIndex);
+      _setDashboardTabIfReady(targetIndex, arguments: targetArguments);
     }
   } catch (error) {
     debugPrint('openDashboardTab: navigation failed $error');
@@ -62,12 +68,13 @@ Future<void> _runDashboardTabNavigation() async {
     _isDashboardTabNavigationRunning = false;
     final pendingTarget = _pendingDashboardTabIndex;
     if (pendingTarget != null) {
-      openDashboardTab(pendingTarget);
+      final pendingArguments = _pendingDashboardTabArguments;
+      openDashboardTab(pendingTarget, arguments: pendingArguments);
     }
   }
 }
 
-void _setDashboardTabIfReady(int targetIndex) {
+void _setDashboardTabIfReady(int targetIndex, {Object? arguments}) {
   if (!Get.isRegistered<DashboardController>() &&
       !Get.isPrepared<DashboardController>()) {
     return;
@@ -75,14 +82,33 @@ void _setDashboardTabIfReady(int targetIndex) {
 
   try {
     Get.find<DashboardController>().setTabFromNavigation(targetIndex);
+    _applyDashboardTabArguments(targetIndex, arguments);
   } catch (error) {
     debugPrint('openDashboardTab: controller not ready $error');
   }
 }
 
+void _applyDashboardTabArguments(int targetIndex, Object? arguments) {
+  if (targetIndex != 1 || arguments == null) return;
+  if (!Get.isRegistered<CategoriesController>()) return;
+
+  try {
+    Get.find<CategoriesController>().openFromRouteArguments(arguments);
+  } catch (error) {
+    debugPrint('openDashboardTab: category arguments failed $error');
+  }
+}
+
 int _normalizeDashboardIndex(int index) => index.clamp(0, 4);
 
-class DashboardController extends GetxController {
+class DashboardController extends GetxController with WidgetsBindingObserver {
+  DashboardController({
+    Duration initialCatalogContextTimeout =
+        _defaultInitialCatalogContextTimeout,
+    Duration settingsLoadTimeout = _defaultSettingsLoadTimeout,
+  }) : _initialCatalogContextTimeout = initialCatalogContextTimeout,
+       _settingsLoadTimeout = settingsLoadTimeout;
+
   final currentIndex = 0.obs;
   final currentSearchHintIndex = 0.obs;
   final isCatalogLoading = false.obs;
@@ -90,10 +116,15 @@ class DashboardController extends GetxController {
   final featuredProducts = <ProductModel>[].obs;
   final categories = <CategoryModel>[].obs;
 
+  static const _defaultInitialCatalogContextTimeout = Duration(seconds: 10);
+  static const _defaultSettingsLoadTimeout = Duration(seconds: 8);
   static const _featuredLoadTimeout = Duration(seconds: 20);
 
+  final Duration _initialCatalogContextTimeout;
+  final Duration _settingsLoadTimeout;
   Timer? _searchHintTimer;
   Worker? _ratingWorker;
+  Future<void>? _appOpenLocationRefresh;
   int _catalogLoadRequestId = 0;
 
   final searchHints = const [
@@ -119,11 +150,16 @@ class DashboardController extends GetxController {
     if (targetIndex == 4 && !requireAuth()) return;
 
     currentIndex.value = targetIndex;
-    _runTabSideEffects(targetIndex, allowSameTabRefresh: false);
+    _runTabSideEffects(
+      targetIndex,
+      previousIndex: current,
+      allowSameTabRefresh: false,
+    );
   }
 
   void setTabFromNavigation(int index) {
     final targetIndex = _normalizeDashboardIndex(index);
+    final current = _normalizeDashboardIndex(currentIndex.value);
 
     debugPrint(
       'DashboardController.setTabFromNavigation: requested tab $targetIndex',
@@ -132,7 +168,11 @@ class DashboardController extends GetxController {
     if (targetIndex == 4 && !requireAuth()) return;
 
     currentIndex.value = targetIndex;
-    _runTabSideEffects(targetIndex, allowSameTabRefresh: true);
+    _runTabSideEffects(
+      targetIndex,
+      previousIndex: current,
+      allowSameTabRefresh: true,
+    );
   }
 
   void refreshCurrentTab() {
@@ -142,10 +182,15 @@ class DashboardController extends GetxController {
 
   void _runTabSideEffects(
     int index, {
+    int? previousIndex,
     required bool allowSameTabRefresh,
   }) {
     try {
-      _prepareForTabChange(index, allowSameTabRefresh: allowSameTabRefresh);
+      _prepareForTabChange(
+        index,
+        previousIndex: previousIndex,
+        allowSameTabRefresh: allowSameTabRefresh,
+      );
     } catch (error, stackTrace) {
       debugPrint('DashboardController.changeTab cleanup failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -161,9 +206,12 @@ class DashboardController extends GetxController {
 
   void _prepareForTabChange(
     int nextIndex, {
+    int? previousIndex,
     required bool allowSameTabRefresh,
   }) {
-    final current = _normalizeDashboardIndex(currentIndex.value);
+    final current = _normalizeDashboardIndex(
+      previousIndex ?? currentIndex.value,
+    );
     final isSameTab = current == nextIndex;
 
     if (isSameTab && !allowSameTabRefresh) return;
@@ -211,15 +259,10 @@ class DashboardController extends GetxController {
         featuredProducts.clear();
       }
 
-      if (!force) {
-        await _ensureInitialCatalogContextReady();
-      }
-
-      if (!_isCurrentCatalogLoad(requestId)) return;
-
-      await repo.loadDeliverySettings(force: force);
-
-      if (!_isCurrentCatalogLoad(requestId)) return;
+      final contextReady = force
+          ? Future<void>.value()
+          : _ensureInitialCatalogContextReady();
+      final settingsReady = repo.loadDeliverySettings(force: force);
 
       final loadedCategories = await repo.fetchCategories();
 
@@ -232,6 +275,12 @@ class DashboardController extends GetxController {
         featuredProducts.clear();
         return;
       }
+
+      await _waitForInitialCatalogContext(contextReady);
+      if (!_isCurrentCatalogLoad(requestId)) return;
+
+      await _waitForCatalogSettings(settingsReady);
+      if (!_isCurrentCatalogLoad(requestId)) return;
 
       final loadedFeatured = await repo
           .fetchFeaturedProducts(loadedCategories)
@@ -282,6 +331,56 @@ class DashboardController extends GetxController {
     await Get.find<ServiceAreaGateController>().ensureChecked();
   }
 
+  Future<void> _waitForInitialCatalogContext(Future<void> contextReady) async {
+    try {
+      await contextReady.timeout(_initialCatalogContextTimeout);
+    } on TimeoutException {
+      debugPrint(
+        'DashboardController.loadCatalog: service-area context timed out; '
+        'continuing with direct product-scope resolution.',
+      );
+      _retryCatalogWhenContextReady(contextReady);
+    } catch (error, stackTrace) {
+      debugPrint(
+        'DashboardController.loadCatalog: service-area context failed $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _waitForCatalogSettings(
+    Future<ProductCatalogSettings> settingsReady,
+  ) async {
+    try {
+      await settingsReady.timeout(_settingsLoadTimeout);
+    } on TimeoutException {
+      debugPrint(
+        'DashboardController.loadCatalog: catalog settings timed out; '
+        'using current defaults.',
+      );
+    } catch (error, stackTrace) {
+      debugPrint('DashboardController.loadCatalog: settings failed $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  void _retryCatalogWhenContextReady(Future<void> contextReady) {
+    unawaited(
+      contextReady
+          .then((_) {
+            if (isClosed || isFeaturedLoading.value) return;
+            if (featuredProducts.isNotEmpty) return;
+            unawaited(loadCatalog(force: true));
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            debugPrint(
+              'DashboardController.loadCatalog: late context retry failed $error',
+            );
+            debugPrintStack(stackTrace: stackTrace);
+          }),
+    );
+  }
+
   Future<void> syncActiveProductOrder() async {
     if (!Get.isRegistered<OrderController>()) return;
 
@@ -289,8 +388,43 @@ class DashboardController extends GetxController {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshLiveLocationAfterAppOpen());
+    }
+  }
+
+  Future<void> _refreshLiveLocationAfterAppOpen() {
+    final active = _appOpenLocationRefresh;
+    if (active != null) return active;
+
+    final refresh = _runLiveLocationAfterAppOpen();
+    _appOpenLocationRefresh = refresh;
+    refresh.whenComplete(() {
+      if (identical(_appOpenLocationRefresh, refresh)) {
+        _appOpenLocationRefresh = null;
+      }
+    });
+    return refresh;
+  }
+
+  Future<void> _runLiveLocationAfterAppOpen() async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (isClosed || !Get.isRegistered<ServiceAreaGateController>()) return;
+
+    final serviceGateController = Get.find<ServiceAreaGateController>();
+    if (!serviceGateController.shouldRefreshLiveLocationOnAppOpen) return;
+
+    await serviceGateController.checkCurrentLocation(force: true);
+    if (isClosed || serviceGateController.isBlocked) return;
+
+    await loadCatalog(force: true);
+  }
+
+  @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
 
     final requestedIndex = (Get.arguments?['tabIndex'] as num?)?.toInt();
 
@@ -344,6 +478,7 @@ class DashboardController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchHintTimer?.cancel();
     _ratingWorker?.dispose();
 

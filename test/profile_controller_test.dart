@@ -6,6 +6,7 @@ import 'package:sonic_cart/app/core/constants/api_constants.dart';
 import 'package:sonic_cart/app/core/network/api_service.dart';
 import 'package:sonic_cart/app/core/services/app_session_scope.dart';
 import 'package:sonic_cart/app/data/models/address_model.dart';
+import 'package:sonic_cart/app/modules/dashboard/controllers/dashboard_controller.dart';
 import 'package:sonic_cart/app/modules/profile/controllers/profile_controller.dart';
 
 void main() {
@@ -61,6 +62,27 @@ void main() {
 
       expect(controller.dashboardAddressLabel, 'Serviceable manual address');
       expect(controller.addresses.any((item) => item.isSelected), isFalse);
+    },
+  );
+
+  test(
+    'startup service location can skip recursive dashboard catalog refresh',
+    () async {
+      final storage = GetStorage(storageContainer);
+      final controller = ProfileController(storage);
+      final dashboard = _SpyDashboardController();
+      Get.put<DashboardController>(dashboard);
+      dashboard.loadCatalogCalls = 0;
+
+      await controller.applyServiceAreaLocation(
+        address: 'Startup serviceable address',
+        latitude: 24.8607,
+        longitude: 67.0011,
+        refreshCatalog: false,
+      );
+
+      expect(dashboard.loadCatalogCalls, 0);
+      expect(controller.dashboardAddressLabel, 'Startup serviceable address');
     },
   );
 
@@ -354,5 +376,14 @@ class _ProfileFakeApiService extends ApiService {
       };
     }
     return const {};
+  }
+}
+
+class _SpyDashboardController extends DashboardController {
+  int loadCatalogCalls = 0;
+
+  @override
+  Future<void> loadCatalog({bool force = false}) async {
+    loadCatalogCalls += 1;
   }
 }

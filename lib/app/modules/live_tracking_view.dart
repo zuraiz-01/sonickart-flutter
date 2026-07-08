@@ -123,7 +123,7 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
         body: SafeArea(
           child: Column(
             children: [
-              _LiveTrackingHeader(order: order, refreshing: _refreshing),
+              _LiveTrackingHeader(refreshing: _refreshing),
               Expanded(
                 child: Container(
                   width: double.infinity,
@@ -162,14 +162,12 @@ class _LiveTrackingScaffoldState extends State<_LiveTrackingScaffold> {
 }
 
 class _LiveTrackingHeader extends StatelessWidget {
-  const _LiveTrackingHeader({required this.order, required this.refreshing});
+  const _LiveTrackingHeader({required this.refreshing});
 
-  final OrderModel? order;
   final bool refreshing;
 
   @override
   Widget build(BuildContext context) {
-    final status = order?.status ?? '';
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: 16.wpx, vertical: 8.hpx),
@@ -187,33 +185,15 @@ class _LiveTrackingHeader extends StatelessWidget {
               ),
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _headerTitle(status),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.spx,
-                ),
-              ),
-              SizedBox(height: 2.hpx),
-              Text(
-                order == null
-                    ? 'Live Tracking'
-                    : _headerSubtitle(status, order!.raw['etaMinutes']),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 22.spx,
-                ),
-              ),
-            ],
+          Text(
+            'Live tracking',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 22.spx,
+            ),
           ),
           if (refreshing)
             Align(
@@ -230,23 +210,6 @@ class _LiveTrackingHeader extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _headerTitle(String status) {
-    final lower = status.toLowerCase();
-    if (_isCancelled(lower)) return 'Order Cancelled';
-    if (_isCompleted(lower)) return 'Order Delivered';
-    if (lower == 'confirmed' || lower == 'accepted' || lower == 'assigned') {
-      return 'Arriving Soon';
-    }
-    if (lower == 'arriving' ||
-        lower == 'picked' ||
-        lower == 'picked_up' ||
-        lower == 'in_transit' ||
-        lower == 'out_for_delivery') {
-      return 'Order Picked Up';
-    }
-    return 'Packing your order';
   }
 
   static String _headerSubtitle(String status, Object? etaValue) {
@@ -294,10 +257,8 @@ class _TrackingBody extends StatelessWidget {
           ),
         ),
         SizedBox(height: 16.hpx),
-        if (!order.isInactive) ...[
-          _LiveStatusCard(order: order),
-          SizedBox(height: 16.hpx),
-        ],
+        _LiveStatusCard(order: order),
+        SizedBox(height: 16.hpx),
         if (shouldShowDeliveryPartnerContact(order)) ...[
           _DeliveryPartnerPhoneCard(order: order),
           SizedBox(height: 16.hpx),
@@ -364,20 +325,6 @@ class _DeliveryPartnerPhoneCard extends StatelessWidget {
       padding: EdgeInsets.all(16.rpx),
       child: Row(
         children: [
-          Container(
-            width: 48.rpx,
-            height: 48.rpx,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.phone_in_talk_rounded,
-              color: AppColors.primary,
-              size: 23.rpx,
-            ),
-          ),
-          SizedBox(width: 13.wpx),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,6 +551,11 @@ String _normalizedDeliveryStatus(String status) {
       compact == 'orderintransit') {
     return 'in_transit';
   }
+  if (compact == 'waitingpickup' ||
+      compact == 'waitingforpickup' ||
+      compact == 'orderwaitingforpickup') {
+    return 'waiting_for_pickup';
+  }
   if (compact == 'outfordelivery') return 'out_for_delivery';
   return normalized;
 }
@@ -648,7 +600,7 @@ class _LiveStatusCard extends StatelessWidget {
                   ? 'Arriving now'
                   : '$eta ${eta == 1 ? 'min' : 'mins'}',
             ),
-          if (distance != null)
+          if (distance != null && _shouldShowDistanceRow(order))
             _LiveStatusRow(
               icon: Icons.near_me_outlined,
               label: 'Distance',
@@ -665,18 +617,26 @@ class _LiveStatusCard extends StatelessWidget {
   }
 
   static String _statusText(String status) {
-    final normalized = status.trim().toLowerCase();
+    final normalized = _normalizedDeliveryStatus(status);
     return switch (normalized) {
-      'pending' => 'Waiting for pickup',
-      'assigned' => 'On the way to pickup',
-      'picked' || 'picked_up' || 'in_transit' => 'On the way to delivery',
-      'confirmed' || 'accepted' => 'On the way',
-      'out_for_delivery' => 'Out for delivery',
+      'pending' || 'waiting_for_pickup' => 'Order Placed',
+      'assigned' ||
+      'confirmed' ||
+      'accepted' ||
+      'on_the_way_to_pickup' => 'Partner Assigned',
+      'picked' ||
+      'picked_up' ||
+      'in_transit' ||
+      'on_the_way' ||
+      'on_the_way_to_delivery' ||
+      'out_for_delivery' => 'Order on the way',
       'prepared' => 'Preparing order',
       'ready' => 'Ready for pickup',
       _ => normalized.replaceAll('_', ' ').capitalizeFirst ?? 'Tracking live',
     };
   }
+
+  static bool _shouldShowDistanceRow(OrderModel order) => false;
 }
 
 class _LiveStatusRow extends StatelessWidget {
@@ -742,7 +702,6 @@ class _OrderSummaryCard extends StatelessWidget {
             subtitle: 'Order #$orderId',
           ),
           SizedBox(height: 10.hpx),
-          _SummaryRow(label: 'Status', value: _statusLabel(order.status)),
           _SummaryRow(label: 'Payment', value: order.paymentMode),
           _SummaryRow(
             label: 'Items',
@@ -757,12 +716,6 @@ class _OrderSummaryCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _statusLabel(String status) {
-    final normalized = status.trim().replaceAll('_', ' ');
-    if (normalized.isEmpty) return 'Tracking live';
-    return normalized.capitalizeFirst ?? normalized;
   }
 }
 
@@ -1400,11 +1353,6 @@ class _LiveMapCardState extends State<_LiveMapCard> {
               rotateGesturesEnabled: false,
               tiltGesturesEnabled: false,
             ),
-            Positioned(
-              left: 12.wpx,
-              top: 12.hpx,
-              child: _MapStatusPill(label: widget.etaLabel),
-            ),
             if (data.deliveryPersonLocation != null)
               Positioned(right: 12.wpx, bottom: 12.hpx, child: _LivePulseDot()),
           ],
@@ -1826,45 +1774,12 @@ double? liveTrackingDistanceKmForTesting(OrderModel order) {
   return _TrackingMapData.fromOrder(order).liveDistanceKm;
 }
 
-class _MapStatusPill extends StatelessWidget {
-  const _MapStatusPill({required this.label});
+String liveTrackingStatusTextForTesting(String status) {
+  return _LiveStatusCard._statusText(status);
+}
 
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12.wpx, vertical: 7.hpx),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.schedule, size: 16.rpx, color: AppColors.accent),
-            SizedBox(width: 6.wpx),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w800,
-                fontSize: 12.spx,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+bool liveTrackingShowsDistanceRowForTesting(OrderModel order) {
+  return _LiveStatusCard._shouldShowDistanceRow(order);
 }
 
 class _MapFallback extends StatelessWidget {

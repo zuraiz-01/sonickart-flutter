@@ -6,7 +6,6 @@ import 'package:get_storage/get_storage.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_service.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/cart_item_model.dart';
 import '../../../data/models/product_model.dart';
@@ -20,6 +19,7 @@ class CartController extends GetxController {
 
   final items = <CartItemModel>[].obs;
   final isSyncingCart = false.obs;
+
   final isClearingCart = false.obs;
 
   int get totalItems => items.fold<int>(0, (sum, item) => sum + item.quantity);
@@ -162,10 +162,6 @@ class CartController extends GetxController {
 
     items.removeWhere((item) => ids.contains(item.product.id));
     await _persistCart();
-    _recordNotification(
-      'Cart Updated',
-      '${ids.length} unavailable item${ids.length == 1 ? '' : 's'} removed from cart.',
-    );
     for (final id in ids) {
       await _trySyncLine(id, 0);
     }
@@ -264,17 +260,5 @@ class CartController extends GetxController {
 
   void _notifyAction(String title, String message) {
     AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
-    _recordNotification(title, message);
-  }
-
-  void _recordNotification(String title, String message) {
-    if (!Get.isRegistered<NotificationService>()) return;
-    unawaited(
-      Get.find<NotificationService>().record(
-        title: title,
-        message: message,
-        category: 'cart',
-      ),
-    );
   }
 }

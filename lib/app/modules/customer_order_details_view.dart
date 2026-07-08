@@ -180,8 +180,6 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
                             color: AppColors.primary,
                             minHeight: 2,
                           ),
-                        if (status != 'cancelled' && status != 'delivered')
-                          _LiveStatusCard(order: order, status: status),
                         _PartnerCard(
                           order: order,
                           status: status,
@@ -282,55 +280,6 @@ class _LiveHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: 56.rpx),
-        ],
-      ),
-    );
-  }
-}
-
-class _LiveStatusCard extends StatelessWidget {
-  const _LiveStatusCard({required this.order, required this.status});
-
-  final OrderModel order;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      margin: EdgeInsets.only(bottom: 10.hpx),
-      padding: EdgeInsets.all(15.rpx),
-      border: true,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(Icons.route, color: AppColors.primary, size: 18.rpx),
-              SizedBox(width: 8.rpx),
-              Text(
-                'Live Tracking',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14.rpx,
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 10.hpx),
-            child: Divider(height: 1, color: AppColors.border),
-          ),
-          _StatusInfoRow(
-            icon: Icons.schedule,
-            label: 'ETA',
-            value: _etaText(order, status),
-          ),
-          SizedBox(height: 8.hpx),
-          _StatusInfoRow(
-            icon: Icons.info_outline,
-            label: 'Status',
-            value: _movementStatus(status),
-          ),
         ],
       ),
     );
@@ -928,7 +877,7 @@ class _PartnerInfoCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: onRate,
                       icon: Icon(Icons.star_rounded, size: 16.rpx),
-                      label: const Text('Rate Delivery'),
+                      label: const Text('Give Rating'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         side: BorderSide(color: AppColors.primary),
@@ -1028,52 +977,6 @@ class _IconInfoCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _StatusInfoRow extends StatelessWidget {
-  const _StatusInfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.accent, size: 17.rpx),
-        SizedBox(width: 10.rpx),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.black.withValues(alpha: 0.65),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11.rpx,
-                ),
-              ),
-              SizedBox(height: 1.hpx),
-              Text(
-                value,
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.rpx,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1288,17 +1191,6 @@ String _etaText(OrderModel order, String status) {
     return '$minutes ${minutes == 1 ? 'min' : 'mins'}';
   }
   return 'Delivery In 10 Minutes';
-}
-
-String _movementStatus(String status) {
-  if (status == 'pending') return 'Waiting For Pickup';
-  if (status == 'assigned') return 'On The Way To Pickup';
-  if (status == 'picked') return 'On The Way To Delivery';
-  if (status == 'confirmed') return 'On The Way';
-  if (status == 'out_for_delivery') return 'Out For Delivery';
-  if (status == 'prepared') return 'Preparing Order';
-  if (status == 'ready') return 'Ready For Pickup';
-  return _titleCase(status.isEmpty ? 'Preparing Order' : status);
 }
 
 String _partnerMessage(String status) {
