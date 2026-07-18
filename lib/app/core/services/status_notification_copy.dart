@@ -88,6 +88,7 @@ String? _allowedOrderNotificationStatus(String? status) {
 
 String? _allowedPackageNotificationStatus(String? status) {
   return switch (normalizeNotificationStatus(status)) {
+    'placed' || 'pending' || 'booked' => 'placed',
     'accepted' ||
     'assigned' ||
     'confirmed' ||
@@ -156,6 +157,11 @@ String? _allowedPackageStatusFromText(Iterable<String?> values) {
       text.contains('partner assigned')) {
     return 'accepted';
   }
+  if (text.contains('placed') ||
+      text.contains('pending') ||
+      text.contains('booked')) {
+    return 'placed';
+  }
   return null;
 }
 
@@ -176,6 +182,10 @@ String? _allowedPackageStatusFromText(Iterable<String?> values) {
 
   if (package) {
     return switch (normalized) {
+      'placed' => (
+        title: 'Package Booked',
+        body: 'Your package has been booked.',
+      ),
       'accepted' => (
         title: 'Partner Assigned',
         body: text(

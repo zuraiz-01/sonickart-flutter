@@ -387,6 +387,12 @@ class OrderController extends GetxController {
         return false;
       }
 
+      final usageMessage = await _couponUsageEligibilityMessage(resolved);
+      if (usageMessage != null) {
+        couponFeedback.value = usageMessage;
+        return false;
+      }
+
       selectedCoupon.value = resolved;
       couponCodeController.text = resolved.code;
       couponFeedback.value = '${resolved.code} applied successfully.';
@@ -474,6 +480,113 @@ class OrderController extends GetxController {
       return 'Minimum order ₹${_formatAmount(coupon.minimumOrderAmount)} required.';
     }
     return null;
+  }
+
+  Future<String?> _couponUsageEligibilityMessage(CheckoutCoupon coupon) async {
+    if (!coupon.requiresOrderHistoryCheck) return null;
+    final history = await _ordersForCouponUsageCheck();
+    if (history == null) {
+      return 'Could not verify coupon eligibility right now.';
+    }
+
+    if (coupon.firstOrderOnly && history.any(_countsForFirstOrderCoupon)) {
+      return '${coupon.code} is only valid on your first order.';
+    }
+
+    if (coupon.oneTimePerUser &&
+        history.any((order) => _orderUsedCoupon(order, coupon))) {
+      return '${coupon.code} has already been used on this account.';
+    }
+
+    return null;
+  }
+
+  Future<List<OrderModel>?> _ordersForCouponUsageCheck() async {
+    final localOrders = orders.toList(growable: false);
+    if (!Get.isRegistered<ApiService>()) return localOrders;
+
+    try {
+      final userId = _authController?.currentUser?.id ?? '';
+      final response = await _api.get(
+        endpoint: ApiConstants.orders,
+        query: userId.isEmpty ? null : {'customerId': userId},
+      );
+      final remoteOrders =
+          _extractList(response)
+              .whereType<Map>()
+              .map(
+                (item) => OrderModel.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .where((order) => order.id.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return _mergeCouponHistoryOrders(remoteOrders, localOrders);
+    } catch (error) {
+      debugPrint('OrderController._ordersForCouponUsageCheck failed: $error');
+      return localOrders.isEmpty ? null : localOrders;
+    }
+  }
+
+  List<OrderModel> _mergeCouponHistoryOrders(
+    List<OrderModel> remoteOrders,
+    List<OrderModel> localOrders,
+  ) {
+    final seen = <String>{};
+    final merged = <OrderModel>[];
+    for (final order in [...remoteOrders, ...localOrders]) {
+      final ids = _orderIdentifiers(order);
+      final key = ids.isNotEmpty ? ids.first : order.id;
+      if (key.isEmpty || seen.contains(key)) continue;
+      seen.add(key);
+      merged.add(order);
+    }
+    return merged;
+  }
+
+  bool _countsForFirstOrderCoupon(OrderModel order) {
+    if (!order.isProductOrder) return false;
+    final status = order.status.trim().toLowerCase();
+    return status != 'cancelled' &&
+        status != 'canceled' &&
+        status != 'failed' &&
+        status != 'payment_failed';
+  }
+
+  bool _orderUsedCoupon(OrderModel order, CheckoutCoupon coupon) {
+    final orderTokens = _couponTokensForOrder(order).toSet();
+    if (orderTokens.isEmpty) return false;
+    final couponTokens = _unique(
+      [
+        coupon.id,
+        coupon.code,
+        coupon.title,
+        ...coupon.matchKeys,
+      ].expand(_collectTokens),
+    );
+    return couponTokens.any(orderTokens.contains);
+  }
+
+  List<String> _couponTokensForOrder(OrderModel order) {
+    final raw = order.raw;
+    return _unique(
+      [
+        raw['couponId'],
+        raw['coupon_id'],
+        raw['couponCode'],
+        raw['coupon_code'],
+        raw['coupon'],
+        raw['promoCode'],
+        raw['promo_code'],
+        raw['voucherCode'],
+        raw['voucher_code'],
+        raw['appliedCoupon'],
+        raw['applied_coupon'],
+        raw['discountCode'],
+        raw['discount_code'],
+        raw['discount'] is Map ? (raw['discount'] as Map)['couponCode'] : null,
+        raw['discount'] is Map ? (raw['discount'] as Map)['couponId'] : null,
+      ].expand(_collectTokens),
+    );
   }
 
   Future<bool> selectAddress(AddressModel address) async {
@@ -1171,6 +1284,21 @@ class OrderController extends GetxController {
         return;
       }
 
+      final appliedCoupon = totals.appliedCoupon;
+      if (appliedCoupon != null) {
+        final couponMessage = couponEligibilityMessage(
+          appliedCoupon,
+          checkoutItems,
+        );
+        final usageMessage =
+            couponMessage ??
+            await _couponUsageEligibilityMessage(appliedCoupon);
+        if (usageMessage != null) {
+          clearInvalidCoupon(usageMessage);
+          return;
+        }
+      }
+
       final address = await _ensureAddressContext();
       final vendorResolution = await _resolveVendor(address);
       debugPrint(
@@ -1263,7 +1391,11 @@ class OrderController extends GetxController {
               },
             )
           : parsedOrder;
-      if (createdOrder.id.isEmpty) {
+      final createdOrderWithCoupon = _withCheckoutCouponMetadata(
+        createdOrder,
+        totals,
+      );
+      if (createdOrderWithCoupon.id.isEmpty) {
         throw ApiException(
           statusCode: 0,
           message: 'There Was An Error Creating The Order.',
@@ -1271,10 +1403,11 @@ class OrderController extends GetxController {
         );
       }
 
-      orders.insert(0, createdOrder);
-      latestOrder.value = createdOrder;
-      if (createdOrder.isProductOrder && !createdOrder.isInactive) {
-        activeProductOrder.value = createdOrder;
+      orders.insert(0, createdOrderWithCoupon);
+      latestOrder.value = createdOrderWithCoupon;
+      if (createdOrderWithCoupon.isProductOrder &&
+          !createdOrderWithCoupon.isInactive) {
+        activeProductOrder.value = createdOrderWithCoupon;
       }
       await _persistOrders();
       selectedCoupon.value = null;
@@ -1284,7 +1417,7 @@ class OrderController extends GetxController {
       await cart.clearCart(notify: false);
       Get.offNamed(
         AppRoutes.orderSuccess,
-        arguments: {'orderId': createdOrder.id},
+        arguments: {'orderId': createdOrderWithCoupon.id},
       );
     } catch (error) {
       final message = error is ApiException
@@ -1884,6 +2017,7 @@ class OrderController extends GetxController {
       'couponDiscount': totals.couponDiscount,
       'discountAmount': totals.couponDiscount,
       'discountType': coupon?.discountType.name,
+      'couponUsageRule': coupon?.usageRule.name,
       'customerName': customerName,
       'customerPhone': customerPhone,
       'address': address,
@@ -1917,6 +2051,31 @@ class OrderController extends GetxController {
     }
     payload.removeWhere((_, value) => value == null);
     return payload;
+  }
+
+  OrderModel _withCheckoutCouponMetadata(
+    OrderModel order,
+    CheckoutTotals totals,
+  ) {
+    final coupon = totals.appliedCoupon;
+    if (coupon == null || totals.couponDiscount <= 0) return order;
+    return order.copyWith(
+      raw: {
+        ...order.raw,
+        'couponId': coupon.id,
+        'coupon_id': coupon.id,
+        'couponCode': coupon.code,
+        'coupon_code': coupon.code,
+        'couponDiscount': totals.couponDiscount,
+        'coupon_discount': totals.couponDiscount,
+        'discountAmount': totals.couponDiscount,
+        'discount_amount': totals.couponDiscount,
+        'discountType': coupon.discountType.name,
+        'discount_type': coupon.discountType.name,
+        'couponUsageRule': coupon.usageRule.name,
+        'coupon_usage_rule': coupon.usageRule.name,
+      },
+    );
   }
 
   Future<bool> _hasIncompleteProductOrder() async {
@@ -3036,6 +3195,8 @@ enum CouponDiscountType { percentage, fixed }
 
 enum CouponStatus { scheduled, active, expired }
 
+enum CouponUsageRule { allOrders, firstOrderOnly, oneUsePerUser }
+
 class CheckoutCoupon {
   const CheckoutCoupon({
     required this.id,
@@ -3050,6 +3211,7 @@ class CheckoutCoupon {
     required this.matchKeys,
     required this.status,
     required this.isActive,
+    required this.usageRule,
   });
 
   final String id;
@@ -3064,6 +3226,14 @@ class CheckoutCoupon {
   final List<String> matchKeys;
   final CouponStatus status;
   final bool isActive;
+  final CouponUsageRule usageRule;
+
+  bool get firstOrderOnly => usageRule == CouponUsageRule.firstOrderOnly;
+
+  bool get oneTimePerUser =>
+      firstOrderOnly || usageRule == CouponUsageRule.oneUsePerUser;
+
+  bool get requiresOrderHistoryCheck => firstOrderOnly || oneTimePerUser;
 
   factory CheckoutCoupon.fromFirestoreDocument(Map document) {
     final name = document['name']?.toString() ?? '';
@@ -3180,6 +3350,13 @@ class CheckoutCoupon {
       ]),
       status: status,
       isActive: status == CouponStatus.active,
+      usageRule: _CouponParser.usageRule(
+        fields: fields,
+        id: id,
+        title: title,
+        description: description,
+        codeSource: codeSource,
+      ),
     );
   }
 }
@@ -3268,6 +3445,16 @@ class _CouponParser {
     return null;
   }
 
+  static bool boolValue(List<Object?> values) {
+    for (final value in values) {
+      if (value is bool) return value;
+      final normalized = value?.toString().trim().toLowerCase() ?? '';
+      if (['true', 'yes', 'y', '1'].contains(normalized)) return true;
+      if (['false', 'no', 'n', '0'].contains(normalized)) return false;
+    }
+    return false;
+  }
+
   static CouponDiscountType discountType(Object? value) {
     final normalized = value.toString().trim().toLowerCase();
     if (normalized == 'fixed' ||
@@ -3277,6 +3464,65 @@ class _CouponParser {
       return CouponDiscountType.fixed;
     }
     return CouponDiscountType.percentage;
+  }
+
+  static CouponUsageRule usageRule({
+    required Map<String, dynamic> fields,
+    required String id,
+    required String title,
+    required String description,
+    required Object? codeSource,
+  }) {
+    final explicit = stringValue([
+      fields['usageRule'],
+      fields['usage_rule'],
+      fields['restriction'],
+      fields['restrictionType'],
+      fields['usageType'],
+      fields['couponType'],
+    ]).toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+
+    if ([
+      'first_order_only',
+      'first_order',
+      'first_purchase',
+      'first_time',
+    ].contains(explicit)) {
+      return CouponUsageRule.firstOrderOnly;
+    }
+    if ([
+      'one_use_per_user',
+      'once_per_user',
+      'single_use',
+      'one_time',
+    ].contains(explicit)) {
+      return CouponUsageRule.oneUsePerUser;
+    }
+
+    if (boolValue([fields['firstOrderOnly'], fields['first_order_only']])) {
+      return CouponUsageRule.firstOrderOnly;
+    }
+
+    final perUserLimit = numberValue([
+      fields['perUserLimit'],
+      fields['per_user_limit'],
+      fields['usageLimitPerUser'],
+      fields['usage_limit_per_user'],
+    ]);
+    if (boolValue([fields['oneTimePerUser'], fields['one_time_per_user']]) ||
+        perUserLimit == 1) {
+      return CouponUsageRule.oneUsePerUser;
+    }
+
+    final searchableText = [
+      id,
+      title,
+      description,
+      codeSource,
+    ].map((value) => value?.toString().toLowerCase() ?? '').join(' ');
+    return searchableText.contains('first')
+        ? CouponUsageRule.firstOrderOnly
+        : CouponUsageRule.allOrders;
   }
 
   static String displayCode(Object? value) =>

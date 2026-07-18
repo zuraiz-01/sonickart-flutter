@@ -2594,10 +2594,7 @@ class PackageController extends GetxController {
       }
       await _upsertOrder(order);
       selectedOrder.value = order;
-      _showSnack(
-        'Package Booked',
-        'Your package order has been placed successfully.',
-      );
+      await _notifyPackageBooked(order);
       resetDraft(keepOrders: true);
       viewMode.value = PackageViewMode.orders;
       _openPackageDetailsSafely(order.id);
@@ -3904,21 +3901,52 @@ class PackageController extends GetxController {
     AppSnackBar.show(title, message, snackPosition: SnackPosition.BOTTOM);
   }
 
-  Future<void> _notifyAction(String title, String message) async {
-    _showSnack(title, message);
-    const category = 'package';
-    final dedupeKey = [
-      category,
+  Future<void> _notifyPackageBooked(PackageOrderModel order) async {
+    const title = 'Package Booked';
+    const message = 'Your package order has been placed successfully.';
+    final dedupeKey =
+        LocalNotificationService.statusDedupeKey(
+          package: true,
+          status: 'placed',
+          trackingNumber: order.id,
+          identifiers: _orderIdentifiers(order),
+          title: title,
+          body: message,
+        ) ??
+        'package|placed|${order.id.trim().toLowerCase()}';
+    await _notifyAction(
       title,
       message,
-    ].map((value) => value.trim().toLowerCase()).join('|');
+      dedupeKey: dedupeKey,
+      notificationId: LocalNotificationService.notificationIdForDedupeKey(
+        dedupeKey,
+      ),
+    );
+  }
+
+  Future<void> _notifyAction(
+    String title,
+    String message, {
+    String? payload,
+    String? dedupeKey,
+    int? notificationId,
+  }) async {
+    _showSnack(title, message);
+    const category = 'package';
+    final effectiveDedupeKey =
+        dedupeKey ??
+        [
+          category,
+          title,
+          message,
+        ].map((value) => value.trim().toLowerCase()).join('|');
 
     if (Get.isRegistered<NotificationService>()) {
       await Get.find<NotificationService>().record(
         title: title,
         message: message,
         category: category,
-        dedupeKey: dedupeKey,
+        dedupeKey: effectiveDedupeKey,
       );
     }
 
@@ -3929,8 +3957,9 @@ class PackageController extends GetxController {
         channelId: LocalNotificationService.defaultChannelId,
         channelName: LocalNotificationService.defaultChannelName,
         channelDescription: 'Package order status notifications',
-        payload: 'packages',
-        dedupeKey: dedupeKey,
+        payload: payload ?? 'packages',
+        notificationId: notificationId,
+        dedupeKey: effectiveDedupeKey,
       );
     }
   }
