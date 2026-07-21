@@ -101,7 +101,7 @@ class CartController extends GetxController {
       'Cart Updated',
       '${product.name.trim().isEmpty ? 'Product' : product.name.trim()} added to cart.',
     );
-    await _trySyncLine(product.id, getItemCount(product.id));
+    await _tryAddOneToServer(product.id);
   }
 
   Future<void> removeItem(String productId) async {
@@ -129,7 +129,7 @@ class CartController extends GetxController {
     }
     await _persistCart();
     _notifyAction('Cart Updated', '$productName removed from cart.');
-    await _trySyncLine(productId, getItemCount(productId));
+    await _tryRemoveOneFromServer(productId);
   }
 
   Future<void> clearCart({bool notify = true}) async {
@@ -160,10 +160,17 @@ class CartController extends GetxController {
         .toSet();
     if (ids.isEmpty) return;
 
+    final quantitiesById = <String, int>{
+      for (final item in items)
+        if (ids.contains(item.product.id)) item.product.id: item.quantity,
+    };
     items.removeWhere((item) => ids.contains(item.product.id));
     await _persistCart();
     for (final id in ids) {
-      await _trySyncLine(id, 0);
+      await _tryRemoveLineCompletelyFromServer(
+        id,
+        quantity: quantitiesById[id] ?? 1,
+      );
     }
   }
 
@@ -206,25 +213,45 @@ class CartController extends GetxController {
     return const [];
   }
 
-  Future<void> _trySyncLine(String productId, int quantity) async {
+  Future<void> _tryAddOneToServer(String productId) async {
     if (!Get.isRegistered<ApiService>()) return;
-    if (!_hasAccessToken) {
-      return;
-    }
+    if (!_hasAccessToken) return;
+
     try {
-      if (quantity <= 0) {
-        await Get.find<ApiService>().delete(
-          endpoint: ApiConstants.cartRemove,
-          data: {'productId': productId},
-        );
-        return;
-      }
       await Get.find<ApiService>().post(
         endpoint: ApiConstants.cartAdd,
-        data: {'productId': productId, 'quantity': quantity},
+        data: {'productId': productId, 'quantity': 1},
       );
     } catch (error) {
-      debugPrint('CartController._trySyncLine: local fallback after $error');
+      debugPrint(
+        'CartController._tryAddOneToServer: local fallback after $error',
+      );
+    }
+  }
+
+  Future<void> _tryRemoveOneFromServer(String productId) async {
+    if (!Get.isRegistered<ApiService>()) return;
+    if (!_hasAccessToken) return;
+
+    try {
+      await Get.find<ApiService>().delete(
+        endpoint: ApiConstants.cartRemove,
+        data: {'productId': productId},
+      );
+    } catch (error) {
+      debugPrint(
+        'CartController._tryRemoveOneFromServer: local fallback after $error',
+      );
+    }
+  }
+
+  Future<void> _tryRemoveLineCompletelyFromServer(
+    String productId, {
+    required int quantity,
+  }) async {
+    final attempts = quantity < 1 ? 1 : quantity;
+    for (var i = 0; i < attempts; i++) {
+      await _tryRemoveOneFromServer(productId);
     }
   }
 
