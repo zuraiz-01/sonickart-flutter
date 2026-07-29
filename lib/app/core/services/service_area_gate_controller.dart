@@ -21,6 +21,8 @@ class ServiceAreaGateController extends GetxController {
   final LocationLookupService _locationLookupService;
 
   final blockedResult = Rxn<ServiceAreaGateResult>();
+  final confirmedResult = Rxn<ServiceAreaGateResult>();
+  final evaluationState = ServiceAreaGateState.checking.obs;
   final isChecking = false.obs;
   final isResolvingLocation = false.obs;
   final isSearching = false.obs;
@@ -41,7 +43,7 @@ class ServiceAreaGateController extends GetxController {
   static const _selectedServiceLocationSessionStorageKey =
       AppSessionScope.selectedServiceLocationSessionKey;
 
-  bool get isBlocked => blockedResult.value != null;
+  bool get isBlocked => blockedResult.value?.isConfirmedOutside == true;
 
   bool get shouldRefreshLiveLocationOnAppOpen {
     final selectedAddress = _storedSelectedAddress;
@@ -56,6 +58,13 @@ class ServiceAreaGateController extends GetxController {
     _beginManualLocationRequest();
     _checkedForSession = true;
     blockedResult.value = null;
+    final preservedResult = ServiceAreaGateResult.allowed(
+      locationLabel: selectedAddress.address,
+      latitude: selectedAddress.latitude,
+      longitude: selectedAddress.longitude,
+    );
+    confirmedResult.value = preservedResult;
+    evaluationState.value = preservedResult.state;
     statusMessage.value = null;
     addressController.text = selectedAddress.address;
     return true;
@@ -79,7 +88,7 @@ class ServiceAreaGateController extends GetxController {
 
   Future<void> checkCurrentLocation({bool force = false}) async {
     final activeCheck = _activeCheck;
-    if (activeCheck != null && !force) return activeCheck;
+    if (activeCheck != null) return activeCheck;
     if (force) {
       _checkedForSession = true;
     }
@@ -97,17 +106,29 @@ class ServiceAreaGateController extends GetxController {
 
   Future<void> _runCurrentLocationCheck(int requestVersion) async {
     isChecking.value = true;
+    evaluationState.value = ServiceAreaGateState.checking;
     statusMessage.value = null;
+    debugPrint(
+      'ServiceAreaGateController: request=$requestVersion '
+      'state=checking previous=${confirmedResult.value?.state.name ?? 'none'} '
+      'overlay=$isBlocked',
+    );
     try {
       final result = await _serviceAreaGateService.evaluate();
       if (!_isLatestLocationRequest(requestVersion)) return;
       await _applyResult(result, requestVersion: requestVersion);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!_isLatestLocationRequest(requestVersion)) return;
       debugPrint(
         'ServiceAreaGateController.checkCurrentLocation failed: $error',
       );
-      statusMessage.value = 'Service area check failed. Please try again.';
+      debugPrintStack(stackTrace: stackTrace);
+      await _applyResult(
+        ServiceAreaGateResult.temporarilyUnavailable(
+          message: 'Service area check failed. Please try again.',
+        ),
+        requestVersion: requestVersion,
+      );
     } finally {
       if (_isLatestLocationRequest(requestVersion)) {
         isChecking.value = false;
@@ -220,7 +241,9 @@ class ServiceAreaGateController extends GetxController {
     int? requestVersion,
   }) async {
     final version = requestVersion ?? _beginManualLocationRequest();
+    evaluationState.value = ServiceAreaGateState.checking;
     if (!_isValidCoordinate(latitude, longitude)) {
+      evaluationState.value = ServiceAreaGateState.temporarilyUnavailable;
       statusMessage.value = 'Please select a valid delivery location.';
       return;
     }
@@ -240,6 +263,8 @@ class ServiceAreaGateController extends GetxController {
       );
       if (!_isLatestLocationRequest(version)) return;
       blockedResult.value = null;
+      confirmedResult.value = result;
+      evaluationState.value = result.state;
       statusMessage.value = null;
       return;
     }
@@ -257,8 +282,8 @@ class ServiceAreaGateController extends GetxController {
     if (requestVersion != null && !_isLatestLocationRequest(requestVersion)) {
       return;
     }
+    evaluationState.value = result.state;
     if (result.isAllowed) {
-      blockedResult.value = null;
       final latitude = result.latitude;
       final longitude = result.longitude;
       if (latitude != null && longitude != null) {
@@ -269,6 +294,18 @@ class ServiceAreaGateController extends GetxController {
           refreshCatalog: false,
         );
       }
+      if (requestVersion != null && !_isLatestLocationRequest(requestVersion)) {
+        return;
+      }
+      confirmedResult.value = result;
+      blockedResult.value = null;
+      statusMessage.value = null;
+      _logAppliedResult(result, requestVersion: requestVersion);
+      return;
+    }
+    if (!result.isConfirmedOutside) {
+      statusMessage.value = result.message.isEmpty ? null : result.message;
+      _logAppliedResult(result, requestVersion: requestVersion);
       return;
     }
     final latitude = result.latitude;
@@ -285,14 +322,25 @@ class ServiceAreaGateController extends GetxController {
     if (requestVersion != null && !_isLatestLocationRequest(requestVersion)) {
       return;
     }
+    confirmedResult.value = result;
     blockedResult.value = result;
+    statusMessage.value = null;
+    _logAppliedResult(result, requestVersion: requestVersion);
+  }
+
+  void _logAppliedResult(ServiceAreaGateResult result, {int? requestVersion}) {
+    debugPrint(
+      'ServiceAreaGateController: request=${requestVersion ?? 'manual'} '
+      'result=${result.state.name} '
+      'confirmed=${confirmedResult.value?.state.name ?? 'none'} '
+      'overlay=$isBlocked',
+    );
   }
 
   int _nextLocationRequestVersion() => ++_locationRequestVersion;
 
   int _beginManualLocationRequest() {
     final requestVersion = _nextLocationRequestVersion();
-    _activeCheck = null;
     isChecking.value = false;
     return requestVersion;
   }

@@ -540,23 +540,44 @@ String _normalizedDeliveryStatus(String status) {
     '_',
   );
   final compact = normalized.replaceAll('_', '');
+  if (compact == 'orderplaced' ||
+      compact == 'placed' ||
+      compact == 'pending' ||
+      compact == 'waitingpickup' ||
+      compact == 'waitingforpickup' ||
+      compact == 'orderwaitingforpickup') {
+    return 'placed';
+  }
+  if (compact == 'orderaccepted' ||
+      compact == 'accepted' ||
+      compact == 'assigned' ||
+      compact == 'confirmed' ||
+      compact == 'partnerassigned' ||
+      compact == 'deliverypartnerassigned' ||
+      compact == 'onthewaytopickup') {
+    return 'accepted';
+  }
   if (compact == 'picked' ||
       compact == 'pickup' ||
       compact == 'pickedup' ||
-      compact == 'orderpickedup') {
+      compact == 'orderpickedup' ||
+      compact == 'intransit' ||
+      compact == 'transit' ||
+      compact == 'orderintransit' ||
+      compact == 'ontheway' ||
+      compact == 'orderontheway' ||
+      compact == 'onthewaytodelivery' ||
+      compact == 'outfordelivery' ||
+      compact == 'orderoutfordelivery' ||
+      compact == 'arriving') {
     return 'picked_up';
   }
-  if (compact == 'intransit' ||
-      compact == 'transit' ||
-      compact == 'orderintransit') {
-    return 'in_transit';
+  if (compact == 'orderdelivered' ||
+      compact == 'delivered' ||
+      compact == 'completed' ||
+      compact == 'complete') {
+    return 'delivered';
   }
-  if (compact == 'waitingpickup' ||
-      compact == 'waitingforpickup' ||
-      compact == 'orderwaitingforpickup') {
-    return 'waiting_for_pickup';
-  }
-  if (compact == 'outfordelivery') return 'out_for_delivery';
   return normalized;
 }
 
@@ -619,19 +640,10 @@ class _LiveStatusCard extends StatelessWidget {
   static String _statusText(String status) {
     final normalized = _normalizedDeliveryStatus(status);
     return switch (normalized) {
-      'pending' || 'waiting_for_pickup' => 'Order Placed',
-      'assigned' ||
-      'confirmed' ||
-      'accepted' ||
-      'on_the_way_to_pickup' => 'Partner Assigned',
-      'picked' ||
-      'picked_up' ||
-      'in_transit' ||
-      'on_the_way' ||
-      'on_the_way_to_delivery' ||
-      'out_for_delivery' => 'Order on the way',
-      'prepared' => 'Preparing order',
-      'ready' => 'Ready for pickup',
+      'placed' => 'Order Placed',
+      'accepted' => 'Partner Assigned',
+      'picked_up' => 'Order Picked Up',
+      'delivered' => 'Order Delivered',
       _ => normalized.replaceAll('_', ' ').capitalizeFirst ?? 'Tracking live',
     };
   }

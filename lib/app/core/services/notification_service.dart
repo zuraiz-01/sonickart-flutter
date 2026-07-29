@@ -9,6 +9,7 @@ class NotificationService extends GetxService {
 
   final GetStorage _storage;
   final notifications = <AppNotification>[].obs;
+  Future<void> _recordQueue = Future<void>.value();
 
   int get unreadCount =>
       notifications.where((notification) => !notification.isRead).length;
@@ -26,13 +27,56 @@ class NotificationService extends GetxService {
     String? dedupeKey,
     Duration dedupeWindow = const Duration(minutes: 2),
   }) async {
+    final operation = _recordQueue.then(
+      (_) => _recordNow(
+        title: title,
+        message: message,
+        category: category,
+        dedupeKey: dedupeKey,
+        dedupeWindow: dedupeWindow,
+      ),
+    );
+    _recordQueue = operation.catchError((_) {});
+    return operation;
+  }
+
+  Future<void> _recordNow({
+    required String title,
+    required String message,
+    required String category,
+    required String? dedupeKey,
+    required Duration dedupeWindow,
+  }) async {
+    final notification = await recordStored(
+      storage: _storage,
+      title: title,
+      message: message,
+      category: category,
+      dedupeKey: dedupeKey,
+      dedupeWindow: dedupeWindow,
+    );
+    if (notification == null) return;
+    _restore();
+  }
+
+  static Future<AppNotification?> recordStored({
+    required GetStorage storage,
+    required String title,
+    required String message,
+    String category = 'general',
+    String? dedupeKey,
+    Duration dedupeWindow = const Duration(minutes: 2),
+    DateTime? now,
+  }) async {
     final normalizedTitle = title.trim();
     final normalizedMessage = message.trim();
     final normalizedCategory = category.trim().isEmpty
         ? 'general'
         : category.trim();
-    final normalizedDedupeKey =
-        dedupeKey?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final normalizedDedupeKey = dedupeKey?.trim().toLowerCase().replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
     final signature = normalizedDedupeKey?.isNotEmpty == true
         ? normalizedDedupeKey!
         : _notificationSignature(
@@ -40,10 +84,24 @@ class NotificationService extends GetxService {
             message: normalizedMessage,
             category: normalizedCategory,
           );
-    final now = DateTime.now();
-    final duplicate = notifications.firstWhereOrNull((item) {
-      if (now.difference(item.createdAt) > dedupeWindow) return false;
-      return (item.dedupeKey ??
+    final currentTime = now ?? DateTime.now();
+    final storedNotifications =
+        (storage.read<List<dynamic>>(_storageKey) ?? <dynamic>[])
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  AppNotification.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList()
+          ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    final duplicate = storedNotifications.firstWhereOrNull((item) {
+      final itemDedupeKey = item.dedupeKey?.trim().toLowerCase();
+      if (normalizedDedupeKey?.isNotEmpty == true &&
+          itemDedupeKey == signature) {
+        return true;
+      }
+      if (currentTime.difference(item.createdAt) > dedupeWindow) return false;
+      return (itemDedupeKey ??
               _notificationSignature(
                 title: item.title,
                 message: item.message,
@@ -51,21 +109,25 @@ class NotificationService extends GetxService {
               )) ==
           signature;
     });
-    if (duplicate != null) return;
+    if (duplicate != null) return null;
 
     final notification = AppNotification(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: currentTime.microsecondsSinceEpoch.toString(),
       title: normalizedTitle,
       message: normalizedMessage,
       category: normalizedCategory,
-      createdAt: now,
+      createdAt: currentTime,
       dedupeKey: signature,
     );
-    notifications.insert(0, notification);
-    if (notifications.length > _maxItems) {
-      notifications.removeRange(_maxItems, notifications.length);
+    storedNotifications.insert(0, notification);
+    if (storedNotifications.length > _maxItems) {
+      storedNotifications.removeRange(_maxItems, storedNotifications.length);
     }
-    await _persist();
+    await storage.write(
+      _storageKey,
+      storedNotifications.map((item) => item.toJson()).toList(),
+    );
+    return notification;
   }
 
   Future<void> markAllRead() async {
@@ -100,18 +162,16 @@ class NotificationService extends GetxService {
     );
   }
 
-  String _notificationSignature({
+  static String _notificationSignature({
     required String title,
     required String message,
     required String category,
   }) {
-    return [
-      category,
-      title,
-      message,
-    ].map((value) {
-      return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-    }).join('|');
+    return [category, title, message]
+        .map((value) {
+          return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+        })
+        .join('|');
   }
 }
 

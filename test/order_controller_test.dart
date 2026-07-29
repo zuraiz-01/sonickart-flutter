@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:sonic_cart/app/core/constants/api_constants.dart';
 import 'package:sonic_cart/app/core/network/api_service.dart';
+import 'package:sonic_cart/app/core/services/local_notification_service.dart';
 import 'package:sonic_cart/app/data/models/address_model.dart';
 import 'package:sonic_cart/app/data/models/order_model.dart';
 import 'package:sonic_cart/app/modules/order_controller.dart';
@@ -262,6 +263,27 @@ void main() {
         expect(api.orderDetailRequests, 1);
       },
     );
+
+    test(
+      'manual live tracking refresh updates status without local notification',
+      () async {
+        final storage = GetStorage(storageContainer);
+        final api = _RefreshOrderApiService(storage);
+        final localNotifications = _RecordingLocalNotificationService();
+        Get.put<ApiService>(api);
+        Get.put<LocalNotificationService>(localNotifications);
+        final controller = OrderController(storage);
+        addTearDown(controller.onClose);
+        controller.orders.assignAll([_baseOrderWithoutDeliveryLocation()]);
+
+        final refreshed = await controller.refreshTrackingOrder('ORD1');
+
+        expect(refreshed?.status, 'delivered');
+        expect(controller.findOrderById('ORD1')?.status, 'delivered');
+        expect(localNotifications.shown, isEmpty);
+        expect(api.orderDetailRequests, 1);
+      },
+    );
   });
 }
 
@@ -332,5 +354,53 @@ class _AcceptedOrderApiService extends ApiService {
       };
     }
     return const {};
+  }
+}
+
+class _RefreshOrderApiService extends ApiService {
+  _RefreshOrderApiService(GetStorage storage) : super(storage: storage);
+
+  int orderDetailRequests = 0;
+
+  @override
+  Future<Map<String, dynamic>> get({
+    required String endpoint,
+    Map<String, dynamic>? query,
+    bool authenticated = true,
+    Map<String, String>? headers,
+  }) async {
+    if (endpoint == ApiConstants.orderById('ORD1')) {
+      orderDetailRequests += 1;
+      return {
+        'id': 'ORD1',
+        'orderId': 'ORD1',
+        'deliveryStatus': 'delivered',
+        'deliveryAddress': 'Customer drop address',
+        'paymentMode': 'COD',
+        'totalPrice': 500,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      };
+    }
+    return const {};
+  }
+}
+
+class _RecordingLocalNotificationService extends LocalNotificationService {
+  final shown = <({String title, String body, String? dedupeKey})>[];
+
+  @override
+  Future<void> show({
+    required String title,
+    required String body,
+    String? payload,
+    String channelId = LocalNotificationService.defaultChannelId,
+    String channelName = LocalNotificationService.defaultChannelName,
+    String channelDescription =
+        LocalNotificationService.defaultChannelDescription,
+    int? notificationId,
+    String? dedupeKey,
+    Duration dedupeWindow = const Duration(minutes: 2),
+  }) async {
+    shown.add((title: title, body: body, dedupeKey: dedupeKey));
   }
 }

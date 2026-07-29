@@ -1,15 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../modules/auth/controllers/auth_controller.dart';
+import '../../modules/order_controller.dart';
+import '../../modules/package/controllers/package_controller.dart';
 import '../constants/api_constants.dart';
 import 'local_notification_service.dart';
+import 'notification_service.dart';
+import 'package_notification_policy.dart';
 import 'status_notification_copy.dart';
 
 class CustomerSocketNotificationService extends GetxService {
+  CustomerSocketNotificationService({
+    GetStorage? storage,
+    bool Function()? isAppForeground,
+  }) : _storage = storage ?? GetStorage(),
+       _isAppForeground = isAppForeground;
+
+  final GetStorage _storage;
+  final bool Function()? _isAppForeground;
   io.Socket? _socket;
   String? _joinedUserId;
 
@@ -43,7 +57,9 @@ class CustomerSocketNotificationService extends GetxService {
 
     socket
       ..onConnect((_) {
-        debugPrint('CustomerSocketNotificationService: connected for $userId');
+        debugPrint(
+          'CustomerSocketNotificationService: connected for current user',
+        );
         socket.emit('joinRoom', 'user-$userId');
         socket.emit('join_room', 'user-$userId');
       })
@@ -55,7 +71,7 @@ class CustomerSocketNotificationService extends GetxService {
       })
       ..onReconnect((_) {
         debugPrint(
-          'CustomerSocketNotificationService: reconnected for $userId',
+          'CustomerSocketNotificationService: reconnected for current user',
         );
         socket.emit('joinRoom', 'user-$userId');
         socket.emit('join_room', 'user-$userId');
@@ -69,15 +85,19 @@ class CustomerSocketNotificationService extends GetxService {
       'packageOrderUpdated',
       'new_notification',
     ]) {
-      socket.on(event, (payload) => _showStatusNotification(payload));
+      socket.on(
+        event,
+        (payload) => unawaited(handleStatusNotificationPayload(payload)),
+      );
     }
 
     socket.connect();
   }
 
-  void _showStatusNotification(Object? payload) {
-    if (!Get.isRegistered<LocalNotificationService>()) return;
+  @visibleForTesting
+  Future<bool> handleStatusNotificationPayload(Object? payload) async {
     final map = _notificationData(_asMap(payload));
+    if (map == null) return false;
     final status = _firstText(map, [
       'status',
       'deliveryStatus',
@@ -91,7 +111,15 @@ class CustomerSocketNotificationService extends GetxService {
     final isPackage =
         type?.toLowerCase().contains('package') == true ||
         _isPackagePayload(map);
+    if (isPackage && !_packageRecipientAllowed(map)) return false;
+
     final trackingNumber = _trackingNumber(map, package: isPackage);
+    final trackingIdentifiers = _trackingIdentifiers(map, package: isPackage);
+    final previousDisplayStatus = _existingDisplayStatus(
+      package: isPackage,
+      trackingNumber: trackingNumber,
+      identifiers: trackingIdentifiers,
+    );
     final copy = status == null
         ? null
         : orderStatusNotificationCopy(
@@ -107,30 +135,97 @@ class CustomerSocketNotificationService extends GetxService {
         copy?.body ??
         _firstText(map, ['message', 'body', 'notificationBody']) ??
         'Your ${isPackage ? 'package' : 'order'} has a new update.';
-    if (shouldSuppressOrderStatusNotification(
+
+    if (isPackage && Get.isRegistered<PackageController>()) {
+      await Get.find<PackageController>().handleRealtimePackagePayload(
+        map,
+        fallbackOrderId: trackingNumber.isEmpty ? null : trackingNumber,
+        notifyStatusChange: false,
+      );
+    }
+
+    final displayStatus = notificationDisplayStatus(
       package: isPackage,
       status: status,
       text: [title, body],
-    )) {
-      return;
+    );
+    if (displayStatus == null) {
+      return false;
     }
+    if (previousDisplayStatus != null &&
+        previousDisplayStatus == displayStatus) {
+      return false;
+    }
+
     final dedupeKey = LocalNotificationService.statusDedupeKey(
       package: isPackage,
       status: status,
       trackingNumber: trackingNumber,
-      identifiers: _trackingIdentifiers(map, package: isPackage),
+      identifiers: trackingIdentifiers,
+      recipientId: _currentUserId,
       title: title,
       body: body,
     );
 
-    Get.find<LocalNotificationService>().show(
-      title: title,
-      body: body,
-      notificationId: LocalNotificationService.notificationIdForDedupeKey(
-        dedupeKey,
-      ),
-      dedupeKey: dedupeKey,
-    );
+    if (Get.isRegistered<NotificationService>()) {
+      await Get.find<NotificationService>().record(
+        title: title,
+        message: body,
+        category: isPackage ? 'package' : 'order',
+        dedupeKey: dedupeKey,
+      );
+    }
+    if (_shouldShowSocketLocalNotification &&
+        Get.isRegistered<LocalNotificationService>()) {
+      await Get.find<LocalNotificationService>().show(
+        title: title,
+        body: body,
+        payload: _encodeNavigationPayload(
+          package: isPackage,
+          trackingNumber: trackingNumber,
+          status: status,
+        ),
+        notificationId: LocalNotificationService.notificationIdForDedupeKey(
+          dedupeKey,
+        ),
+        dedupeKey: dedupeKey,
+      );
+    }
+    return true;
+  }
+
+  String? _existingDisplayStatus({
+    required bool package,
+    required String trackingNumber,
+    required List<String> identifiers,
+  }) {
+    if (package) {
+      if (!Get.isRegistered<PackageController>()) return null;
+      final controller = Get.find<PackageController>();
+      for (final id in [trackingNumber, ...identifiers]) {
+        final order = controller.findOrderById(id);
+        if (order == null) continue;
+        return notificationDisplayStatus(package: true, status: order.status);
+      }
+      return null;
+    }
+
+    if (!Get.isRegistered<OrderController>()) return null;
+    final controller = Get.find<OrderController>();
+    for (final id in [trackingNumber, ...identifiers]) {
+      final order = controller.findOrderById(id);
+      if (order == null) continue;
+      return notificationDisplayStatus(package: false, status: order.status);
+    }
+    return null;
+  }
+
+  bool get _shouldShowSocketLocalNotification {
+    final foregroundOverride = _isAppForeground;
+    if (foregroundOverride != null) return foregroundOverride();
+
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == AppLifecycleState.resumed;
   }
 
   Map<String, dynamic>? _asMap(Object? value) {
@@ -234,6 +329,61 @@ class CustomerSocketNotificationService extends GetxService {
         .where((value) => value.isNotEmpty)
         .toSet()
         .toList(growable: false);
+  }
+
+  bool _packageRecipientAllowed(Map<String, dynamic> data) {
+    final currentUser = _currentUserData;
+    if (currentUser == null) return false;
+    return packageRecipientMatch(
+          data: data,
+          currentUserId: currentUser['id']?.toString() ?? '',
+          currentUserPhone: currentUser['phone']?.toString() ?? '',
+        ) !=
+        PackageRecipientMatch.mismatched;
+  }
+
+  Map<String, dynamic>? get _currentUserData {
+    if (_storage.read('isLoggedIn') != true ||
+        (_storage.read<String>('accessToken')?.trim().isEmpty ?? true)) {
+      return null;
+    }
+    final authUser = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>().currentUser
+        : null;
+    if (authUser != null) {
+      return {'id': authUser.id, 'phone': authUser.phone};
+    }
+    final rawUser = _storage.read('currentUser');
+    return rawUser is Map ? Map<String, dynamic>.from(rawUser) : null;
+  }
+
+  String get _currentUserId {
+    final currentUser = _currentUserData;
+    if (currentUser == null) return '';
+    return _firstText(currentUser, const [
+          'id',
+          '_id',
+          'userId',
+          'user_id',
+          'phone',
+          'phoneNumber',
+          'mobile',
+          'email',
+        ]) ??
+        '';
+  }
+
+  String _encodeNavigationPayload({
+    required bool package,
+    required String trackingNumber,
+    required String? status,
+  }) {
+    return jsonEncode({
+      'type': package ? 'package' : 'order',
+      if (trackingNumber.isNotEmpty)
+        (package ? 'packageOrderId' : 'orderId'): trackingNumber,
+      if (status?.trim().isNotEmpty == true) 'status': status!.trim(),
+    });
   }
 
   void disconnect() {

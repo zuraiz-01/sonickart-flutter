@@ -12,6 +12,7 @@ import '../../../routes/app_routes.dart';
 import '../../../theme/app_colors.dart';
 import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/status_notification_copy.dart';
 import '../../../core/widgets/service_area_gate_overlay.dart';
 import '../../ads/widgets/ad_placement.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -1003,20 +1004,8 @@ class _ActiveOrderCard extends StatelessWidget {
 }
 
 (String, String) _activeOrderCopy(String status) {
-  final normalized = status.trim().toLowerCase();
-  if (normalized == 'pending') {
-    return ('Preparing your order', 'We are getting everything ready.');
-  }
-  if (normalized == 'confirmed' ||
-      normalized == 'accepted' ||
-      normalized == 'assigned') {
-    return ('Your order is confirmed', 'Tap to open live tracking.');
-  }
-  if (normalized == 'picked' ||
-      normalized == 'arriving' ||
-      normalized == 'out_for_delivery') {
-    return ('Your order is on the way', 'Tap to track the delivery live.');
-  }
+  final copy = orderStatusNotificationCopy(status: status, orderNumber: '');
+  if (copy != null) return (copy.title, copy.body);
   return ('Your order is active', 'Tap to view the latest status.');
 }
 

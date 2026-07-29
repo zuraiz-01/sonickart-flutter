@@ -8,12 +8,15 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/services/firebase_bootstrap.dart';
+import '../../../core/services/customer_socket_notification_service.dart';
+import '../../../core/services/package_socket_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/services/service_area_gate_controller.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../routes/app_routes.dart';
+import '../../cart/controllers/cart_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
 class AuthController extends GetxController {
@@ -262,6 +265,15 @@ class AuthController extends GetxController {
   }
 
   Future<void> logout() async {
+    if (Get.isRegistered<CustomerSocketNotificationService>()) {
+      Get.find<CustomerSocketNotificationService>().disconnect();
+    }
+    if (Get.isRegistered<PackageSocketService>()) {
+      Get.find<PackageSocketService>().disconnect();
+    }
+    if (Get.isRegistered<CartController>()) {
+      await Get.find<CartController>().detachFromCurrentSession();
+    }
     if (Get.isRegistered<ProfileController>()) {
       Get.find<ProfileController>().clearSessionState();
     }
@@ -500,6 +512,12 @@ class AuthController extends GetxController {
 
     await _storage.write('isLoggedIn', true);
     await _storage.write('currentUser', appUser.toJson());
+    if (Get.isRegistered<CartController>()) {
+      await Get.find<CartController>().rebindToCurrentSession();
+    }
+    if (Get.isRegistered<CustomerSocketNotificationService>()) {
+      Get.find<CustomerSocketNotificationService>().connectForCurrentUser();
+    }
     if (Get.isRegistered<PushNotificationService>()) {
       await Get.find<PushNotificationService>().registerCurrentToken();
     }

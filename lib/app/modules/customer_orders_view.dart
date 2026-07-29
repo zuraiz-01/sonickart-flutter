@@ -333,11 +333,16 @@ class _OrderStatusMeta {
                 order.status)
             .toString()
             .trim()
-            .toLowerCase();
+            .toLowerCase()
+            .replaceAll(RegExp(r'[-\s]+'), '_');
+    final compact = status.replaceAll('_', '');
 
-    if (status == 'delivered' || status == 'completed') {
+    if (compact == 'delivered' ||
+        compact == 'orderdelivered' ||
+        compact == 'completed' ||
+        compact == 'complete') {
       return _OrderStatusMeta(
-        label: 'Delivered',
+        label: 'Order Delivered',
         icon: Icons.verified_rounded,
         backgroundColor: const Color(0xFFEAF8EF),
         color: AppColors.success,
@@ -346,27 +351,43 @@ class _OrderStatusMeta {
 
     if (status == 'cancelled' || status == 'canceled') {
       return _OrderStatusMeta(
-        label: 'Cancelled',
+        label: 'Order Cancelled',
         icon: Icons.cancel_rounded,
         backgroundColor: const Color(0xFFFDECEC),
         color: AppColors.error,
       );
     }
 
-    if (status == 'confirmed' || status == 'assigned' || status == 'accepted') {
+    if (compact == 'confirmed' ||
+        compact == 'assigned' ||
+        compact == 'accepted' ||
+        compact == 'orderaccepted' ||
+        compact == 'orderassigned' ||
+        compact == 'partnerassigned' ||
+        compact == 'deliverypartnerassigned' ||
+        compact == 'onthewaytopickup') {
       return _OrderStatusMeta(
-        label: 'In Progress',
+        label: 'Partner Assigned',
         icon: Icons.local_shipping_outlined,
         backgroundColor: const Color(0xFFEAF1FF),
         color: AppColors.price,
       );
     }
 
-    if (status == 'picked' ||
-        status == 'arriving' ||
-        status == 'out_for_delivery') {
+    if (compact == 'picked' ||
+        compact == 'pickup' ||
+        compact == 'pickedup' ||
+        compact == 'orderpickedup' ||
+        compact == 'intransit' ||
+        compact == 'orderintransit' ||
+        compact == 'ontheway' ||
+        compact == 'orderontheway' ||
+        compact == 'onthewaytodelivery' ||
+        compact == 'outfordelivery' ||
+        compact == 'orderoutfordelivery' ||
+        compact == 'arriving') {
       return _OrderStatusMeta(
-        label: 'On The Way',
+        label: 'Order Picked Up',
         icon: Icons.delivery_dining_rounded,
         backgroundColor: const Color(0xFFEAF1FF),
         color: AppColors.price,
@@ -374,7 +395,7 @@ class _OrderStatusMeta {
     }
 
     return _OrderStatusMeta(
-      label: 'Preparing',
+      label: 'Order Placed',
       icon: Icons.schedule_rounded,
       backgroundColor: const Color(0xFFFFF5DE),
       color: const Color(0xFFD18A00),

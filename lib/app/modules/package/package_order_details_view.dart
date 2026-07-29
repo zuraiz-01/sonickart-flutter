@@ -524,6 +524,13 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
   void didUpdateWidget(covariant _PackageLiveMapCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final data = _PackageTrackingMapData.fromOrder(widget.order);
+    if (!data.hasAssigned) {
+      _glideTimer?.cancel();
+      _displayedPartnerLoc = null;
+      _targetPartnerLoc = null;
+      _scheduleFitToBounds(data);
+      return;
+    }
     final newLoc = data.deliveryPersonLocation;
 
     if (newLoc != null &&
@@ -564,6 +571,20 @@ class _PackageLiveMapCardState extends State<_PackageLiveMapCard> {
   }
 
   Set<Marker> _animatedMarkers(_PackageTrackingMapData data) {
+    if (!data.hasAssigned) {
+      return {
+        if (data.userLocation != null)
+          Marker(
+            markerId: const MarkerId('userLocation'),
+            position: data.userLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen,
+            ),
+            infoWindow: const InfoWindow(title: 'Your Location'),
+          ),
+      };
+    }
+
     final partnerPos = _displayedPartnerLoc ?? data.deliveryPersonLocation;
     return {
       if (data.pickupLocation != null)
@@ -1213,6 +1234,7 @@ class _PackageTrackingMapData {
   const _PackageTrackingMapData({
     required this.dropLocation,
     required this.pickupLocation,
+    required this.userLocation,
     required this.deliveryPersonLocation,
     required this.hasAssigned,
     required this.hasPickedUp,
@@ -1220,6 +1242,7 @@ class _PackageTrackingMapData {
 
   final LatLng? dropLocation;
   final LatLng? pickupLocation;
+  final LatLng? userLocation;
   final LatLng? deliveryPersonLocation;
   final bool hasAssigned;
   final bool hasPickedUp;
@@ -1228,90 +1251,103 @@ class _PackageTrackingMapData {
     final raw = order.raw;
     final partner = _mapFrom(raw['deliveryPartner']);
     final status = _normalizedStatus(order.status);
+    final dropLocation =
+        _currentDropCoordinate(order, raw) ??
+        _coordinateFrom(raw['currentDropLocation']) ??
+        _coordinateFrom(raw['current_drop_location']) ??
+        _coordinateFrom(raw['dropLocation']) ??
+        _coordinateFrom(raw['drop_location']) ??
+        _coordinateFrom(raw['deliveryLocation']) ??
+        _coordinateFrom(raw['delivery_location']) ??
+        _coordinateFrom({
+          'latitude':
+              order.dropLatitude ??
+              raw['dropLatitude'] ??
+              raw['drop_latitude'] ??
+              raw['deliveryLatitude'] ??
+              raw['delivery_latitude'],
+          'longitude':
+              order.dropLongitude ??
+              raw['dropLongitude'] ??
+              raw['drop_longitude'] ??
+              raw['deliveryLongitude'] ??
+              raw['delivery_longitude'],
+        });
+    final pickupLocation =
+        _coordinateFrom(raw['pickupLocation']) ??
+        _coordinateFrom(raw['pickup_location']) ??
+        _coordinateFrom({
+          'latitude':
+              order.pickupLatitude ??
+              raw['pickupLatitude'] ??
+              raw['pickup_latitude'],
+          'longitude':
+              order.pickupLongitude ??
+              raw['pickupLongitude'] ??
+              raw['pickup_longitude'],
+        });
+    final hasAssigned = _hasAssignedPartner(order, status);
+    final deliveryPersonLocation =
+        _coordinateFrom(raw['deliveryPersonLocation']) ??
+        _coordinateFrom(raw['delivery_person_location']) ??
+        _coordinateFrom(partner['liveLocation']) ??
+        _coordinateFrom(partner['live_location']) ??
+        _coordinateFrom(partner['location']) ??
+        _coordinateFrom(partner['currentLocation']) ??
+        _coordinateFrom(partner['current_location']) ??
+        _coordinateFrom(raw['riderLocation']) ??
+        _coordinateFrom(raw['rider_location']) ??
+        _coordinateFrom(raw['driverLocation']) ??
+        _coordinateFrom(raw['driver_location']) ??
+        _coordinateFrom(raw['partnerLocation']) ??
+        _coordinateFrom(raw['partner_location']) ??
+        _coordinateFrom(raw['liveLocation']) ??
+        _coordinateFrom(raw['live_location']) ??
+        _coordinateFrom({
+          'latitude':
+              raw['deliveryPartnerLatitude'] ??
+              raw['delivery_partner_latitude'] ??
+              raw['deliveryPersonLatitude'] ??
+              raw['delivery_person_latitude'] ??
+              raw['driverLatitude'] ??
+              raw['driver_latitude'] ??
+              raw['partnerLatitude'] ??
+              raw['partner_latitude'],
+          'longitude':
+              raw['deliveryPartnerLongitude'] ??
+              raw['delivery_partner_longitude'] ??
+              raw['deliveryPersonLongitude'] ??
+              raw['delivery_person_longitude'] ??
+              raw['driverLongitude'] ??
+              raw['driver_longitude'] ??
+              raw['partnerLongitude'] ??
+              raw['partner_longitude'],
+        });
+
     return _PackageTrackingMapData(
-      dropLocation:
-          _currentDropCoordinate(order, raw) ??
-          _coordinateFrom(raw['currentDropLocation']) ??
-          _coordinateFrom(raw['current_drop_location']) ??
-          _coordinateFrom(raw['dropLocation']) ??
-          _coordinateFrom(raw['drop_location']) ??
-          _coordinateFrom(raw['deliveryLocation']) ??
-          _coordinateFrom(raw['delivery_location']) ??
-          _coordinateFrom({
-            'latitude':
-                order.dropLatitude ??
-                raw['dropLatitude'] ??
-                raw['drop_latitude'] ??
-                raw['deliveryLatitude'] ??
-                raw['delivery_latitude'],
-            'longitude':
-                order.dropLongitude ??
-                raw['dropLongitude'] ??
-                raw['drop_longitude'] ??
-                raw['deliveryLongitude'] ??
-                raw['delivery_longitude'],
-          }),
-      pickupLocation:
-          _coordinateFrom(raw['pickupLocation']) ??
-          _coordinateFrom(raw['pickup_location']) ??
-          _coordinateFrom({
-            'latitude':
-                order.pickupLatitude ??
-                raw['pickupLatitude'] ??
-                raw['pickup_latitude'],
-            'longitude':
-                order.pickupLongitude ??
-                raw['pickupLongitude'] ??
-                raw['pickup_longitude'],
-          }),
-      deliveryPersonLocation:
-          _coordinateFrom(raw['deliveryPersonLocation']) ??
-          _coordinateFrom(raw['delivery_person_location']) ??
-          _coordinateFrom(partner['liveLocation']) ??
-          _coordinateFrom(partner['live_location']) ??
-          _coordinateFrom(partner['location']) ??
-          _coordinateFrom(partner['currentLocation']) ??
-          _coordinateFrom(partner['current_location']) ??
-          _coordinateFrom(raw['riderLocation']) ??
-          _coordinateFrom(raw['rider_location']) ??
-          _coordinateFrom(raw['driverLocation']) ??
-          _coordinateFrom(raw['driver_location']) ??
-          _coordinateFrom(raw['partnerLocation']) ??
-          _coordinateFrom(raw['partner_location']) ??
-          _coordinateFrom(raw['liveLocation']) ??
-          _coordinateFrom(raw['live_location']) ??
-          _coordinateFrom({
-            'latitude':
-                raw['deliveryPartnerLatitude'] ??
-                raw['delivery_partner_latitude'] ??
-                raw['deliveryPersonLatitude'] ??
-                raw['delivery_person_latitude'] ??
-                raw['driverLatitude'] ??
-                raw['driver_latitude'] ??
-                raw['partnerLatitude'] ??
-                raw['partner_latitude'],
-            'longitude':
-                raw['deliveryPartnerLongitude'] ??
-                raw['delivery_partner_longitude'] ??
-                raw['deliveryPersonLongitude'] ??
-                raw['delivery_person_longitude'] ??
-                raw['driverLongitude'] ??
-                raw['driver_longitude'] ??
-                raw['partnerLongitude'] ??
-                raw['partner_longitude'],
-          }),
-      hasAssigned: _hasAssignedPartner(order, status),
+      dropLocation: dropLocation,
+      pickupLocation: pickupLocation,
+      userLocation: _userLocationForPackageOrder(
+        order,
+        pickupLocation: pickupLocation,
+        dropLocation: dropLocation,
+      ),
+      deliveryPersonLocation: hasAssigned ? deliveryPersonLocation : null,
+      hasAssigned: hasAssigned,
       hasPickedUp: _hasPickedUp(status),
     );
   }
 
-  List<LatLng> get points => [
-    dropLocation,
-    pickupLocation,
-    deliveryPersonLocation,
-  ].whereType<LatLng>().toList();
+  List<LatLng> get points => hasAssigned
+      ? [
+          dropLocation,
+          pickupLocation,
+          deliveryPersonLocation,
+        ].whereType<LatLng>().toList()
+      : [userLocation].whereType<LatLng>().toList();
 
   List<LatLng> get focusPoints {
+    if (!hasAssigned) return points;
     final route = [
       deliveryPersonLocation,
       hasPickedUp ? dropLocation : pickupLocation,
@@ -1320,7 +1356,10 @@ class _PackageTrackingMapData {
   }
 
   LatLng get initialTarget =>
-      deliveryPersonLocation ?? pickupLocation ?? dropLocation!;
+      (points.isNotEmpty ? points.first : null) ??
+      deliveryPersonLocation ??
+      pickupLocation ??
+      dropLocation!;
 
   LatLng? get routeTarget {
     if (!hasAssigned) return null;
@@ -1341,6 +1380,20 @@ class _PackageTrackingMapData {
   }
 
   Set<Marker> get markers {
+    if (!hasAssigned) {
+      return {
+        if (userLocation != null)
+          Marker(
+            markerId: const MarkerId('userLocation'),
+            position: userLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen,
+            ),
+            infoWindow: const InfoWindow(title: 'Your Location'),
+          ),
+      };
+    }
+
     return {
       if (pickupLocation != null)
         Marker(
@@ -1373,6 +1426,7 @@ class _PackageTrackingMapData {
   }
 
   Set<Polyline> get polylines {
+    if (!hasAssigned) return const <Polyline>{};
     final lines = <Polyline>{};
     final target = routeTarget;
     if (deliveryPersonLocation != null && target != null) {
@@ -1522,8 +1576,11 @@ class _PackageTrackingMapData {
 ({
   bool hasPickup,
   bool hasDrop,
+  bool hasUserLocation,
   bool hasDeliveryPartner,
+  int displayPointCount,
   int focusPointCount,
+  int polylineCount,
   double? liveDistanceKm,
 })
 packageTrackingMapDataForTesting(PackageOrderModel order) {
@@ -1531,10 +1588,34 @@ packageTrackingMapDataForTesting(PackageOrderModel order) {
   return (
     hasPickup: data.pickupLocation != null,
     hasDrop: data.dropLocation != null,
+    hasUserLocation: data.userLocation != null,
     hasDeliveryPartner: data.deliveryPersonLocation != null,
+    displayPointCount: data.points.length,
     focusPointCount: data.focusPoints.length,
+    polylineCount: data.polylines.length,
     liveDistanceKm: data.liveDistanceKm,
   );
+}
+
+LatLng? _userLocationForPackageOrder(
+  PackageOrderModel order, {
+  required LatLng? pickupLocation,
+  required LatLng? dropLocation,
+}) {
+  final type = _firstString([
+    order.packageOrderType,
+    order.raw['packageOrderType'],
+    order.raw['package_order_type'],
+    order.raw['flow'],
+    order.raw['packageFlow'],
+  ]).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  final isReceivePackage =
+      type.contains('receive') ||
+      type.contains('incoming') ||
+      type.contains('receiver');
+  return isReceivePackage
+      ? (dropLocation ?? pickupLocation)
+      : (pickupLocation ?? dropLocation);
 }
 
 bool packageShouldShowLiveMapForTesting(PackageOrderModel order) {
@@ -1552,7 +1633,48 @@ String _normalizedStatus(String status) {
     RegExp(r'[-\s]+'),
     '_',
   );
-  return normalized.isEmpty ? 'pending' : normalized;
+  final compact = normalized.replaceAll('_', '');
+  if (compact.isEmpty ||
+      compact == 'pending' ||
+      compact == 'placed' ||
+      compact == 'booked' ||
+      compact == 'packagebooked' ||
+      compact == 'packageplaced') {
+    return 'placed';
+  }
+  if (compact == 'assigned' ||
+      compact == 'accepted' ||
+      compact == 'confirmed' ||
+      compact == 'packageassigned' ||
+      compact == 'packageaccepted' ||
+      compact == 'partnerassigned' ||
+      compact == 'deliveryassigned' ||
+      compact == 'deliverypartnerassigned' ||
+      compact == 'assignedtopartner' ||
+      compact == 'riderassigned' ||
+      compact == 'driverassigned') {
+    return 'accepted';
+  }
+  if (compact == 'picked' ||
+      compact == 'pickup' ||
+      compact == 'pickedup' ||
+      compact == 'packagepickedup' ||
+      compact == 'intransit' ||
+      compact == 'packageintransit' ||
+      compact == 'ontheway' ||
+      compact == 'packageontheway' ||
+      compact == 'outfordelivery' ||
+      compact == 'packageoutfordelivery' ||
+      compact == 'arriving') {
+    return 'picked_up';
+  }
+  if (compact == 'delivered' ||
+      compact == 'packagedelivered' ||
+      compact == 'completed' ||
+      compact == 'complete') {
+    return 'delivered';
+  }
+  return normalized;
 }
 
 bool _shouldShowPackageLiveMap(PackageOrderModel order) {
@@ -1599,19 +1721,11 @@ bool _hasPickedUp(String status) {
 }
 
 String _displayStatusHeading(String status) {
-  if (status == 'pending') return 'Package Booked';
-  if (const {
-    'assigned',
-    'confirmed',
-    'accepted',
-    'partner_assigned',
-    'delivery_assigned',
-    'delivery_partner_assigned',
-    'assigned_to_partner',
-    'rider_assigned',
-    'driver_assigned',
-  }.contains(status)) {
-    return 'Partner Assigned';
+  if (status == 'placed') return 'Package Booked';
+  if (status == 'accepted') return 'Partner Assigned';
+  if (status == 'picked_up') return 'Package Picked Up';
+  if (status == 'delivered' || status == 'completed') {
+    return 'Package Delivered';
   }
   final text = status.replaceAll(RegExp(r'[-_]+'), ' ').trim();
   if (text.isEmpty) return 'Package Order';

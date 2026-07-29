@@ -15,7 +15,9 @@ class ServiceAreaGateOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final result = controller.blockedResult.value;
-      if (result == null) return const SizedBox.shrink();
+      if (result == null || !result.isConfirmedOutside) {
+        return const SizedBox.shrink();
+      }
       return Positioned.fill(
         child: Material(
           color: const Color(0xFF001B42),

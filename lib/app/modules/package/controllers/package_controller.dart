@@ -1936,6 +1936,7 @@
 //   final String placeId;
 // }
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1950,6 +1951,8 @@ import '../../../core/network/api_service.dart';
 import '../../../core/services/local_notification_service.dart';
 import '../../../core/services/location_lookup_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/package_notification_policy.dart';
+import '../../../core/services/status_notification_copy.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../data/models/package_order_model.dart';
 import '../../../routes/app_routes.dart';
@@ -2004,7 +2007,7 @@ class DropLocationData {
 class PackageController extends GetxController {
   PackageController(this._storage);
 
-  static const _storageKey = 'package_orders';
+  static const packageOrdersStorageKey = storedPackageOrdersKey;
   static const _defaultPackageTypes = [
     'Documents',
     'Food',
@@ -2069,6 +2072,7 @@ class PackageController extends GetxController {
 
   Timer? _pickupDebounce;
   bool _detailsNavigationInFlight = false;
+  Future<void>? _ordersReconciliation;
 
   List<String> get packageTypes => _packageTypes.toList(growable: false);
 
@@ -2618,12 +2622,18 @@ class PackageController extends GetxController {
     return null;
   }
 
-  Future<PackageOrderModel?> refreshOrderDetails(String orderId) async {
+  Future<PackageOrderModel?> refreshOrderDetails(
+    String orderId, {
+    bool notifyStatusChange = false,
+  }) async {
     final normalized = orderId.trim();
     if (normalized.isEmpty) return selectedOrder.value;
     final remote = await _tryFetchPackageOrderById(normalized);
     if (remote != null) {
-      final updated = await _upsertOrder(remote);
+      final updated = await _upsertOrder(
+        remote,
+        notifyStatusChange: notifyStatusChange,
+      );
       selectedOrder.value = updated;
       return updated;
     }
@@ -2638,6 +2648,7 @@ class PackageController extends GetxController {
   Future<bool> handleRealtimePackagePayload(
     Map<String, dynamic> payload, {
     String? fallbackOrderId,
+    bool notifyStatusChange = true,
   }) async {
     final raw = _extractObject(payload);
     final identifiers = _payloadIdentifiers(raw);
@@ -2649,7 +2660,11 @@ class PackageController extends GetxController {
 
     final existing =
         (fallback.isNotEmpty ? findOrderById(fallback) : null) ??
-        selectedOrder.value;
+        identifiers
+            .map(findOrderById)
+            .whereType<PackageOrderModel>()
+            .firstOrNull ??
+        (identifiers.isEmpty ? selectedOrder.value : null);
     final merged = existing == null
         ? raw
         : <String, dynamic>{...existing.raw, ...existing.toJson(), ...raw};
@@ -2659,8 +2674,16 @@ class PackageController extends GetxController {
     final updated = await _upsertOrder(
       parsed,
       allowCancellation: _hasExplicitCancellation(raw),
+      notifyStatusChange: notifyStatusChange,
     );
-    selectedOrder.value = updated;
+    final selected = selectedOrder.value;
+    final selectedIds = selected == null
+        ? const <String>{}
+        : _orderIdentifiers(selected).map(_normalizeId).toSet();
+    final updatedIds = _orderIdentifiers(updated).map(_normalizeId).toSet();
+    if (selected == null || updatedIds.any(selectedIds.contains)) {
+      selectedOrder.value = updated;
+    }
     return true;
   }
 
@@ -2717,8 +2740,69 @@ class PackageController extends GetxController {
     }
   }
 
+  Future<void> syncOrdersFromBackend() {
+    final active = _ordersReconciliation;
+    if (active != null) return active;
+
+    final reconciliation = _syncOrdersFromBackend();
+    _ordersReconciliation = reconciliation;
+    return reconciliation;
+  }
+
+  Future<void> _syncOrdersFromBackend() async {
+    try {
+      final remote = await _tryFetchPackageOrders();
+      if (remote.isEmpty) return;
+
+      final seenIdentifiers = <String>{};
+      final reconciled = <PackageOrderModel>[];
+      for (final incoming in remote) {
+        final incomingIds = _orderIdentifiers(
+          incoming,
+        ).map(_normalizeId).toSet();
+        if (incomingIds.any(seenIdentifiers.contains)) continue;
+        seenIdentifiers.addAll(incomingIds);
+        final existing = orders.firstWhereOrNull(
+          (order) => _orderIdentifiers(
+            order,
+          ).map(_normalizeId).any(incomingIds.contains),
+        );
+        final next = existing == null
+            ? incoming
+            : _protectStatusRegression(
+                existing,
+                incoming,
+                allowCancellation: _hasExplicitCancellation(incoming.raw),
+              );
+        _notifyPackageStatusChange(existing, next);
+        reconciled.add(next);
+      }
+      reconciled.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      orders.assignAll(reconciled);
+      _refreshSelectedOrderFromCurrentOrders();
+      await _persistOrders();
+    } finally {
+      _ordersReconciliation = null;
+    }
+  }
+
+  void _refreshSelectedOrderFromCurrentOrders() {
+    final selected = selectedOrder.value;
+    if (selected == null) return;
+    final selectedIds = _orderIdentifiers(selected).map(_normalizeId).toSet();
+    final refreshed = orders.firstWhereOrNull(
+      (order) =>
+          _orderIdentifiers(order).map(_normalizeId).any(selectedIds.contains),
+    );
+    if (refreshed != null) {
+      selectedOrder.value = refreshed;
+    }
+  }
+
   List<PackageOrderModel> _restoreStoredOrders() {
-    final rawOrders = _storage.read<List<dynamic>>(_storageKey) ?? <dynamic>[];
+    final rawOrders =
+        _storage.read<List<dynamic>>(packageOrdersStorageKey) ?? <dynamic>[];
     return rawOrders
         .whereType<Map>()
         .map(
@@ -3201,12 +3285,13 @@ class PackageController extends GetxController {
 
   Future<void> _persistOrders() async {
     final payload = orders.map((order) => order.toJson()).toList();
-    await _storage.write(_storageKey, payload);
+    await _storage.write(packageOrdersStorageKey, payload);
   }
 
   Future<PackageOrderModel> _upsertOrder(
     PackageOrderModel order, {
     bool allowCancellation = false,
+    bool notifyStatusChange = false,
   }) async {
     final incomingIds = _orderIdentifiers(order).map(_normalizeId).toSet();
     final index = orders.indexWhere(
@@ -3228,16 +3313,20 @@ class PackageController extends GetxController {
     }
     orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     await _persistOrders();
-    _notifyPackageStatusChange(existing, nextOrder);
+    _notifyPackageStatusChange(
+      existing,
+      nextOrder,
+      displayNotification: notifyStatusChange,
+    );
     return nextOrder;
   }
 
   void _notifyPackageStatusChange(
     PackageOrderModel? existing,
-    PackageOrderModel nextOrder,
-  ) {
+    PackageOrderModel nextOrder, {
+    bool displayNotification = false,
+  }) {
     final status = _normalizeStatus(nextOrder.status);
-    if (!_shouldNotifyPackageStatus(status)) return;
     if (existing == null) return;
     final previousStatus = _normalizeStatus(existing.status);
     if (previousStatus == status) return;
@@ -3246,27 +3335,43 @@ class PackageController extends GetxController {
     if (!wasDelivered && _isCompletionStatus(status)) {
       requestDeliveryRatingIfNeeded(nextOrder);
     }
+    if (!displayNotification || !_shouldNotifyPackageStatus(status)) return;
+
+    final copy = orderStatusNotificationCopy(
+      status: status,
+      orderNumber: nextOrder.id,
+      package: true,
+    );
+    if (copy == null) return;
+    final dedupeKey = LocalNotificationService.statusDedupeKey(
+      package: true,
+      status: status,
+      trackingNumber: nextOrder.id,
+      identifiers: _orderIdentifiers(nextOrder),
+      recipientId: _currentUserNotificationId,
+      title: copy.title,
+      body: copy.body,
+    );
+    final payload = jsonEncode({
+      'type': 'package',
+      'packageOrderId': nextOrder.id,
+      'status': status,
+    });
+    unawaited(
+      _notifyAction(
+        copy.title,
+        copy.body,
+        payload: payload,
+        dedupeKey: dedupeKey,
+        notificationId: LocalNotificationService.notificationIdForDedupeKey(
+          dedupeKey,
+        ),
+      ),
+    );
   }
 
   bool _shouldNotifyPackageStatus(String status) {
-    return const {
-      'placed',
-      'pending',
-      'sent',
-      'send',
-      'confirmed',
-      'accepted',
-      'assigned',
-      'picked',
-      'picked_up',
-      'arriving',
-      'out_for_delivery',
-      'delivered',
-      'completed',
-      'cancelled',
-      'prepared',
-      'ready',
-    }.contains(status);
+    return notificationDisplayStatus(package: true, status: status) != null;
   }
 
   PackageOrderModel _protectStatusRegression(
@@ -3288,6 +3393,18 @@ class PackageController extends GetxController {
         existingStatus != 'delivered' &&
         existingStatus != 'completed';
     if (existingIsActive && incomingIsCancel && !allowCancellation) {
+      return PackageOrderModel.fromJson({
+        ...incoming.raw,
+        ...incoming.toJson(),
+        'status': existing.status,
+        'deliveryStatus': existing.status,
+      });
+    }
+    final existingRank = _packageStatusRank(existingStatus);
+    final incomingRank = _packageStatusRank(incomingStatus);
+    if (existingRank != null &&
+        incomingRank != null &&
+        incomingRank < existingRank) {
       return PackageOrderModel.fromJson({
         ...incoming.raw,
         ...incoming.toJson(),
@@ -3455,7 +3572,6 @@ class PackageController extends GetxController {
         'PackageController.createPackage drops=${dropLocationsPayload.length} '
         'addresses=${dropAddrList.length} contacts=${receiverContacts.length}',
       );
-      debugPrint('PackageController.createPackage payload=$payload');
       final response = await Get.find<ApiService>().post(
         endpoint: ApiConstants.packageOrder,
         data: payload,
@@ -3684,6 +3800,10 @@ class PackageController extends GetxController {
           payload['orderId'],
           payload['orderNumber'],
           payload['packageOrderId'],
+          payload['package_order_id'],
+          payload['packageId'],
+          payload['package_id'],
+          payload['delivery_code'],
         ]
         .map((value) => value?.toString().trim() ?? '')
         .where((value) => value.isNotEmpty)
@@ -3696,12 +3816,37 @@ class PackageController extends GetxController {
   }
 
   String _normalizeStatus(String status) {
-    final normalized = status.trim().toLowerCase().replaceAll(
-      RegExp(r'[-\s]+'),
-      '_',
-    );
+    final normalized = normalizeNotificationStatus(status);
     if (normalized == 'cancel' || normalized == 'canceled') return 'cancelled';
+    if (const {
+      'in_transit',
+      'on_the_way',
+      'out_for_delivery',
+      'arriving',
+    }.contains(normalized)) {
+      return 'picked_up';
+    }
     return normalized;
+  }
+
+  int? _packageStatusRank(String status) {
+    return switch (_normalizeStatus(status)) {
+      'placed' || 'pending' || 'booked' => 0,
+      'prepared' ||
+      'ready' ||
+      'accepted' ||
+      'assigned' ||
+      'confirmed' ||
+      'partner_assigned' ||
+      'delivery_assigned' ||
+      'delivery_partner_assigned' ||
+      'assigned_to_partner' ||
+      'rider_assigned' ||
+      'driver_assigned' => 1,
+      'picked' || 'pickup' || 'picked_up' => 2,
+      'delivered' || 'completed' || 'complete' || 'finished' || 'done' => 3,
+      _ => null,
+    };
   }
 
   bool _hasExplicitCancellation(Map<String, dynamic> raw) {
@@ -3903,20 +4048,26 @@ class PackageController extends GetxController {
 
   Future<void> _notifyPackageBooked(PackageOrderModel order) async {
     const title = 'Package Booked';
-    const message = 'Your package order has been placed successfully.';
+    const message = 'Your Package Has Been Booked.';
     final dedupeKey =
         LocalNotificationService.statusDedupeKey(
           package: true,
-          status: 'placed',
+          status: 'booked',
           trackingNumber: order.id,
           identifiers: _orderIdentifiers(order),
+          recipientId: _currentUserNotificationId,
           title: title,
           body: message,
         ) ??
-        'package|placed|${order.id.trim().toLowerCase()}';
+        'package|booked|${order.id.trim().toLowerCase()}';
     await _notifyAction(
       title,
       message,
+      payload: jsonEncode({
+        'type': 'package',
+        'packageOrderId': order.id,
+        'status': 'booked',
+      }),
       dedupeKey: dedupeKey,
       notificationId: LocalNotificationService.notificationIdForDedupeKey(
         dedupeKey,
@@ -4114,6 +4265,35 @@ class PackageController extends GetxController {
           order.raw['deliveryPartnerName'],
         ]) ??
         '';
+  }
+
+  String get _currentUserNotificationId {
+    final authUser = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>().currentUser
+        : null;
+    final fromController = authUser?.id.trim() ?? '';
+    if (fromController.isNotEmpty) return fromController;
+    if (_storage.read('isLoggedIn') != true ||
+        (_storage.read<String>('accessToken')?.trim().isEmpty ?? true)) {
+      return '';
+    }
+    final rawUser = _storage.read('currentUser');
+    if (rawUser is! Map) return '';
+    final user = Map<String, dynamic>.from(rawUser);
+    for (final key in const [
+      'id',
+      '_id',
+      'userId',
+      'user_id',
+      'phone',
+      'phoneNumber',
+      'mobile',
+      'email',
+    ]) {
+      final value = user[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   @override

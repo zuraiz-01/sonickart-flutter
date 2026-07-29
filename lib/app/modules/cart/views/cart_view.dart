@@ -214,6 +214,7 @@ class _ItemsCard extends StatelessWidget {
           Divider(height: 1, color: AppColors.border),
           ...controller.items.map((item) {
             return _CartItemRow(
+              key: ValueKey(item.product.id),
               itemId: item.product.id,
               imageUrl: item.product.resolvedImageUrl,
               name: item.product.name,
@@ -231,6 +232,7 @@ class _ItemsCard extends StatelessWidget {
 
 class _CartItemRow extends StatelessWidget {
   const _CartItemRow({
+    super.key,
     required this.itemId,
     required this.imageUrl,
     required this.name,
@@ -250,7 +252,6 @@ class _CartItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('CartView._CartItemRow: item=$itemId imageUrl=$imageUrl');
     return Container(
       color: AppColors.white,
       padding: EdgeInsets.symmetric(horizontal: 14.wpx, vertical: 16.hpx),

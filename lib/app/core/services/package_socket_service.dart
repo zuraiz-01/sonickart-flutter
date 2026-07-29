@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -42,7 +42,7 @@ class PackageSocketService extends GetxService {
 
     socket
       ..onConnect((_) {
-        debugPrint('PackageSocketService: connected for package $normalizedId');
+        debugPrint('PackageSocketService: connected for active package');
         for (final room in _roomsFor(orderId, normalizedId, user?.id)) {
           socket.emit('joinRoom', room);
         }
@@ -54,7 +54,7 @@ class PackageSocketService extends GetxService {
         debugPrint('PackageSocketService socket error: $error');
       })
       ..onReconnect((_) {
-        debugPrint('PackageSocketService: reconnected for package $normalizedId');
+        debugPrint('PackageSocketService: reconnected for active package');
         for (final room in _roomsFor(orderId, normalizedId, user?.id)) {
           socket.emit('joinRoom', room);
         }
@@ -91,7 +91,7 @@ class PackageSocketService extends GetxService {
       );
       if (handled) return;
     }
-    await controller.refreshOrderDetails(orderId);
+    await controller.refreshOrderDetails(orderId, notifyStatusChange: true);
   }
 
   Iterable<String> _roomsFor(

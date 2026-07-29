@@ -7,84 +7,302 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../../modules/package/controllers/package_controller.dart';
 import '../../routes/app_routes.dart';
 import '../constants/api_constants.dart';
 import '../network/api_service.dart';
 import 'firebase_bootstrap.dart';
 import 'local_notification_service.dart';
 import 'notification_service.dart';
+import 'package_notification_policy.dart';
 import 'status_notification_copy.dart';
 
+typedef DeviceTokenRegistrar =
+    Future<void> Function(Map<String, String> payload);
+
+abstract interface class PushMessagingClient {
+  Future<void> initialize();
+
+  Future<AuthorizationStatus> requestPermission();
+
+  Future<AuthorizationStatus> getAuthorizationStatus();
+
+  Future<void> setForegroundPresentationOptions();
+
+  Stream<RemoteMessage> get onMessage;
+
+  Stream<RemoteMessage> get onMessageOpenedApp;
+
+  Stream<String> get onTokenRefresh;
+
+  Future<RemoteMessage?> getInitialMessage();
+
+  Future<String?> getToken();
+
+  Future<String?> getApnsToken();
+}
+
+class FirebasePushMessagingClient implements PushMessagingClient {
+  @override
+  Future<void> initialize() => FirebaseBootstrap.initialize();
+
+  @override
+  Future<AuthorizationStatus> requestPermission() async {
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    return settings.authorizationStatus;
+  }
+
+  @override
+  Future<AuthorizationStatus> getAuthorizationStatus() async {
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+    return settings.authorizationStatus;
+  }
+
+  @override
+  Future<void> setForegroundPresentationOptions() {
+    return FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: false,
+          badge: true,
+          sound: false,
+        );
+  }
+
+  @override
+  Stream<RemoteMessage> get onMessage => FirebaseMessaging.onMessage;
+
+  @override
+  Stream<RemoteMessage> get onMessageOpenedApp =>
+      FirebaseMessaging.onMessageOpenedApp;
+
+  @override
+  Stream<String> get onTokenRefresh =>
+      FirebaseMessaging.instance.onTokenRefresh;
+
+  @override
+  Future<RemoteMessage?> getInitialMessage() {
+    return FirebaseMessaging.instance.getInitialMessage();
+  }
+
+  @override
+  Future<String?> getToken() => FirebaseMessaging.instance.getToken();
+
+  @override
+  Future<String?> getApnsToken() => FirebaseMessaging.instance.getAPNSToken();
+}
+
+abstract interface class PushLocalTapSource {
+  Stream<Map<String, dynamic>>? get taps;
+
+  Map<String, dynamic>? takePendingLaunchData();
+}
+
+class GetxPushLocalTapSource implements PushLocalTapSource {
+  LocalNotificationService? get _service {
+    if (!Get.isRegistered<LocalNotificationService>()) return null;
+    return Get.find<LocalNotificationService>();
+  }
+
+  @override
+  Stream<Map<String, dynamic>>? get taps => _service?.taps;
+
+  @override
+  Map<String, dynamic>? takePendingLaunchData() {
+    return _service?.takePendingLaunchData();
+  }
+}
+
 class PushNotificationService extends GetxService {
-  PushNotificationService({GetStorage? storage})
-    : _storage = storage ?? GetStorage();
+  PushNotificationService({
+    GetStorage? storage,
+    PushMessagingClient? messaging,
+    PushLocalTapSource? localTapSource,
+    DeviceTokenRegistrar? tokenRegistrar,
+  }) : _storage = storage ?? GetStorage(),
+       _messaging = messaging ?? FirebasePushMessagingClient(),
+       _localTapSource = localTapSource ?? GetxPushLocalTapSource(),
+       _tokenRegistrar = tokenRegistrar;
 
   static const notificationsDisabledStorageKey = 'pushNotificationsDisabled';
+  static const _tokenStorageKey = 'fcmToken';
+  static const _tokenOwnerStorageKey = 'fcmTokenRegistrationOwner';
+  static const _apnsTokenStorageKey = 'registeredApnsToken';
 
   final GetStorage _storage;
+  final PushMessagingClient _messaging;
+  final PushLocalTapSource _localTapSource;
+  final DeviceTokenRegistrar? _tokenRegistrar;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
+  StreamSubscription<RemoteMessage>? _messageOpenedSub;
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<Map<String, dynamic>>? _localTapSub;
-  bool _initialized = false;
-  String? _lastRegisteredToken;
+  Future<PushNotificationService>? _initializationInFlight;
+  Future<void>? _tokenRegistrationInFlight;
+  bool _listenersInitialized = false;
+  bool _tokenRegistrationRequested = false;
+  String? _queuedRegistrationToken;
+  String? _registrationTokenInProgress;
+  String? _registrationOwnerInProgress;
+  int _tokenCacheGeneration = 0;
   final _recentRecords = <String, DateTime>{};
   bool _notificationNavigationInFlight = false;
   Map<String, dynamic>? _pendingNotificationNavigation;
   String? _lastNotificationNavigationSignature;
   DateTime? _lastNotificationNavigationAt;
 
-  Future<PushNotificationService> init() async {
-    if (_initialized) return this;
-    _initialized = true;
+  @visibleForTesting
+  bool get listenersInitialized => _listenersInitialized;
 
+  Future<PushNotificationService> init() {
+    if (_listenersInitialized) {
+      unawaited(registerCurrentToken());
+      return Future<PushNotificationService>.value(this);
+    }
+    final active = _initializationInFlight;
+    if (active != null) return active;
+
+    final initialization = _initializeListeners();
+    _initializationInFlight = initialization;
+    unawaited(
+      initialization.whenComplete(() {
+        if (identical(_initializationInFlight, initialization)) {
+          _initializationInFlight = null;
+        }
+      }),
+    );
+    return initialization;
+  }
+
+  Future<PushNotificationService> _initializeListeners() async {
+    StreamSubscription<RemoteMessage>? foregroundMessageSub;
+    StreamSubscription<RemoteMessage>? messageOpenedSub;
+    StreamSubscription<String>? tokenRefreshSub;
+    StreamSubscription<Map<String, dynamic>>? localTapSub;
     try {
-      await FirebaseBootstrap.initialize();
+      await _messaging.initialize();
 
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      final authorizationStatus = await _messaging.requestPermission();
+      if (authorizationStatus == AuthorizationStatus.denied) {
         debugPrint(
           'PushNotificationService: Notifications permission denied by user',
         );
       }
 
-      await _setForegroundPresentationOptions();
+      await _messaging.setForegroundPresentationOptions();
 
-      _bindLocalNotificationTaps();
-      FirebaseMessaging.onMessage.listen(_showForegroundNotification);
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
-      _tokenRefreshSub?.cancel();
-      _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen(
+      foregroundMessageSub = _messaging.onMessage.listen(
+        _showForegroundNotification,
+      );
+      messageOpenedSub = _messaging.onMessageOpenedApp.listen(_handleTap);
+      tokenRefreshSub = _messaging.onTokenRefresh.listen(
         (token) => unawaited(registerCurrentToken(token: token)),
       );
+      localTapSub = _localTapSource.taps?.listen(_handleLocalTap);
 
-      final initialMessage = await FirebaseMessaging.instance
-          .getInitialMessage();
+      final initialMessage = await _messaging.getInitialMessage();
+      final pendingLocalTap = _localTapSource.takePendingLaunchData();
+
+      _foregroundMessageSub = foregroundMessageSub;
+      _messageOpenedSub = messageOpenedSub;
+      _tokenRefreshSub = tokenRefreshSub;
+      _localTapSub = localTapSub;
+      _listenersInitialized = true;
+
       if (initialMessage != null) {
         _handleTap(initialMessage);
       }
-
-      if (await areNotificationsEnabled()) {
-        await registerCurrentToken();
+      if (pendingLocalTap != null) {
+        _handleLocalTap(pendingLocalTap);
       }
-    } catch (error) {
+
+      unawaited(registerCurrentToken());
+    } catch (error, stackTrace) {
+      _listenersInitialized = false;
+      _foregroundMessageSub = null;
+      _messageOpenedSub = null;
+      _tokenRefreshSub = null;
+      _localTapSub = null;
+      await _cancelSubscriptions([
+        foregroundMessageSub,
+        messageOpenedSub,
+        tokenRefreshSub,
+        localTapSub,
+      ]);
       debugPrint('PushNotificationService.init skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
     return this;
   }
 
-  Future<void> registerCurrentToken({String? token}) async {
-    final accessToken = _storage.read<String>('accessToken');
-    if (accessToken == null || accessToken.trim().isEmpty) return;
-    if (!await areNotificationsEnabled()) return;
+  Future<void> registerCurrentToken({String? token}) {
+    final normalizedToken = token?.trim();
+    final active = _tokenRegistrationInFlight;
+    if (active != null &&
+        normalizedToken != null &&
+        normalizedToken.isNotEmpty &&
+        normalizedToken == _registrationTokenInProgress &&
+        _authenticatedRegistrationOwner() == _registrationOwnerInProgress) {
+      return active;
+    }
+
+    _tokenRegistrationRequested = true;
+    if (normalizedToken != null && normalizedToken.isNotEmpty) {
+      _queuedRegistrationToken = normalizedToken;
+    }
+    if (active != null) return active;
+
+    final registration = _drainTokenRegistrations();
+    _tokenRegistrationInFlight = registration;
+    unawaited(
+      registration.whenComplete(() {
+        if (!identical(_tokenRegistrationInFlight, registration)) return;
+        _tokenRegistrationInFlight = null;
+        if (_tokenRegistrationRequested) {
+          unawaited(registerCurrentToken());
+        }
+      }),
+    );
+    return registration;
+  }
+
+  Future<void> _drainTokenRegistrations() async {
+    while (_tokenRegistrationRequested) {
+      _tokenRegistrationRequested = false;
+      final token = _queuedRegistrationToken;
+      _queuedRegistrationToken = null;
+      _registrationTokenInProgress = token;
+      try {
+        await _registerToken(token: token);
+      } finally {
+        _registrationTokenInProgress = null;
+        _registrationOwnerInProgress = null;
+      }
+    }
+  }
+
+  Future<void> _registerToken({String? token}) async {
+    final owner = _authenticatedRegistrationOwner();
+    _registrationOwnerInProgress = owner;
+    if (owner == null) return;
 
     try {
-      final apnsToken = await _waitForApnsToken();
-      final fcmToken = token ?? await FirebaseMessaging.instance.getToken();
-      if (fcmToken == null || fcmToken.trim().isEmpty) return;
-      if (_lastRegisteredToken == fcmToken) return;
+      await _messaging.initialize();
+      if (!await areNotificationsEnabled()) return;
+
+      final fcmToken = (token ?? await _messaging.getToken())?.trim();
+      if (fcmToken == null || fcmToken.isEmpty) return;
+      final apnsToken = await _currentApnsToken();
+      if (_isRegistrationCurrent(
+        owner: owner,
+        fcmToken: fcmToken,
+        apnsToken: apnsToken,
+      )) {
+        return;
+      }
       debugPrint(
         'PushNotificationService: FCM token fetched ${_describeToken(fcmToken)}',
       );
@@ -100,9 +318,19 @@ class PushNotificationService extends GetxService {
         payload['apns_token'] = apnsToken;
       }
 
-      await _api.patch(endpoint: ApiConstants.user, data: payload);
-      _lastRegisteredToken = fcmToken;
-      await _storage.write('fcmToken', fcmToken);
+      final cacheGeneration = _tokenCacheGeneration;
+      await _registerTokenWithBackend(payload);
+      if (cacheGeneration != _tokenCacheGeneration ||
+          owner != _authenticatedRegistrationOwner()) {
+        return;
+      }
+      await _storage.write(_tokenStorageKey, fcmToken);
+      await _storage.write(_tokenOwnerStorageKey, owner);
+      if (apnsToken == null) {
+        await _storage.remove(_apnsTokenStorageKey);
+      } else {
+        await _storage.write(_apnsTokenStorageKey, apnsToken);
+      }
       debugPrint(
         'PushNotificationService: FCM token registered ${_describeToken(fcmToken)}',
       );
@@ -115,32 +343,26 @@ class PushNotificationService extends GetxService {
     if (_notificationsDisabledByUser) return false;
     if (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS) {
-      final settings = await FirebaseMessaging.instance
-          .getNotificationSettings();
-      return _isAllowed(settings.authorizationStatus);
+      return _isAllowed(await _messaging.getAuthorizationStatus());
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
-      final settings = await FirebaseMessaging.instance
-          .getNotificationSettings();
-      return _isAllowed(settings.authorizationStatus);
+      return _isAllowed(await _messaging.getAuthorizationStatus());
     }
     return true;
   }
 
   Future<bool> enableNotifications() async {
     try {
-      await FirebaseBootstrap.initialize();
-      await _setForegroundPresentationOptions();
+      await _messaging.initialize();
+      await _messaging.setForegroundPresentationOptions();
       await _storage.write(notificationsDisabledStorageKey, false);
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      final allowed = _isAllowed(settings.authorizationStatus);
+      final allowed = _isAllowed(await _messaging.requestPermission());
       if (!allowed) {
         await _storage.write(notificationsDisabledStorageKey, true);
         return false;
+      }
+      if (!_listenersInitialized) {
+        await init();
       }
       await registerCurrentToken();
       return true;
@@ -175,8 +397,10 @@ class PushNotificationService extends GetxService {
   }
 
   Future<void> clearTokenCache() async {
-    _lastRegisteredToken = null;
-    await _storage.remove('fcmToken');
+    _tokenCacheGeneration += 1;
+    await _storage.remove(_tokenStorageKey);
+    await _storage.remove(_tokenOwnerStorageKey);
+    await _storage.remove(_apnsTokenStorageKey);
   }
 
   bool get _notificationsDisabledByUser {
@@ -188,13 +412,84 @@ class PushNotificationService extends GetxService {
         status == AuthorizationStatus.provisional;
   }
 
-  Future<void> _setForegroundPresentationOptions() {
-    return FirebaseMessaging.instance
-        .setForegroundNotificationPresentationOptions(
-          alert: true,
-          badge: true,
-          sound: true,
+  String? _authenticatedRegistrationOwner() {
+    final accessToken = _storage.read<String>('accessToken')?.trim() ?? '';
+    if (accessToken.isEmpty || _storage.read('isLoggedIn') != true) return null;
+
+    final rawUser = _storage.read('currentUser');
+    if (rawUser is! Map) return null;
+    final user = Map<String, dynamic>.from(rawUser);
+    String firstValue(List<String> keys) {
+      for (final key in keys) {
+        final value = user[key]?.toString().trim() ?? '';
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    final userIdentifier = firstValue(const [
+      'id',
+      '_id',
+      'userId',
+      'phone',
+      'phoneNumber',
+      'email',
+    ]);
+    if (userIdentifier.isEmpty) return null;
+    return '${userIdentifier.toLowerCase()}|${accessToken.hashCode}';
+  }
+
+  bool _isRegistrationCurrent({
+    required String owner,
+    required String fcmToken,
+    required String? apnsToken,
+  }) {
+    if (_storage.read<String>(_tokenOwnerStorageKey) != owner ||
+        _storage.read<String>(_tokenStorageKey) != fcmToken) {
+      return false;
+    }
+    if (apnsToken == null) return true;
+    return _storage.read<String>(_apnsTokenStorageKey) == apnsToken;
+  }
+
+  Future<String?> _currentApnsToken() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return null;
+    }
+    try {
+      final token = await _messaging.getApnsToken();
+      if (token == null || token.trim().isEmpty) return null;
+      return token.trim();
+    } catch (error) {
+      debugPrint(
+        'PushNotificationService: APNs token is not available yet: $error',
+      );
+      return null;
+    }
+  }
+
+  Future<void> _registerTokenWithBackend(Map<String, String> payload) {
+    final registrar = _tokenRegistrar;
+    if (registrar != null) return registrar(payload);
+    return _api
+        .patch(endpoint: ApiConstants.user, data: payload)
+        .then<void>((_) {});
+  }
+
+  Future<void> _cancelSubscriptions(
+    Iterable<StreamSubscription<dynamic>?> subscriptions,
+  ) async {
+    for (final subscription in subscriptions) {
+      if (subscription == null) continue;
+      try {
+        await subscription.cancel();
+      } catch (error) {
+        debugPrint(
+          'PushNotificationService: listener cleanup failed safely: $error',
         );
+      }
+    }
   }
 
   ApiService get _api {
@@ -204,16 +499,20 @@ class PushNotificationService extends GetxService {
 
   String _describeToken(String token) {
     final trimmed = token.trim();
-    if (trimmed.length <= 12) return 'length=${trimmed.length}';
-    return 'length=${trimmed.length} prefix=${trimmed.substring(0, 6)}...suffix=${trimmed.substring(trimmed.length - 6)}';
+    return 'length=${trimmed.length}';
   }
 
   void _showForegroundNotification(RemoteMessage message) {
+    unawaited(_processForegroundNotification(message));
+  }
+
+  Future<void> _processForegroundNotification(RemoteMessage message) async {
     final data = _notificationData(message.data);
     final isPackage = _isPackagePayload(data);
-    final isIosSystemNotification =
-        defaultTargetPlatform == TargetPlatform.iOS &&
-        message.notification != null;
+    if (isPackage && !_packageRecipientAllowed(data)) return;
+    if (isPackage) {
+      await _updatePackageState(data);
+    }
     final status = _status(data);
     final trackingNumber = _trackingNumber(data, package: isPackage);
     final copy = status == null
@@ -250,6 +549,7 @@ class PushNotificationService extends GetxService {
       status: status,
       trackingNumber: trackingNumber,
       identifiers: _trackingIdentifiers(data, package: isPackage),
+      recipientId: _recipientIdentifier(data),
       title: title,
       body: body,
     );
@@ -261,37 +561,33 @@ class PushNotificationService extends GetxService {
       dedupeKey: dedupeKey,
     );
 
-    if (!isIosSystemNotification) {
-      if (Get.isRegistered<LocalNotificationService>()) {
-        Get.find<LocalNotificationService>().show(
-          title: title ?? (isPackage ? 'Package update' : 'Order update'),
-          body:
-              body ??
-              'You have a new ${isPackage ? 'package' : 'order'} update.',
-          payload: _encodePayload(data, package: isPackage),
-          notificationId: LocalNotificationService.notificationIdForDedupeKey(
-            dedupeKey,
-          ),
-          dedupeKey: dedupeKey,
-        );
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (Get.isRegistered<LocalNotificationService>()) {
-            Get.find<LocalNotificationService>().show(
-              title: title ?? (isPackage ? 'Package update' : 'Order update'),
-              body:
-                  body ??
-                  'You have a new ${isPackage ? 'package' : 'order'} update.',
-              payload: _encodePayload(data, package: isPackage),
-              notificationId:
-                  LocalNotificationService.notificationIdForDedupeKey(
-                    dedupeKey,
-                  ),
-              dedupeKey: dedupeKey,
-            );
-          }
-        });
-      }
+    if (Get.isRegistered<LocalNotificationService>()) {
+      Get.find<LocalNotificationService>().show(
+        title: title ?? (isPackage ? 'Package update' : 'Order update'),
+        body:
+            body ?? 'You have a new ${isPackage ? 'package' : 'order'} update.',
+        payload: _encodePayload(data, package: isPackage),
+        notificationId: LocalNotificationService.notificationIdForDedupeKey(
+          dedupeKey,
+        ),
+        dedupeKey: dedupeKey,
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (Get.isRegistered<LocalNotificationService>()) {
+          Get.find<LocalNotificationService>().show(
+            title: title ?? (isPackage ? 'Package update' : 'Order update'),
+            body:
+                body ??
+                'You have a new ${isPackage ? 'package' : 'order'} update.',
+            payload: _encodePayload(data, package: isPackage),
+            notificationId: LocalNotificationService.notificationIdForDedupeKey(
+              dedupeKey,
+            ),
+            dedupeKey: dedupeKey,
+          );
+        }
+      });
     }
   }
 
@@ -300,11 +596,25 @@ class PushNotificationService extends GetxService {
   }
 
   void _handleLocalTap(Map<String, dynamic> data) {
-    _handleNotificationData(_notificationData(data));
+    _handleNotificationData(
+      _notificationData(data),
+      packageRecipientAlreadyValidated: true,
+    );
   }
 
-  void _handleNotificationData(Map<String, dynamic> data) {
+  void _handleNotificationData(
+    Map<String, dynamic> data, {
+    bool packageRecipientAlreadyValidated = false,
+  }) {
     final isPackage = _isPackagePayload(data);
+    if (isPackage &&
+        !packageRecipientAlreadyValidated &&
+        !_packageRecipientAllowed(data)) {
+      return;
+    }
+    if (isPackage) {
+      unawaited(_updatePackageState(data));
+    }
     final status = _navigationStatus(data);
     final displayStatus = _status(data);
     final trackingNumber = _trackingNumber(data, package: isPackage);
@@ -320,6 +630,7 @@ class PushNotificationService extends GetxService {
       status: status,
       trackingNumber: trackingNumber,
       identifiers: _trackingIdentifiers(data, package: isPackage),
+      recipientId: _recipientIdentifier(data),
       title: data['title']?.toString(),
       body: data['body']?.toString() ?? data['message']?.toString(),
     );
@@ -389,20 +700,6 @@ class PushNotificationService extends GetxService {
         _queueNotificationNavigation(_pendingNotificationNavigation!);
       }
     }
-  }
-
-  Future<String?> _waitForApnsToken() async {
-    if (defaultTargetPlatform != TargetPlatform.iOS &&
-        defaultTargetPlatform != TargetPlatform.macOS) {
-      return null;
-    }
-
-    for (var attempt = 0; attempt < 10; attempt += 1) {
-      final token = await FirebaseMessaging.instance.getAPNSToken();
-      if (token != null && token.trim().isNotEmpty) return token;
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-    return null;
   }
 
   void _recordInAppNotification({
@@ -515,18 +812,24 @@ class PushNotificationService extends GetxService {
     final signature = _navigationSignature(data);
     if (_lastNotificationNavigationSignature != signature) return false;
 
-    return DateTime.now().difference(lastAt) < const Duration(seconds: 1);
+    return DateTime.now().difference(lastAt) < const Duration(seconds: 3);
   }
 
   String _navigationSignature(Map<String, dynamic> data) {
     final isPackage = _isPackagePayload(data);
+    final explicitDedupeKey =
+        _firstText(data, const ['dedupeKey', 'dedupe_key']) ?? '';
+    if (explicitDedupeKey.trim().isNotEmpty) {
+      return explicitDedupeKey.trim().toLowerCase();
+    }
     final type = data['type']?.toString().trim().toLowerCase() ?? '';
     final status = _navigationStatus(data)?.trim().toLowerCase() ?? '';
     final orderId = _trackingNumber(
       data,
       package: isPackage,
     ).trim().toLowerCase();
-    return '${isPackage ? 'package' : 'order'}|$type|$status|$orderId';
+    final recipientId = _recipientIdentifier(data).trim().toLowerCase();
+    return '${isPackage ? 'package' : 'order'}|$type|$status|$orderId|$recipientId';
   }
 
   String? _navigationStatus(Map<String, dynamic> data) {
@@ -572,15 +875,6 @@ class PushNotificationService extends GetxService {
       'out_for_delivery',
       'on_the_way',
     }.contains(normalized);
-  }
-
-  void _bindLocalNotificationTaps() {
-    if (!Get.isRegistered<LocalNotificationService>()) return;
-    final local = Get.find<LocalNotificationService>();
-    _localTapSub?.cancel();
-    _localTapSub = local.taps.listen(_handleLocalTap);
-    final pending = local.takePendingLaunchData();
-    if (pending != null) _handleLocalTap(pending);
   }
 
   Map<String, dynamic> _notificationData(Map<String, dynamic> data) {
@@ -693,17 +987,104 @@ class PushNotificationService extends GetxService {
         .toList(growable: false);
   }
 
+  String _recipientIdentifier(Map<String, dynamic> data) {
+    final explicit = _firstText(data, const [
+      'recipientUserId',
+      'recipient_user_id',
+      'recipientId',
+      'recipient_id',
+      'targetUserId',
+      'target_user_id',
+      'customerId',
+      'customer_id',
+      'userId',
+      'user_id',
+    ]);
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+
+    if (_storage.read('isLoggedIn') != true ||
+        (_storage.read<String>('accessToken')?.trim().isEmpty ?? true)) {
+      return '';
+    }
+    final rawUser = _storage.read('currentUser');
+    if (rawUser is! Map) return '';
+    final user = Map<String, dynamic>.from(rawUser);
+    return _firstText(user, const [
+          'id',
+          '_id',
+          'userId',
+          'user_id',
+          'phone',
+          'phoneNumber',
+          'mobile',
+          'email',
+        ]) ??
+        '';
+  }
+
   String _encodePayload(Map<String, dynamic> data, {required bool package}) {
+    final status = _status(data);
+    final trackingNumber = _trackingNumber(data, package: package);
+    final recipientId = _recipientIdentifier(data);
     final payload = <String, String>{
       'type': package ? 'package' : 'order',
-      for (final entry in data.entries)
-        if (entry.value != null) entry.key: entry.value.toString(),
+      if (trackingNumber.isNotEmpty)
+        (package ? 'packageOrderId' : 'orderId'): trackingNumber,
+      if (status?.trim().isNotEmpty == true) 'status': status!.trim(),
+      if (recipientId.isNotEmpty) 'recipientUserId': recipientId,
     };
     return jsonEncode(payload);
   }
 
+  bool _packageRecipientAllowed(Map<String, dynamic> data) {
+    if (_storage.read('isLoggedIn') != true ||
+        (_storage.read<String>('accessToken')?.trim().isEmpty ?? true)) {
+      return false;
+    }
+    final rawUser = _storage.read('currentUser');
+    if (rawUser is! Map) return false;
+    final user = Map<String, dynamic>.from(rawUser);
+    final match = packageRecipientMatch(
+      data: data,
+      currentUserId:
+          (user['id'] ?? user['_id'] ?? user['userId'])?.toString() ?? '',
+      currentUserPhone:
+          (user['phone'] ?? user['phoneNumber'] ?? user['mobile'])
+              ?.toString() ??
+          '',
+    );
+    if (match == PackageRecipientMatch.matched) return true;
+    if (match == PackageRecipientMatch.mismatched) return false;
+
+    final liveOrders = Get.isRegistered<PackageController>()
+        ? Get.find<PackageController>().orders.map((order) => order.toJson())
+        : const <Map<String, dynamic>>[];
+    final storedOrders =
+        _storage.read<List<dynamic>>(
+          PackageController.packageOrdersStorageKey,
+        ) ??
+        const <dynamic>[];
+    return packageNotificationBelongsToKnownOrder(
+      data: data,
+      storedOrders: [...liveOrders, ...storedOrders],
+    );
+  }
+
+  Future<void> _updatePackageState(Map<String, dynamic> data) async {
+    if (!Get.isRegistered<PackageController>()) return;
+    final trackingNumber = _trackingNumber(data, package: true);
+    await Get.find<PackageController>().handleRealtimePackagePayload(
+      data,
+      fallbackOrderId: trackingNumber.isEmpty ? null : trackingNumber,
+      notifyStatusChange: false,
+    );
+  }
+
   @override
   void onClose() {
+    _listenersInitialized = false;
+    _foregroundMessageSub?.cancel();
+    _messageOpenedSub?.cancel();
     _tokenRefreshSub?.cancel();
     _localTapSub?.cancel();
     super.onClose();

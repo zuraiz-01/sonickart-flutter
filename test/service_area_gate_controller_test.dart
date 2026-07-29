@@ -1,11 +1,16 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:sizer/sizer.dart';
 import 'package:sonic_cart/app/core/network/api_service.dart';
 import 'package:sonic_cart/app/core/services/app_session_scope.dart';
 import 'package:sonic_cart/app/core/services/service_area_gate_controller.dart';
 import 'package:sonic_cart/app/core/services/service_area_gate_service.dart';
+import 'package:sonic_cart/app/core/widgets/service_area_gate_overlay.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -214,6 +219,180 @@ void main() {
     expect(controller.isBlocked, isTrue);
     expect(service.evaluateCount, 1);
   });
+
+  testWidgets('inside and temporary results do not show Hang Tight', (
+    tester,
+  ) async {
+    final service = _FakeServiceAreaGateService([
+      ServiceAreaGateResult.allowed(
+        locationLabel: 'Inside service area',
+        latitude: 24.8607,
+        longitude: 67.0011,
+      ),
+      ServiceAreaGateResult.temporarilyUnavailable(
+        message: 'Network temporarily unavailable.',
+      ),
+    ]);
+    final controller = ServiceAreaGateController(
+      serviceAreaGateService: service,
+    );
+    addTearDown(controller.onClose);
+
+    await controller.ensureChecked();
+    await tester.pumpWidget(_overlayTestApp(controller));
+
+    expect(
+      controller.evaluationState.value,
+      ServiceAreaGateState.insideServiceArea,
+    );
+    expect(find.text('HANG'), findsNothing);
+
+    await controller.ensureChecked(force: true);
+    await tester.pump();
+
+    expect(
+      controller.evaluationState.value,
+      ServiceAreaGateState.temporarilyUnavailable,
+    );
+    expect(controller.confirmedResult.value?.isAllowed, isTrue);
+    expect(controller.isBlocked, isFalse);
+    expect(find.text('HANG'), findsNothing);
+    expect(GetStorage().read<bool>('selectedLocationServiceable'), isTrue);
+  });
+
+  testWidgets('confirmed outside result shows Hang Tight', (tester) async {
+    final controller = ServiceAreaGateController(
+      serviceAreaGateService: _FakeServiceAreaGateService([
+        ServiceAreaGateResult.blocked(
+          reason: ServiceAreaBlockReason.outsideWorkingArea,
+          locationLabel: 'Outside service area',
+          message: 'Service is not available here.',
+          latitude: 25.5,
+          longitude: 68.5,
+        ),
+      ]),
+    );
+    addTearDown(controller.onClose);
+
+    await controller.ensureChecked();
+    await tester.pumpWidget(_overlayTestApp(controller));
+
+    expect(controller.isBlocked, isTrue);
+    expect(find.text('HANG'), findsOneWidget);
+    expect(find.text('TIGHT!'), findsOneWidget);
+  });
+
+  test(
+    'later confirmed outside result replaces a previous inside result',
+    () async {
+      final service = _FakeServiceAreaGateService([
+        ServiceAreaGateResult.allowed(
+          locationLabel: 'Inside service area',
+          latitude: 24.8607,
+          longitude: 67.0011,
+        ),
+        ServiceAreaGateResult.blocked(
+          reason: ServiceAreaBlockReason.outsideWorkingArea,
+          locationLabel: 'Outside service area',
+          message: 'Service is not available here.',
+          latitude: 25.5,
+          longitude: 68.5,
+        ),
+      ]);
+      final controller = ServiceAreaGateController(
+        serviceAreaGateService: service,
+      );
+      addTearDown(controller.onClose);
+
+      await controller.ensureChecked();
+      expect(controller.isBlocked, isFalse);
+
+      await controller.ensureChecked(force: true);
+
+      expect(controller.isBlocked, isTrue);
+      expect(
+        controller.confirmedResult.value?.state,
+        ServiceAreaGateState.outsideServiceArea,
+      );
+      expect(GetStorage().read<bool>('selectedLocationServiceable'), isFalse);
+    },
+  );
+
+  test('concurrent current-location checks share one evaluation', () async {
+    final service = _ControllableServiceAreaGateService();
+    final controller = ServiceAreaGateController(
+      serviceAreaGateService: service,
+    );
+    addTearDown(controller.onClose);
+
+    final first = controller.checkCurrentLocation();
+    final second = controller.checkCurrentLocation(force: true);
+
+    expect(service.evaluateCount, 1);
+    service.currentLocationCompleter.complete(
+      ServiceAreaGateResult.allowed(
+        locationLabel: 'Inside service area',
+        latitude: 24.8607,
+        longitude: 67.0011,
+      ),
+    );
+    await Future.wait([first, second]);
+
+    expect(service.evaluateCount, 1);
+    expect(controller.isBlocked, isFalse);
+  });
+
+  test(
+    'older current-location result cannot overwrite newer manual success',
+    () async {
+      final service = _ControllableServiceAreaGateService();
+      final controller = ServiceAreaGateController(
+        serviceAreaGateService: service,
+      );
+      addTearDown(controller.onClose);
+
+      final oldCheck = controller.checkCurrentLocation();
+      await controller.evaluateManualLocation(
+        address: 'New selected address',
+        latitude: 24.8607,
+        longitude: 67.0011,
+      );
+      service.currentLocationCompleter.complete(
+        ServiceAreaGateResult.blocked(
+          reason: ServiceAreaBlockReason.outsideWorkingArea,
+          locationLabel: 'Stale outside result',
+          message: 'Stale result',
+          latitude: 25.5,
+          longitude: 68.5,
+        ),
+      );
+      await oldCheck;
+
+      expect(controller.isBlocked, isFalse);
+      expect(
+        controller.confirmedResult.value?.state,
+        ServiceAreaGateState.insideServiceArea,
+      );
+      expect(
+        GetStorage().read<Map<String, dynamic>>('selectedAddress')?['address'],
+        'New selected address',
+      );
+    },
+  );
+}
+
+Widget _overlayTestApp(ServiceAreaGateController controller) {
+  return Sizer(
+    builder: (context, orientation, deviceType) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [ServiceAreaGateOverlay(controller: controller)],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _FakeServiceAreaGateService extends ServiceAreaGateService {
@@ -230,5 +409,32 @@ class _FakeServiceAreaGateService extends ServiceAreaGateService {
         : _results.length - 1;
     evaluateCount += 1;
     return _results[index];
+  }
+}
+
+class _ControllableServiceAreaGateService extends ServiceAreaGateService {
+  _ControllableServiceAreaGateService()
+    : super(apiService: ApiService(storage: GetStorage()));
+
+  final currentLocationCompleter = Completer<ServiceAreaGateResult>();
+  int evaluateCount = 0;
+
+  @override
+  Future<ServiceAreaGateResult> evaluate() {
+    evaluateCount += 1;
+    return currentLocationCompleter.future;
+  }
+
+  @override
+  Future<ServiceAreaGateResult> evaluateManualLocation({
+    required double latitude,
+    required double longitude,
+    required String locationLabel,
+  }) async {
+    return ServiceAreaGateResult.allowed(
+      locationLabel: locationLabel,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 }

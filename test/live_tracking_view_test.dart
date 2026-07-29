@@ -37,13 +37,14 @@ void main() {
       liveTrackingStatusTextForTesting('on the way to pickup'),
       'Partner Assigned',
     );
-    expect(liveTrackingStatusTextForTesting('picked_up'), 'Order on the way');
-    expect(liveTrackingStatusTextForTesting('on the way'), 'Order on the way');
+    expect(liveTrackingStatusTextForTesting('picked_up'), 'Order Picked Up');
+    expect(liveTrackingStatusTextForTesting('on the way'), 'Order Picked Up');
     expect(
       liveTrackingStatusTextForTesting('on the way to delivery'),
-      'Order on the way',
+      'Order Picked Up',
     );
-    expect(liveTrackingStatusTextForTesting('in_transit'), 'Order on the way');
+    expect(liveTrackingStatusTextForTesting('in_transit'), 'Order Picked Up');
+    expect(liveTrackingStatusTextForTesting('delivered'), 'Order Delivered');
   });
 
   test('live tracking status card does not show distance row', () {

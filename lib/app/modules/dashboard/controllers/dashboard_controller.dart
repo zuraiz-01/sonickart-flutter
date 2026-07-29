@@ -16,10 +16,6 @@ import '../../categories/controllers/categories_controller.dart';
 import '../../package/controllers/package_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
-bool _isDashboardTabNavigationRunning = false;
-int? _pendingDashboardTabIndex;
-Object? _pendingDashboardTabArguments;
-
 void openDashboardTab(int index, {Object? arguments}) {
   final targetIndex = _normalizeDashboardIndex(index);
 
@@ -30,47 +26,31 @@ void openDashboardTab(int index, {Object? arguments}) {
   );
 
   if (Get.currentRoute == AppRoutes.dashboard) {
-    _pendingDashboardTabIndex = null;
-    _pendingDashboardTabArguments = null;
     _setDashboardTabIfReady(targetIndex, arguments: arguments);
     return;
   }
 
-  _pendingDashboardTabIndex = targetIndex;
-  _pendingDashboardTabArguments = arguments;
-  if (_isDashboardTabNavigationRunning) return;
-
-  _isDashboardTabNavigationRunning = true;
-  unawaited(_runDashboardTabNavigation());
-}
-
-Future<void> _runDashboardTabNavigation() async {
-  await Future<void>.delayed(Duration.zero);
+  // Update a live controller now; route arguments initialize a replacement.
+  _setDashboardTabIfReady(targetIndex, arguments: arguments);
   try {
-    while (_pendingDashboardTabIndex != null) {
-      final targetIndex = _pendingDashboardTabIndex!;
-      final targetArguments = _pendingDashboardTabArguments;
-      _pendingDashboardTabIndex = null;
-      _pendingDashboardTabArguments = null;
-
-      if (Get.currentRoute != AppRoutes.dashboard) {
-        await Get.offAllNamed(
-          AppRoutes.dashboard,
-          arguments: {'tabIndex': targetIndex},
-        );
-      }
-
-      _setDashboardTabIfReady(targetIndex, arguments: targetArguments);
+    final navigation = Get.offAllNamed<void>(
+      AppRoutes.dashboard,
+      arguments: {'tabIndex': targetIndex},
+    );
+    // This future completes when the dashboard route is later removed.
+    if (navigation != null) {
+      unawaited(
+        navigation.then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('openDashboardTab: navigation failed $error');
+            debugPrintStack(stackTrace: stackTrace);
+          },
+        ),
+      );
     }
   } catch (error) {
     debugPrint('openDashboardTab: navigation failed $error');
-  } finally {
-    _isDashboardTabNavigationRunning = false;
-    final pendingTarget = _pendingDashboardTabIndex;
-    if (pendingTarget != null) {
-      final pendingArguments = _pendingDashboardTabArguments;
-      openDashboardTab(pendingTarget, arguments: pendingArguments);
-    }
   }
 }
 
@@ -106,8 +86,13 @@ class DashboardController extends GetxController with WidgetsBindingObserver {
     Duration initialCatalogContextTimeout =
         _defaultInitialCatalogContextTimeout,
     Duration settingsLoadTimeout = _defaultSettingsLoadTimeout,
+    Duration resumeLocationRefreshInterval =
+        _defaultResumeLocationRefreshInterval,
+    DateTime Function()? clock,
   }) : _initialCatalogContextTimeout = initialCatalogContextTimeout,
-       _settingsLoadTimeout = settingsLoadTimeout;
+       _settingsLoadTimeout = settingsLoadTimeout,
+       _resumeLocationRefreshInterval = resumeLocationRefreshInterval,
+       _clock = clock ?? DateTime.now;
 
   final currentIndex = 0.obs;
   final currentSearchHintIndex = 0.obs;
@@ -119,12 +104,17 @@ class DashboardController extends GetxController with WidgetsBindingObserver {
   static const _defaultInitialCatalogContextTimeout = Duration(seconds: 10);
   static const _defaultSettingsLoadTimeout = Duration(seconds: 8);
   static const _featuredLoadTimeout = Duration(seconds: 20);
+  static const _defaultResumeLocationRefreshInterval = Duration(seconds: 5);
 
   final Duration _initialCatalogContextTimeout;
   final Duration _settingsLoadTimeout;
+  final Duration _resumeLocationRefreshInterval;
+  final DateTime Function() _clock;
   Timer? _searchHintTimer;
   Worker? _ratingWorker;
   Future<void>? _appOpenLocationRefresh;
+  DateTime? _lastAppOpenLocationRefreshAt;
+  bool _wasAwayFromForeground = false;
   int _catalogLoadRequestId = 0;
 
   final searchHints = const [
@@ -389,16 +379,37 @@ class DashboardController extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_refreshLiveLocationAfterAppOpen());
+    if (state != AppLifecycleState.resumed) {
+      _wasAwayFromForeground = true;
+      return;
     }
+    if (!_wasAwayFromForeground) return;
+
+    _wasAwayFromForeground = false;
+    unawaited(_refreshLiveLocationAfterAppOpen());
   }
 
   Future<void> _refreshLiveLocationAfterAppOpen() {
     final active = _appOpenLocationRefresh;
     if (active != null) return active;
+    if (isClosed || !Get.isRegistered<ServiceAreaGateController>()) {
+      return Future<void>.value();
+    }
 
-    final refresh = _runLiveLocationAfterAppOpen();
+    final serviceGateController = Get.find<ServiceAreaGateController>();
+    if (!serviceGateController.shouldRefreshLiveLocationOnAppOpen) {
+      return Future<void>.value();
+    }
+
+    final now = _clock();
+    final lastRefreshAt = _lastAppOpenLocationRefreshAt;
+    if (lastRefreshAt != null &&
+        now.difference(lastRefreshAt) < _resumeLocationRefreshInterval) {
+      return Future<void>.value();
+    }
+    _lastAppOpenLocationRefreshAt = now;
+
+    final refresh = _runLiveLocationAfterAppOpen(serviceGateController);
     _appOpenLocationRefresh = refresh;
     refresh.whenComplete(() {
       if (identical(_appOpenLocationRefresh, refresh)) {
@@ -408,13 +419,9 @@ class DashboardController extends GetxController with WidgetsBindingObserver {
     return refresh;
   }
 
-  Future<void> _runLiveLocationAfterAppOpen() async {
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (isClosed || !Get.isRegistered<ServiceAreaGateController>()) return;
-
-    final serviceGateController = Get.find<ServiceAreaGateController>();
-    if (!serviceGateController.shouldRefreshLiveLocationOnAppOpen) return;
-
+  Future<void> _runLiveLocationAfterAppOpen(
+    ServiceAreaGateController serviceGateController,
+  ) async {
     await serviceGateController.checkCurrentLocation(force: true);
     if (isClosed || serviceGateController.isBlocked) return;
 

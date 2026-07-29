@@ -751,9 +751,10 @@ class OrderController extends GetxController {
       }
 
       final hydrated = await _hydrateOrdersForList(fromApi);
-      orders.assignAll(hydrated);
-      latestOrder.value = hydrated.firstOrNull;
-      var active = _latestActiveProductOrder(hydrated);
+      final reconciled = _deduplicateOrders(hydrated);
+      orders.assignAll(reconciled);
+      latestOrder.value = reconciled.firstOrNull;
+      var active = _latestActiveProductOrder(reconciled);
       if (active != null && active.resolvedItemCount == 0) {
         for (final id in _orderIdentifiers(active)) {
           final detailed = await _tryFetchOrderById(id);
@@ -768,11 +769,36 @@ class OrderController extends GetxController {
         }
       }
       activeProductOrder.value = active;
+      _refreshSelectedOrderFromCurrentOrders();
       await _persistOrders();
     } catch (error) {
       debugPrint('OrderController.syncActiveProductOrder failed: $error');
     } finally {
       isSyncingActiveOrder.value = false;
+    }
+  }
+
+  List<OrderModel> _deduplicateOrders(List<OrderModel> source) {
+    final seenIdentifiers = <String>{};
+    return source
+        .where((order) {
+          final identifiers = _orderIdentifiers(order).toSet();
+          if (identifiers.any(seenIdentifiers.contains)) return false;
+          seenIdentifiers.addAll(identifiers);
+          return true;
+        })
+        .toList(growable: false);
+  }
+
+  void _refreshSelectedOrderFromCurrentOrders() {
+    final selected = selectedOrder.value;
+    if (selected == null) return;
+    final selectedIds = _orderIdentifiers(selected).toSet();
+    final refreshed = orders.firstWhereOrNull(
+      (order) => _orderIdentifiers(order).any(selectedIds.contains),
+    );
+    if (refreshed != null) {
+      selectedOrder.value = refreshed;
     }
   }
 
@@ -1234,7 +1260,7 @@ class OrderController extends GetxController {
     for (final id in identifiers.where((item) => item.isNotEmpty)) {
       final detailed = await _tryFetchOrderById(id);
       if (detailed != null) {
-        final updated = await _upsertOrder(detailed);
+        final updated = await _upsertOrder(detailed, notifyStatusChange: false);
         selectedOrder.value = updated;
         return updated;
       }
@@ -1250,7 +1276,7 @@ class OrderController extends GetxController {
     for (final id in _orderIdentifiers(order)) {
       final detailed = await _tryFetchOrderById(id);
       if (detailed != null) {
-        return _upsertOrder(detailed);
+        return _upsertOrder(detailed, notifyStatusChange: false);
       }
     }
     return null;
@@ -2219,12 +2245,28 @@ class OrderController extends GetxController {
           order.id,
           order.raw['_id'],
           order.raw['orderId'],
+          order.raw['order_id'],
           order.raw['orderNumber'],
+          order.raw['order_number'],
+          order.raw['deliveryOrderId'],
+          order.raw['delivery_order_id'],
         ]
         .map((value) => value?.toString().trim() ?? '')
         .where((value) => value.isNotEmpty)
         .toSet()
         .toList();
+  }
+
+  String _notificationOrderNumber(OrderModel order) {
+    return _firstNonEmpty([
+          order.raw['orderNumber'],
+          order.raw['order_number'],
+          order.raw['orderId'],
+          order.raw['order_id'],
+          order.raw['_id'],
+          order.id,
+        ]) ??
+        order.id;
   }
 
   String _ratingRequestOrderId(OrderModel? order, String fallback) {
@@ -3012,7 +3054,7 @@ class OrderController extends GetxController {
 
     final copy = orderStatusNotificationCopy(
       status: status,
-      orderNumber: order.id,
+      orderNumber: _notificationOrderNumber(order),
     );
     if (copy == null) return;
 
@@ -3020,9 +3062,20 @@ class OrderController extends GetxController {
       package: false,
       status: status,
       identifiers: _orderIdentifiers(order),
+      recipientId: _currentUserNotificationId,
       title: copy.title,
       body: copy.body,
     );
+    if (Get.isRegistered<NotificationService>()) {
+      unawaited(
+        Get.find<NotificationService>().record(
+          title: copy.title,
+          message: copy.body,
+          category: 'order',
+          dedupeKey: dedupeKey,
+        ),
+      );
+    }
     if (Get.isRegistered<LocalNotificationService>()) {
       Get.find<LocalNotificationService>().show(
         title: copy.title,
@@ -3060,15 +3113,48 @@ class OrderController extends GetxController {
     if (compact == 'picked' ||
         compact == 'pickup' ||
         compact == 'pickedup' ||
-        compact == 'orderpickedup') {
+        compact == 'orderpickedup' ||
+        compact == 'intransit' ||
+        compact == 'transit' ||
+        compact == 'orderintransit' ||
+        compact == 'ontheway' ||
+        compact == 'orderontheway' ||
+        compact == 'onthewaytodelivery' ||
+        compact == 'outfordelivery' ||
+        compact == 'orderoutfordelivery' ||
+        compact == 'arriving') {
       return 'picked_up';
     }
-    if (compact == 'intransit' ||
-        compact == 'transit' ||
-        compact == 'orderintransit') {
-      return 'in_transit';
-    }
     return normalized;
+  }
+
+  String get _currentUserNotificationId {
+    final authUser = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>().currentUser
+        : null;
+    final fromController = authUser?.id.trim() ?? '';
+    if (fromController.isNotEmpty) return fromController;
+    if (_storage.read('isLoggedIn') != true ||
+        (_storage.read<String>('accessToken')?.trim().isEmpty ?? true)) {
+      return '';
+    }
+    final rawUser = _storage.read('currentUser');
+    if (rawUser is! Map) return '';
+    final user = Map<String, dynamic>.from(rawUser);
+    for (final key in const [
+      'id',
+      '_id',
+      'userId',
+      'user_id',
+      'phone',
+      'phoneNumber',
+      'mobile',
+      'email',
+    ]) {
+      final value = user[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 }
 

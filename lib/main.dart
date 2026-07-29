@@ -9,6 +9,7 @@ import 'package:toastification/toastification.dart';
 
 import 'app/core/services/firebase_bootstrap.dart';
 import 'app/core/services/app_session_scope.dart';
+import 'app/core/services/app_resume_reconciliation_service.dart';
 import 'app/core/services/local_notification_service.dart';
 import 'app/core/services/push_notification_service.dart';
 import 'app/core/services/session_controller.dart';
@@ -19,30 +20,30 @@ import 'app/theme/theme_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('=== BACKGROUND HANDLER TRIGGERED ===');
-  debugPrint('Message ID: ${message.messageId}');
-  debugPrint('Has notification: ${message.notification != null}');
-  debugPrint('Notification title: ${message.notification?.title}');
-  debugPrint('Notification body: ${message.notification?.body}');
-  debugPrint('Data payload: ${message.data}');
+  debugPrint(
+    'Background notification received: '
+    'systemPayload=${message.notification != null} '
+    'dataFieldCount=${message.data.length}',
+  );
   try {
     DartPluginRegistrant.ensureInitialized();
-    debugPrint('DartPluginRegistrant.ensureInitialized() done');
     await FirebaseBootstrap.initialize();
-    debugPrint('FirebaseBootstrap.initialize() done');
-    if (message.notification == null) {
+    await GetStorage.init();
+    if (LocalNotificationService.shouldDisplayRemoteMessageFromBackground(
+      message,
+    )) {
       await LocalNotificationService.showRemoteMessageFromBackground(message);
-      debugPrint('showRemoteMessageFromBackground() done');
     } else {
+      await LocalNotificationService.recordRemoteMessageFromBackground(message);
       debugPrint(
-        'Background local notification skipped; FCM system notification handles this message.',
+        'Background local notification skipped; FCM/system notification handles this message or the payload is not displayable.',
       );
     }
-  } catch (error, stack) {
-    debugPrint('BACKGROUND HANDLER ERROR: $error');
-    debugPrint('STACK: $stack');
+  } catch (error) {
+    debugPrint(
+      'Background notification handling failed safely: ${error.runtimeType}',
+    );
   }
-  debugPrint('=== BACKGROUND HANDLER END ===');
 }
 
 Future<void> main() async {
@@ -56,6 +57,12 @@ Future<void> main() async {
   }
   if (!Get.isRegistered<SessionController>()) {
     Get.put(SessionController(GetStorage()), permanent: true);
+  }
+  if (!Get.isRegistered<AppResumeReconciliationService>()) {
+    Get.put(
+      AppResumeReconciliationService(GetStorage()),
+      permanent: true,
+    ).start();
   }
   if (!Get.isRegistered<LocalNotificationService>()) {
     await Get.putAsync(

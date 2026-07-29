@@ -6,11 +6,22 @@ String normalizeNotificationStatus(String? status) {
   final compact = normalized.replaceAll('_', '');
 
   if (compact == 'orderplaced') return 'placed';
+  if (compact == 'waitingpickup' ||
+      compact == 'waitingforpickup' ||
+      compact == 'orderwaitingforpickup' ||
+      compact == 'packagewaitingforpickup') {
+    return 'placed';
+  }
   if (compact == 'packageplaced' || compact == 'packagebooked') {
     return 'placed';
   }
   if (compact == 'orderaccepted') return 'accepted';
   if (compact == 'packageaccepted') return 'accepted';
+  if (compact == 'onthewaytopickup' ||
+      compact == 'orderonthewaytopickup' ||
+      compact == 'packageonthewaytopickup') {
+    return 'accepted';
+  }
   if (compact == 'orderassigned') return 'assigned';
   if (compact == 'packageassigned' ||
       compact == 'partnerassigned' ||
@@ -29,18 +40,31 @@ String normalizeNotificationStatus(String? status) {
       compact == 'pickup' ||
       compact == 'pickedup' ||
       compact == 'orderpickedup' ||
-      compact == 'packagepickedup') {
+      compact == 'packagepickedup' ||
+      compact == 'arriving' ||
+      compact == 'orderarriving' ||
+      compact == 'packagearriving') {
     return 'picked_up';
   }
   if (compact == 'intransit' ||
       compact == 'transit' ||
-      compact == 'orderintransit') {
+      compact == 'orderintransit' ||
+      compact == 'packageintransit') {
     return 'in_transit';
   }
-  if (compact == 'ontheway' || compact == 'orderontheway') {
+  if (compact == 'ontheway' ||
+      compact == 'orderontheway' ||
+      compact == 'packageontheway' ||
+      compact == 'onthewaytodelivery' ||
+      compact == 'orderonthewaytodelivery' ||
+      compact == 'packageonthewaytodelivery') {
     return 'on_the_way';
   }
-  if (compact == 'outfordelivery') return 'out_for_delivery';
+  if (compact == 'outfordelivery' ||
+      compact == 'orderoutfordelivery' ||
+      compact == 'packageoutfordelivery') {
+    return 'out_for_delivery';
+  }
   if (normalized == 'complete') return 'completed';
   if (normalized == 'canceled') return 'cancelled';
   return normalized;
@@ -79,8 +103,11 @@ String? notificationDisplayStatus({
 String? _allowedOrderNotificationStatus(String? status) {
   return switch (normalizeNotificationStatus(status)) {
     'placed' || 'pending' => 'placed',
-    'accepted' || 'assigned' || 'confirmed' => 'accepted',
-    'picked_up' => 'picked_up',
+    'accepted' || 'assigned' || 'confirmed' => 'assigned',
+    'picked_up' ||
+    'in_transit' ||
+    'on_the_way' ||
+    'out_for_delivery' => 'picked_up',
     'delivered' || 'completed' => 'delivered',
     _ => null,
   };
@@ -88,7 +115,7 @@ String? _allowedOrderNotificationStatus(String? status) {
 
 String? _allowedPackageNotificationStatus(String? status) {
   return switch (normalizeNotificationStatus(status)) {
-    'placed' || 'pending' || 'booked' => 'placed',
+    'placed' || 'pending' || 'booked' => 'booked',
     'accepted' ||
     'assigned' ||
     'confirmed' ||
@@ -97,8 +124,11 @@ String? _allowedPackageNotificationStatus(String? status) {
     'delivery_partner_assigned' ||
     'assigned_to_partner' ||
     'rider_assigned' ||
-    'driver_assigned' => 'accepted',
-    'picked_up' => 'picked_up',
+    'driver_assigned' => 'assigned',
+    'picked_up' ||
+    'in_transit' ||
+    'on_the_way' ||
+    'out_for_delivery' => 'picked_up',
     'delivered' || 'completed' => 'delivered',
     _ => null,
   };
@@ -120,11 +150,14 @@ String? _allowedOrderStatusFromText(Iterable<String?> values) {
   if (text.contains('accepted') ||
       text.contains('confirmed') ||
       text.contains('assigned')) {
-    return 'accepted';
+    return 'assigned';
   }
   if (text.contains('picked up') ||
       text.contains('pickup') ||
-      text.contains('pickedup')) {
+      text.contains('pickedup') ||
+      text.contains('on the way') ||
+      text.contains('out for delivery') ||
+      text.contains('in transit')) {
     return 'picked_up';
   }
   if (text.contains('placed') || text.contains('pending')) {
@@ -148,19 +181,20 @@ String? _allowedPackageStatusFromText(Iterable<String?> values) {
   }
   if (text.contains('picked up') ||
       text.contains('pickup') ||
-      text.contains('pickedup')) {
+      text.contains('pickedup') ||
+      text.contains('on the way') ||
+      text.contains('out for delivery') ||
+      text.contains('in transit')) {
     return 'picked_up';
   }
   if (text.contains('accepted') ||
       text.contains('confirmed') ||
       text.contains('assigned') ||
       text.contains('partner assigned')) {
-    return 'accepted';
+    return 'assigned';
   }
-  if (text.contains('placed') ||
-      text.contains('pending') ||
-      text.contains('booked')) {
-    return 'placed';
+  if (text.contains('booked') || text.contains('placed')) {
+    return 'booked';
   }
   return null;
 }
@@ -176,52 +210,41 @@ String? _allowedPackageStatusFromText(Iterable<String?> values) {
   );
   if (normalized == null) return null;
 
-  final cleanNumber = orderNumber.trim().replaceFirst(RegExp(r'^#+'), '');
-  final code = cleanNumber.isEmpty ? '' : '#$cleanNumber';
-  String text(String value) => value.replaceAll(RegExp(r'\s+'), ' ').trim();
-
   if (package) {
     return switch (normalized) {
-      'placed' => (
+      'booked' => (
         title: 'Package Booked',
-        body: 'Your package has been booked.',
+        body: 'Your Package Has Been Booked.',
       ),
-      'accepted' => (
+      'assigned' => (
         title: 'Partner Assigned',
-        body: text(
-          'A delivery partner has been assigned to your package $code.',
-        ),
+        body: 'A Delivery Partner Has Been Assigned.',
       ),
       'picked_up' => (
-        title: text('Package $code Picked Up'),
-        body: text('Your package $code has been picked up.'),
+        title: 'Package Picked Up',
+        body: 'Your Package Has Been Picked Up.',
       ),
       'delivered' => (
-        title: text('Package $code Delivered'),
-        body: text('Your package $code has been delivered.'),
+        title: 'Package Delivered',
+        body: 'Your Package Has Been Delivered.',
       ),
       _ => null,
     };
   }
 
-  const subject = 'Order';
-  const object = 'order';
   return switch (normalized) {
-    'placed' => (
-      title: text('$subject $code Placed'),
-      body: text('Your $object $code has been placed.'),
-    ),
-    'accepted' => (
-      title: text('$subject $code Accepted'),
-      body: text('Your $object $code has been accepted.'),
+    'placed' => (title: 'Order Placed', body: 'Your Order Has Been Placed.'),
+    'assigned' => (
+      title: 'Partner Assigned',
+      body: 'A Delivery Partner Has Been Assigned.',
     ),
     'picked_up' => (
-      title: text('$subject $code Picked Up'),
-      body: text('Your $object $code has been picked up.'),
+      title: 'Order Picked Up',
+      body: 'Your Order Has Been Picked Up.',
     ),
     'delivered' => (
-      title: text('$subject $code Delivered'),
-      body: text('Your $object $code has been delivered.'),
+      title: 'Order Delivered',
+      body: 'Your Order Has Been Delivered.',
     ),
     _ => null,
   };

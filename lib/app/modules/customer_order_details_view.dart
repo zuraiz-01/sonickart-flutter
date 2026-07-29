@@ -1156,24 +1156,61 @@ class _Card extends StatelessWidget {
 }
 
 String _normalizedStatus(OrderModel order) {
-  return (order.raw['deliveryStatus'] ??
-          order.raw['delivery_status'] ??
-          order.status)
-      .toString()
-      .trim()
-      .toLowerCase();
+  final normalized =
+      (order.raw['deliveryStatus'] ??
+              order.raw['delivery_status'] ??
+              order.status)
+          .toString()
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[-\s]+'), '_');
+  final compact = normalized.replaceAll('_', '');
+  if (compact == 'orderplaced' ||
+      compact == 'placed' ||
+      compact == 'pending' ||
+      compact == 'waitingpickup' ||
+      compact == 'waitingforpickup') {
+    return 'placed';
+  }
+  if (compact == 'orderaccepted' ||
+      compact == 'accepted' ||
+      compact == 'assigned' ||
+      compact == 'confirmed' ||
+      compact == 'partnerassigned' ||
+      compact == 'deliverypartnerassigned' ||
+      compact == 'onthewaytopickup') {
+    return 'accepted';
+  }
+  if (compact == 'picked' ||
+      compact == 'pickup' ||
+      compact == 'pickedup' ||
+      compact == 'orderpickedup' ||
+      compact == 'intransit' ||
+      compact == 'transit' ||
+      compact == 'orderintransit' ||
+      compact == 'ontheway' ||
+      compact == 'orderontheway' ||
+      compact == 'onthewaytodelivery' ||
+      compact == 'outfordelivery' ||
+      compact == 'orderoutfordelivery' ||
+      compact == 'arriving') {
+    return 'picked_up';
+  }
+  if (compact == 'orderdelivered' ||
+      compact == 'delivered' ||
+      compact == 'completed' ||
+      compact == 'complete') {
+    return 'delivered';
+  }
+  return normalized;
 }
 
 String _statusLabel(String status) {
   if (status == 'cancelled') return 'Order Cancelled';
   if (status == 'delivered' || status == 'completed') return 'Order Delivered';
-  if (status == 'confirmed' || status == 'accepted' || status == 'assigned') {
-    return 'Order Confirmed';
-  }
-  if (status == 'arriving' || status == 'out_for_delivery') {
-    return 'On The Way';
-  }
-  return 'Getting Things Ready';
+  if (status == 'accepted') return 'Partner Assigned';
+  if (status == 'picked_up') return 'Order Picked Up';
+  return 'Order Placed';
 }
 
 String _etaText(OrderModel order, String status) {
@@ -1196,7 +1233,9 @@ String _etaText(OrderModel order, String status) {
 String _partnerMessage(String status) {
   if (status == 'cancelled') return 'This order has been cancelled';
   if (status == 'delivered') return 'This order has been delivered';
-  return 'Your order is being prepared';
+  if (status == 'picked_up') return 'Your order has been picked up';
+  if (status == 'accepted') return 'A delivery partner has been assigned';
+  return 'Your order has been placed';
 }
 
 Map<String, dynamic> _deliveryPartner(OrderModel order) {

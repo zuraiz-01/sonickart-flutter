@@ -10,43 +10,112 @@ import '../network/api_service.dart';
 import 'firebase_bootstrap.dart';
 import 'location_lookup_service.dart';
 
+typedef ServiceAreaRulesLoader = Future<List<ServiceAreaRule>> Function();
+
+abstract interface class ServiceAreaLocationProvider {
+  Future<bool> isLocationServiceEnabled();
+
+  Future<LocationPermission> checkPermission();
+
+  Future<LocationPermission> requestPermission();
+
+  Future<Position?> getLastKnownPosition();
+
+  Future<Position> getCurrentPosition({
+    required LocationSettings locationSettings,
+  });
+}
+
+final class GeolocatorServiceAreaLocationProvider
+    implements ServiceAreaLocationProvider {
+  @override
+  Future<bool> isLocationServiceEnabled() {
+    return Geolocator.isLocationServiceEnabled();
+  }
+
+  @override
+  Future<LocationPermission> checkPermission() {
+    return Geolocator.checkPermission();
+  }
+
+  @override
+  Future<LocationPermission> requestPermission() {
+    return Geolocator.requestPermission();
+  }
+
+  @override
+  Future<Position?> getLastKnownPosition() {
+    return Geolocator.getLastKnownPosition();
+  }
+
+  @override
+  Future<Position> getCurrentPosition({
+    required LocationSettings locationSettings,
+  }) {
+    return Geolocator.getCurrentPosition(locationSettings: locationSettings);
+  }
+}
+
 class ServiceAreaGateService {
   ServiceAreaGateService({
     required ApiService apiService,
     FirebaseAuth? firebaseAuth,
     LocationLookupService? locationLookupService,
+    ServiceAreaLocationProvider? locationProvider,
+    DateTime Function()? clock,
   }) : _apiService = apiService,
        _firebaseAuth = firebaseAuth,
        _locationLookupService =
-           locationLookupService ?? LocationLookupService();
+           locationLookupService ?? LocationLookupService(),
+       _locationProvider =
+           locationProvider ?? GeolocatorServiceAreaLocationProvider(),
+       _serviceAreaRulesLoader = null,
+       _clock = clock ?? DateTime.now;
+
+  ServiceAreaGateService.withRulesLoader({
+    required ServiceAreaRulesLoader serviceAreaRulesLoader,
+    required ServiceAreaLocationProvider locationProvider,
+    LocationLookupService? locationLookupService,
+    DateTime Function()? clock,
+  }) : _apiService = null,
+       _firebaseAuth = null,
+       _locationLookupService =
+           locationLookupService ?? LocationLookupService(),
+       _locationProvider = locationProvider,
+       _serviceAreaRulesLoader = serviceAreaRulesLoader,
+       _clock = clock ?? DateTime.now;
 
   static const _collectionName = 'serviceAreas';
   static const _genericBlockedMessage =
       'We are currently live in select areas and expanding quickly to more neighbourhoods and cities.';
   static const _serviceAreasUnavailableMessage =
       'Service areas are not available right now. Please try again shortly.';
+  static const lastKnownLocationMaxAge = Duration(minutes: 5);
+  static const lastKnownLocationMaxAccuracyMeters = 100.0;
+  static const currentLocationMaxAge = Duration(minutes: 2);
+  static const currentLocationMaxAccuracyMeters = 200.0;
+  static const _lastKnownLocationTimeout = Duration(seconds: 2);
 
-  final ApiService _apiService;
+  final ApiService? _apiService;
   final FirebaseAuth? _firebaseAuth;
   final LocationLookupService _locationLookupService;
+  final ServiceAreaLocationProvider _locationProvider;
+  final ServiceAreaRulesLoader? _serviceAreaRulesLoader;
+  final DateTime Function() _clock;
 
   Future<ServiceAreaGateResult> evaluate() async {
     try {
       final positionResult = await _resolvePosition();
       if (positionResult.position == null) {
-        return ServiceAreaGateResult.blocked(
-          reason: ServiceAreaBlockReason.locationUnavailable,
-          locationLabel: positionResult.label,
-          message:
-              'Please allow location access so we can check service availability in your area.',
-        );
+        return _resultForUnavailablePosition(positionResult);
       }
 
       final position = positionResult.position!;
       debugPrint(
-        'ServiceAreaGateService.evaluate: checking position ${_coordinateLabel(position.latitude, position.longitude)}',
+        'ServiceAreaGateService.evaluate: checking '
+        '${_safePositionSummary(position)}',
       );
-      final result = await _evaluateCoordinate(
+      return await _evaluateCoordinate(
         latitude: position.latitude,
         longitude: position.longitude,
         locationLabel: await _locationLabel(
@@ -54,23 +123,11 @@ class ServiceAreaGateService {
           position.longitude,
         ),
       );
-      if (!result.isAllowed && result.reason == ServiceAreaBlockReason.outsideWorkingArea) {
-        final areas = await _fetchServiceAreas();
-        final hasAnyCoords = areas.any((a) => a.hasCoordinateRule);
-        if (!hasAnyCoords && areas.isNotEmpty) {
-          return ServiceAreaGateResult.blocked(
-            reason: ServiceAreaBlockReason.outsideWorkingArea,
-            locationLabel: result.locationLabel,
-            message: 'Service areas are missing location data. Please try again or contact support.',
-            latitude: position.latitude,
-            longitude: position.longitude,
-          );
-        }
-      }
-      return result;
-    } catch (error) {
+    } catch (error, stackTrace) {
       debugPrint('ServiceAreaGateService.evaluate failed: $error');
-      return _blockedWithCurrentLocation(
+      debugPrintStack(stackTrace: stackTrace);
+      return ServiceAreaGateResult.temporarilyUnavailable(
+        locationLabel: 'Live location unavailable',
         message: _serviceAreasUnavailableMessage,
       );
     }
@@ -82,19 +139,29 @@ class ServiceAreaGateService {
     required String locationLabel,
   }) async {
     if (!_isValidCoordinate(latitude, longitude)) {
-      return ServiceAreaGateResult.blocked(
-        reason: ServiceAreaBlockReason.locationUnavailable,
+      return ServiceAreaGateResult.temporarilyUnavailable(
         locationLabel: locationLabel.trim().isEmpty
             ? 'Selected location unavailable'
             : locationLabel.trim(),
         message: 'Please select a valid delivery location.',
       );
     }
-    return _evaluateCoordinate(
-      latitude: latitude,
-      longitude: longitude,
-      locationLabel: locationLabel,
-    );
+    try {
+      return await _evaluateCoordinate(
+        latitude: latitude,
+        longitude: longitude,
+        locationLabel: locationLabel,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        'ServiceAreaGateService.evaluateManualLocation failed: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+      return ServiceAreaGateResult.temporarilyUnavailable(
+        locationLabel: locationLabel,
+        message: _serviceAreasUnavailableMessage,
+      );
+    }
   }
 
   Future<ServiceAreaGateResult> _evaluateCoordinate({
@@ -124,17 +191,8 @@ class ServiceAreaGateService {
       );
     }
 
-    final activeCoordinateAreas = areas
-        .where((area) => area.isActive && area.hasCoordinateRule)
-        .toList();
-    final workingAreas = activeCoordinateAreas
-        .where((area) => area.status == 'working')
-        .toList();
-    debugPrint(
-      'ServiceAreaGateService.evaluate: activeCoordinateAreas=${activeCoordinateAreas.length}, workingAreas=${workingAreas.length}',
-    );
-
-    if (workingAreas.isEmpty) {
+    final activeAreas = areas.where((area) => area.isActive).toList();
+    if (activeAreas.isEmpty) {
       return ServiceAreaGateResult.blocked(
         reason: ServiceAreaBlockReason.outsideWorkingArea,
         locationLabel: safeLabel,
@@ -143,6 +201,28 @@ class ServiceAreaGateService {
         longitude: longitude,
       );
     }
+
+    final invalidWorkingAreas = activeAreas.where(
+      (area) => area.status == 'working' && !area.hasCoordinateRule,
+    );
+    if (invalidWorkingAreas.isNotEmpty) {
+      return ServiceAreaGateResult.temporarilyUnavailable(
+        locationLabel: safeLabel,
+        message: _serviceAreasUnavailableMessage,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    final activeCoordinateAreas = activeAreas
+        .where((area) => area.hasCoordinateRule)
+        .toList();
+    final workingAreas = activeCoordinateAreas
+        .where((area) => area.status == 'working')
+        .toList();
+    debugPrint(
+      'ServiceAreaGateService.evaluate: activeCoordinateAreas=${activeCoordinateAreas.length}, workingAreas=${workingAreas.length}',
+    );
 
     final notWorkingMatch = _firstMatchingArea(
       activeCoordinateAreas.where((area) => area.status == 'not_working'),
@@ -157,6 +237,16 @@ class ServiceAreaGateService {
         message: notWorkingMatch.message.isNotEmpty
             ? notWorkingMatch.message
             : 'Service is not available in this area yet.',
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    if (workingAreas.isEmpty) {
+      return ServiceAreaGateResult.blocked(
+        reason: ServiceAreaBlockReason.outsideWorkingArea,
+        locationLabel: safeLabel,
+        message: _serviceAreasUnavailableMessage,
         latitude: latitude,
         longitude: longitude,
       );
@@ -181,69 +271,60 @@ class ServiceAreaGateService {
     );
   }
 
-  Future<ServiceAreaGateResult> _blockedWithCurrentLocation({
-    required String message,
-  }) async {
-    return ServiceAreaGateResult.blocked(
-      reason: ServiceAreaBlockReason.outsideWorkingArea,
-      locationLabel: await _currentLocationLabel(),
-      message: message,
-    );
-  }
-
-  Future<String> _currentLocationLabel() async {
-    try {
-      final positionResult = await _resolvePosition();
-      final position = positionResult.position;
-      if (position == null) return positionResult.label;
-      return _locationLabel(position.latitude, position.longitude);
-    } catch (error) {
-      debugPrint('ServiceAreaGateService._currentLocationLabel failed: $error');
-      return 'Live location unavailable';
-    }
-  }
-
   Future<List<ServiceAreaRule>> _fetchServiceAreas() async {
+    final loader = _serviceAreaRulesLoader;
+    if (loader != null) return loader();
+
     final headers = await _firebaseAuthHeaders();
-    if (headers == null) return const [];
+    if (headers == null) {
+      throw StateError('Firebase authentication is temporarily unavailable');
+    }
 
     final options = DefaultFirebaseOptions.currentPlatform;
     final endpoint =
         'https://firestore.googleapis.com/v1/projects/${options.projectId}/databases/(default)/documents/$_collectionName?key=${options.apiKey}';
-    final response = await _apiService.get(
+    final response = await _apiService!.get(
       endpoint: endpoint,
       authenticated: false,
       headers: headers,
     );
+    if (response.isEmpty) return const [];
+    if (!response.containsKey('documents')) {
+      throw const FormatException('Incomplete Firestore service-area response');
+    }
     final documents = response['documents'];
     if (documents is! List) {
-      debugPrint(
-        'ServiceAreaGateService._fetchServiceAreas: no documents list in Firestore response',
-      );
-      return const [];
+      throw const FormatException('Invalid Firestore service-area documents');
     }
 
-    return documents
-        .whereType<Map>()
-        .map((doc) {
-          final data = Map<String, dynamic>.from(doc);
-          final name = data['name']?.toString() ?? '';
-          final id = name.split('/').isEmpty ? '' : name.split('/').last;
-          return ServiceAreaRule.fromFirestore(
-            id: id,
-            fields: _decodeFirestoreFields(data['fields']),
-          );
-        })
-        .where((area) => area.id.isNotEmpty)
-        .toList()
-      ..sort((left, right) {
-        if (left.sortOrder != right.sortOrder) {
-          return left.sortOrder.compareTo(right.sortOrder);
-        }
-        return '${left.city} ${left.name}'.compareTo(
-          '${right.city} ${right.name}',
-        );
-      });
+    final areas = <ServiceAreaRule>[];
+    for (final document in documents) {
+      if (document is! Map) {
+        throw const FormatException('Invalid Firestore service-area document');
+      }
+      final data = Map<String, dynamic>.from(document);
+      if (data['fields'] is! Map) {
+        throw const FormatException('Missing Firestore service-area fields');
+      }
+      final name = data['name']?.toString() ?? '';
+      final id = name.split('/').isEmpty ? '' : name.split('/').last;
+      final area = ServiceAreaRule.fromFirestore(
+        id: id,
+        fields: _decodeFirestoreFields(data['fields']),
+      );
+      if (area.id.isEmpty) {
+        throw const FormatException('Missing Firestore service-area id');
+      }
+      areas.add(area);
+    }
+    return areas..sort((left, right) {
+      if (left.sortOrder != right.sortOrder) {
+        return left.sortOrder.compareTo(right.sortOrder);
+      }
+      return '${left.city} ${left.name}'.compareTo(
+        '${right.city} ${right.name}',
+      );
+    });
   }
 
   Future<Map<String, String>?> _firebaseAuthHeaders() async {
@@ -279,84 +360,183 @@ class ServiceAreaGateService {
 
   Future<_PositionResult> _resolvePosition() async {
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await _locationProvider.isLocationServiceEnabled();
       if (!serviceEnabled) {
         return const _PositionResult(
           label: 'Location services are off',
           position: null,
+          state: ServiceAreaGateState.locationServicesDisabled,
         );
       }
 
-      var permission = await Geolocator.checkPermission();
+      var permission = await _locationProvider.checkPermission();
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+        permission = await _locationProvider.requestPermission();
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         return const _PositionResult(
           label: 'Location permission required',
           position: null,
+          state: ServiceAreaGateState.locationPermissionRequired,
+        );
+      }
+      if (permission == LocationPermission.unableToDetermine) {
+        return const _PositionResult(
+          label: 'Location permission unavailable',
+          position: null,
+          state: ServiceAreaGateState.temporarilyUnavailable,
         );
       }
 
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null) {
+      Position? lastKnown;
+      try {
+        lastKnown = await _locationProvider.getLastKnownPosition().timeout(
+          _lastKnownLocationTimeout,
+        );
+      } catch (error) {
         debugPrint(
-          'ServiceAreaGateService._resolvePosition: using last known -> latitude: ${lastKnown.latitude}, longitude: ${lastKnown.longitude}',
+          'ServiceAreaGateService._resolvePosition: '
+          'last-known lookup unavailable: $error',
+        );
+      }
+      if (lastKnown != null &&
+          _isReliablePosition(
+            lastKnown,
+            maxAge: lastKnownLocationMaxAge,
+            maxAccuracyMeters: lastKnownLocationMaxAccuracyMeters,
+          )) {
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: using reliable last known '
+          '${_safePositionSummary(lastKnown)}',
         );
         return _PositionResult(
           label: _coordinateLabel(lastKnown.latitude, lastKnown.longitude),
           position: lastKnown,
+          state: ServiceAreaGateState.checking,
+        );
+      }
+      if (lastKnown != null) {
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: rejected last known '
+          '${_safePositionSummary(lastKnown)}',
         );
       }
 
       try {
-        final position = await Geolocator.getCurrentPosition(
+        final position = await _locationProvider.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
             timeLimit: Duration(seconds: 8),
           ),
         );
+        if (_isReliablePosition(
+          position,
+          maxAge: currentLocationMaxAge,
+          maxAccuracyMeters: currentLocationMaxAccuracyMeters,
+        )) {
+          debugPrint(
+            'ServiceAreaGateService._resolvePosition: reliable live location '
+            '${_safePositionSummary(position)}',
+          );
+          return _PositionResult(
+            label: _coordinateLabel(position.latitude, position.longitude),
+            position: position,
+            state: ServiceAreaGateState.checking,
+          );
+        }
         debugPrint(
-          'ServiceAreaGateService._resolvePosition: live location -> latitude: ${position.latitude}, longitude: ${position.longitude}',
+          'ServiceAreaGateService._resolvePosition: rejected live location '
+          '${_safePositionSummary(position)}',
         );
-        return _PositionResult(
-          label: _coordinateLabel(position.latitude, position.longitude),
-          position: position,
+      } catch (error) {
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: '
+          'high accuracy unavailable: $error',
         );
-      } catch (_) {
-        debugPrint('ServiceAreaGateService._resolvePosition: high accuracy failed, trying medium');
       }
 
       try {
-        final position = await Geolocator.getCurrentPosition(
+        final position = await _locationProvider.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.medium,
             timeLimit: Duration(seconds: 10),
           ),
         );
+        if (_isReliablePosition(
+          position,
+          maxAge: currentLocationMaxAge,
+          maxAccuracyMeters: currentLocationMaxAccuracyMeters,
+        )) {
+          debugPrint(
+            'ServiceAreaGateService._resolvePosition: reliable medium location '
+            '${_safePositionSummary(position)}',
+          );
+          return _PositionResult(
+            label: _coordinateLabel(position.latitude, position.longitude),
+            position: position,
+            state: ServiceAreaGateState.checking,
+          );
+        }
         debugPrint(
-          'ServiceAreaGateService._resolvePosition: medium accuracy -> latitude: ${position.latitude}, longitude: ${position.longitude}',
+          'ServiceAreaGateService._resolvePosition: rejected medium location '
+          '${_safePositionSummary(position)}',
         );
-        return _PositionResult(
-          label: _coordinateLabel(position.latitude, position.longitude),
-          position: position,
+      } catch (error) {
+        debugPrint(
+          'ServiceAreaGateService._resolvePosition: '
+          'medium accuracy unavailable: $error',
         );
-      } catch (_) {
-        debugPrint('ServiceAreaGateService._resolvePosition: medium accuracy also failed');
       }
 
       return const _PositionResult(
         label: 'Unable to read live location',
         position: null,
+        state: ServiceAreaGateState.temporarilyUnavailable,
       );
     } catch (error) {
       debugPrint('ServiceAreaGateService._resolvePosition failed: $error');
       return const _PositionResult(
         label: 'Unable to read live location',
         position: null,
+        state: ServiceAreaGateState.temporarilyUnavailable,
       );
     }
+  }
+
+  ServiceAreaGateResult _resultForUnavailablePosition(
+    _PositionResult positionResult,
+  ) {
+    return switch (positionResult.state) {
+      ServiceAreaGateState.locationPermissionRequired =>
+        ServiceAreaGateResult.locationPermissionRequired(
+          locationLabel: positionResult.label,
+        ),
+      ServiceAreaGateState.locationServicesDisabled =>
+        ServiceAreaGateResult.locationServicesDisabled(
+          locationLabel: positionResult.label,
+        ),
+      _ => ServiceAreaGateResult.temporarilyUnavailable(
+        locationLabel: positionResult.label,
+        message: 'Unable to verify your current service area right now.',
+      ),
+    };
+  }
+
+  bool _isReliablePosition(
+    Position position, {
+    required Duration maxAge,
+    required double maxAccuracyMeters,
+  }) {
+    if (!_isValidCoordinate(position.latitude, position.longitude) ||
+        !position.accuracy.isFinite ||
+        position.accuracy <= 0 ||
+        position.accuracy > maxAccuracyMeters) {
+      return false;
+    }
+    final age = _clock().difference(position.timestamp);
+    if (age > maxAge) return false;
+    return !age.isNegative || age.abs() <= const Duration(minutes: 1);
   }
 
   Future<String> _locationLabel(double latitude, double longitude) async {
@@ -422,6 +602,14 @@ class ServiceAreaGateService {
   static String _coordinateLabel(double latitude, double longitude) =>
       '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
 
+  String _safePositionSummary(Position position) {
+    final ageSeconds = _clock().difference(position.timestamp).inSeconds;
+    return 'ageSeconds=$ageSeconds '
+        'accuracyMeters=${position.accuracy.toStringAsFixed(1)} '
+        'coordinate≈${position.latitude.toStringAsFixed(2)},'
+        '${position.longitude.toStringAsFixed(2)}';
+  }
+
   bool _isValidCoordinate(double latitude, double longitude) {
     return latitude.isFinite &&
         longitude.isFinite &&
@@ -432,7 +620,10 @@ class ServiceAreaGateService {
   }
 
   static String _debugAreaSummary(ServiceAreaRule area) {
-    return '${area.id}{status:${area.status}, active:${area.isActive}, lat:${area.latitude}, lng:${area.longitude}, radiusKm:${area.radiusKm}}';
+    final latitude = area.latitude?.toStringAsFixed(2) ?? 'missing';
+    final longitude = area.longitude?.toStringAsFixed(2) ?? 'missing';
+    return '${area.id}{status:${area.status}, active:${area.isActive}, '
+        'coordinate≈$latitude,$longitude, radiusKm:${area.radiusKm}}';
   }
 
   Map<String, dynamic> _decodeFirestoreFields(Object? fields) {
@@ -555,7 +746,7 @@ class ServiceAreaRule {
 
 class ServiceAreaGateResult {
   const ServiceAreaGateResult({
-    required this.isAllowed,
+    required this.state,
     required this.reason,
     this.locationLabel = '',
     this.message = '',
@@ -564,13 +755,18 @@ class ServiceAreaGateResult {
     this.longitude,
   });
 
-  final bool isAllowed;
+  final ServiceAreaGateState state;
   final ServiceAreaBlockReason reason;
   final String locationLabel;
   final String message;
   final ServiceAreaRule? matchedArea;
   final double? latitude;
   final double? longitude;
+
+  bool get isAllowed => state == ServiceAreaGateState.insideServiceArea;
+
+  bool get isConfirmedOutside =>
+      state == ServiceAreaGateState.outsideServiceArea;
 
   factory ServiceAreaGateResult.allowed({
     String locationLabel = '',
@@ -579,7 +775,7 @@ class ServiceAreaGateResult {
     double? longitude,
   }) {
     return ServiceAreaGateResult(
-      isAllowed: true,
+      state: ServiceAreaGateState.insideServiceArea,
       reason: ServiceAreaBlockReason.none,
       locationLabel: locationLabel,
       matchedArea: matchedArea,
@@ -597,7 +793,11 @@ class ServiceAreaGateResult {
     double? longitude,
   }) {
     return ServiceAreaGateResult(
-      isAllowed: false,
+      state:
+          reason == ServiceAreaBlockReason.outsideWorkingArea ||
+              reason == ServiceAreaBlockReason.notWorkingArea
+          ? ServiceAreaGateState.outsideServiceArea
+          : ServiceAreaGateState.temporarilyUnavailable,
       reason: reason,
       locationLabel: locationLabel,
       message: message,
@@ -606,18 +806,75 @@ class ServiceAreaGateResult {
       longitude: longitude,
     );
   }
+
+  factory ServiceAreaGateResult.temporarilyUnavailable({
+    String locationLabel = '',
+    String message = '',
+    double? latitude,
+    double? longitude,
+  }) {
+    return ServiceAreaGateResult(
+      state: ServiceAreaGateState.temporarilyUnavailable,
+      reason: ServiceAreaBlockReason.serviceUnavailable,
+      locationLabel: locationLabel,
+      message: message,
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+
+  factory ServiceAreaGateResult.locationPermissionRequired({
+    String locationLabel = 'Location permission required',
+  }) {
+    return ServiceAreaGateResult(
+      state: ServiceAreaGateState.locationPermissionRequired,
+      reason: ServiceAreaBlockReason.locationPermissionRequired,
+      locationLabel: locationLabel,
+      message:
+          'Please allow location access so we can check service availability in your area.',
+    );
+  }
+
+  factory ServiceAreaGateResult.locationServicesDisabled({
+    String locationLabel = 'Location services are off',
+  }) {
+    return ServiceAreaGateResult(
+      state: ServiceAreaGateState.locationServicesDisabled,
+      reason: ServiceAreaBlockReason.locationServicesDisabled,
+      locationLabel: locationLabel,
+      message:
+          'Please turn on location services so we can check service availability in your area.',
+    );
+  }
+}
+
+enum ServiceAreaGateState {
+  checking,
+  insideServiceArea,
+  outsideServiceArea,
+  temporarilyUnavailable,
+  locationPermissionRequired,
+  locationServicesDisabled,
 }
 
 enum ServiceAreaBlockReason {
   none,
   locationUnavailable,
+  locationPermissionRequired,
+  locationServicesDisabled,
+  serviceUnavailable,
   notWorkingArea,
   outsideWorkingArea,
 }
 
 class _PositionResult {
-  const _PositionResult({required this.label, required this.position});
+  const _PositionResult({
+    required this.label,
+    required this.position,
+    required this.state,
+  });
 
   final String label;
   final Position? position;
+  final ServiceAreaGateState state;
 }

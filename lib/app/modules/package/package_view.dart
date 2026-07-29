@@ -2701,19 +2701,15 @@ class _PackageLocationLine extends StatelessWidget {
 }
 
 Color _packageListStatusColor(String status) {
-  switch (status.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_')) {
+  switch (_packageFlowStatus(status)) {
     case 'available':
-    case 'pending':
+    case 'placed':
       return AppColors.success;
-    case 'confirmed':
-    case 'assigned':
     case 'accepted':
       return AppColors.secondaryBlue;
-    case 'picked':
     case 'picked_up':
       return AppColors.accent;
     case 'delivered':
-    case 'completed':
       return const Color(0xFF00A8C8);
     case 'cancel':
     case 'canceled':
@@ -2725,16 +2721,73 @@ Color _packageListStatusColor(String status) {
 }
 
 String _displayPackageStatus(String status) {
-  final normalizedStatus = status.trim().toLowerCase().replaceAll(
+  final normalizedStatus = _packageFlowStatus(status);
+  return switch (normalizedStatus) {
+    'placed' => 'Package Booked',
+    'accepted' => 'Partner Assigned',
+    'picked_up' => 'Package Picked Up',
+    'delivered' => 'Package Delivered',
+    'cancelled' => 'Cancelled',
+    _ => _titleCaseStatus(normalizedStatus),
+  };
+}
+
+String _packageFlowStatus(String status) {
+  final normalized = status.trim().toLowerCase().replaceAll(
     RegExp(r'[-\s]+'),
     '_',
   );
-  final normalized = switch (normalizedStatus) {
+  final compact = normalized.replaceAll('_', '');
+  if (compact.isEmpty ||
+      compact == 'pending' ||
+      compact == 'placed' ||
+      compact == 'booked' ||
+      compact == 'packagebooked' ||
+      compact == 'packageplaced') {
+    return 'placed';
+  }
+  if (compact == 'confirmed' ||
+      compact == 'assigned' ||
+      compact == 'accepted' ||
+      compact == 'packageassigned' ||
+      compact == 'packageaccepted' ||
+      compact == 'partnerassigned' ||
+      compact == 'deliveryassigned' ||
+      compact == 'deliverypartnerassigned' ||
+      compact == 'assignedtopartner' ||
+      compact == 'riderassigned' ||
+      compact == 'driverassigned') {
+    return 'accepted';
+  }
+  if (compact == 'picked' ||
+      compact == 'pickup' ||
+      compact == 'pickedup' ||
+      compact == 'packagepickedup' ||
+      compact == 'intransit' ||
+      compact == 'packageintransit' ||
+      compact == 'ontheway' ||
+      compact == 'packageontheway' ||
+      compact == 'outfordelivery' ||
+      compact == 'packageoutfordelivery' ||
+      compact == 'arriving') {
+    return 'picked_up';
+  }
+  if (compact == 'delivered' ||
+      compact == 'packagedelivered' ||
+      compact == 'completed' ||
+      compact == 'complete') {
+    return 'delivered';
+  }
+  return switch (normalized) {
     'cancel' || 'canceled' || 'cancelled' => 'cancelled',
-    _ => normalizedStatus,
-  }.replaceAll('_', ' ');
-  if (normalized.isEmpty) return 'Pending';
-  return normalized
+    _ => normalized,
+  };
+}
+
+String _titleCaseStatus(String status) {
+  final text = status.replaceAll('_', ' ');
+  if (text.isEmpty) return 'Package Booked';
+  return text
       .split(RegExp(r'\s+'))
       .where((word) => word.isNotEmpty)
       .map(

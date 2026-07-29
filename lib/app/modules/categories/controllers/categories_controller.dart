@@ -402,7 +402,7 @@ class CategoriesController extends GetxController {
       final result = await productsFuture;
       final loadedSubcategories = await subcategoriesFuture;
 
-      if (!_isCurrentProductRequest(requestId, categoryId)) return;
+      if (!_isCurrentProductRequest(requestId, categoryId, cacheKey)) return;
 
       _applyLoadedCategoryContent(
         loadedProducts: result,
@@ -414,7 +414,7 @@ class CategoriesController extends GetxController {
     } catch (error) {
       debugPrint('CategoriesController.loadProducts: failed $error');
 
-      if (_isCurrentProductRequest(requestId, categoryId)) {
+      if (_isCurrentProductRequest(requestId, categoryId, cacheKey)) {
         products.clear();
         categoryProducts.clear();
         subcategories.clear();
@@ -423,7 +423,7 @@ class CategoriesController extends GetxController {
         _lastResolvedProductCacheKey = cacheKey;
       }
     } finally {
-      if (_isCurrentProductRequest(requestId, categoryId)) {
+      if (_isCurrentProductRequest(requestId, categoryId, cacheKey)) {
         isProductsLoading.value = false;
         isSubcategoriesLoading.value = false;
 
@@ -722,9 +722,14 @@ class CategoriesController extends GetxController {
     ].join('|');
   }
 
-  bool _isCurrentProductRequest(int requestId, String categoryId) {
+  bool _isCurrentProductRequest(
+    int requestId,
+    String categoryId,
+    String cacheKey,
+  ) {
     return requestId == _productsRequestId &&
-        selectedCategory.value?.id == categoryId;
+        selectedCategory.value?.id == categoryId &&
+        _currentlyLoadingProductCacheKey == cacheKey;
   }
 
   void _scrollProductsToTop() {

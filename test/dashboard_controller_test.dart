@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -10,6 +12,7 @@ import 'package:sonic_cart/app/core/services/service_area_gate_controller.dart';
 import 'package:sonic_cart/app/core/services/service_area_gate_service.dart';
 import 'package:sonic_cart/app/data/repositories/catalog_repository.dart';
 import 'package:sonic_cart/app/modules/dashboard/controllers/dashboard_controller.dart';
+import 'package:sonic_cart/app/routes/app_routes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +35,64 @@ void main() {
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, null);
+  });
+
+  testWidgets(
+    'openDashboardTab selects cart when dashboard controller already exists',
+    (tester) async {
+      final controller = Get.put(DashboardController(), permanent: true);
+      await tester.pumpWidget(_dashboardNavigationTestApp());
+
+      openDashboardTab(2);
+
+      expect(controller.currentIndex.value, 2);
+      await tester.pumpAndSettle();
+      expect(Get.currentRoute, AppRoutes.dashboard);
+      expect(find.text('dashboard-tab-2'), findsOneWidget);
+      Get.delete<DashboardController>(force: true);
+    },
+  );
+
+  testWidgets(
+    'dashboard route arguments select cart when binding creates controller',
+    (tester) async {
+      await tester.pumpWidget(_dashboardNavigationTestApp());
+      expect(Get.isRegistered<DashboardController>(), isFalse);
+
+      openDashboardTab(2);
+      await tester.pumpAndSettle();
+
+      expect(Get.currentRoute, AppRoutes.dashboard);
+      expect(Get.find<DashboardController>().currentIndex.value, 2);
+      expect(find.text('dashboard-tab-2'), findsOneWidget);
+    },
+  );
+
+  testWidgets('openDashboardTab keeps other indexes and invalid input safe', (
+    tester,
+  ) async {
+    final controller = Get.put(DashboardController(), permanent: true);
+    await tester.pumpWidget(_dashboardNavigationTestApp());
+
+    for (final index in [0, 1, 2, 3]) {
+      openDashboardTab(index);
+      expect(controller.currentIndex.value, index);
+    }
+
+    expect(() => openDashboardTab(-1), returnsNormally);
+    expect(controller.currentIndex.value, 0);
+    Get.delete<DashboardController>(force: true);
+  });
+
+  test('product detail View Cart callbacks target dashboard cart tab', () {
+    final source = File(
+      'lib/app/modules/product_detail_view.dart',
+    ).readAsStringSync();
+
+    expect(
+      RegExp(r'onPressed: \(\) => openDashboardTab\(2\)').allMatches(source),
+      hasLength(2),
+    );
   });
 
   test('bottom tab indexes map categories before cart', () {
@@ -112,6 +173,85 @@ void main() {
     expect(controller.isCatalogLoading.value, isFalse);
     expect(controller.isFeaturedLoading.value, isFalse);
   });
+
+  test(
+    'rapid resume transitions share one gate refresh and preserve navigation',
+    () async {
+      final storage = GetStorage();
+      final service = _ResumeServiceAreaGateService(storage);
+      final gate = Get.put(
+        ServiceAreaGateController(serviceAreaGateService: service),
+        permanent: true,
+      );
+      addTearDown(gate.onClose);
+      await _pumpUntil(
+        () => service.evaluateCalls == 1 && !gate.isChecking.value,
+      );
+
+      final now = DateTime.utc(2026, 7, 25, 12);
+      final controller = DashboardController(
+        resumeLocationRefreshInterval: const Duration(seconds: 5),
+        clock: () => now,
+      )..currentIndex.value = 3;
+      addTearDown(controller.onClose);
+      final routeBeforeResume = Get.currentRoute;
+
+      controller.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      controller.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await _pumpUntil(() => service.evaluateCalls == 2);
+
+      expect(service.evaluateCalls, 2);
+      expect(controller.currentIndex.value, 3);
+      expect(Get.currentRoute, routeBeforeResume);
+
+      service.resumeCompleter.complete(
+        ServiceAreaGateResult.temporarilyUnavailable(
+          message: 'Temporary location failure',
+        ),
+      );
+      await _pumpUntil(() => !gate.isChecking.value);
+
+      controller.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.evaluateCalls, 2);
+      expect(controller.currentIndex.value, 3);
+      expect(Get.currentRoute, routeBeforeResume);
+      expect(gate.isBlocked, isFalse);
+    },
+  );
+}
+
+Widget _dashboardNavigationTestApp() {
+  return GetMaterialApp(
+    initialRoute: AppRoutes.productDetail,
+    getPages: [
+      GetPage(
+        name: AppRoutes.productDetail,
+        page: () => const Scaffold(body: Text('product-detail')),
+      ),
+      GetPage(
+        name: AppRoutes.dashboard,
+        binding: BindingsBuilder(() {
+          if (!Get.isRegistered<DashboardController>() &&
+              !Get.isPrepared<DashboardController>()) {
+            Get.lazyPut(DashboardController.new, fenix: true);
+          }
+        }),
+        page: () {
+          final controller = Get.find<DashboardController>();
+          return Scaffold(
+            body: Obx(
+              () => Text('dashboard-tab-${controller.currentIndex.value}'),
+            ),
+          );
+        },
+      ),
+    ],
+  );
 }
 
 Future<void> _pumpUntil(bool Function() condition, {int attempts = 20}) async {
@@ -149,6 +289,29 @@ class _NeverCompletesServiceAreaGateService extends ServiceAreaGateService {
   @override
   Future<ServiceAreaGateResult> evaluate() =>
       Completer<ServiceAreaGateResult>().future;
+}
+
+class _ResumeServiceAreaGateService extends ServiceAreaGateService {
+  _ResumeServiceAreaGateService(GetStorage storage)
+    : super(apiService: ApiService(storage: storage));
+
+  final resumeCompleter = Completer<ServiceAreaGateResult>();
+  int evaluateCalls = 0;
+
+  @override
+  Future<ServiceAreaGateResult> evaluate() {
+    evaluateCalls += 1;
+    if (evaluateCalls == 1) {
+      return Future.value(
+        ServiceAreaGateResult.allowed(
+          locationLabel: 'Initial inside location',
+          latitude: 24.8607,
+          longitude: 67.0011,
+        ),
+      );
+    }
+    return resumeCompleter.future;
+  }
 }
 
 class _DashboardFakeApiService extends ApiService {

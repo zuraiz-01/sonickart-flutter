@@ -5,6 +5,9 @@ import 'package:get_storage/get_storage.dart';
 
 import '../utils/auth_guard.dart';
 import '../../routes/app_routes.dart';
+import '../../modules/cart/controllers/cart_controller.dart';
+import 'customer_socket_notification_service.dart';
+import 'package_socket_service.dart';
 
 class SessionController extends GetxController {
   SessionController(this._storage);
@@ -28,6 +31,15 @@ class SessionController extends GetxController {
   }
 
   Future<void> _clearSession() async {
+    if (Get.isRegistered<CustomerSocketNotificationService>()) {
+      Get.find<CustomerSocketNotificationService>().disconnect();
+    }
+    if (Get.isRegistered<PackageSocketService>()) {
+      Get.find<PackageSocketService>().disconnect();
+    }
+    if (Get.isRegistered<CartController>()) {
+      await Get.find<CartController>().detachFromCurrentSession();
+    }
     try {
       await FirebaseAuth.instance.signOut();
     } catch (error) {

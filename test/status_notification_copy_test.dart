@@ -4,19 +4,23 @@ import 'package:sonic_cart/app/core/services/status_notification_copy.dart';
 void main() {
   group('status notification allow-list', () {
     test(
-      'keeps only placed accepted picked-up and delivered order notifications',
+      'keeps only placed assigned picked-up and delivered order notifications',
       () {
         for (final entry in const {
           'placed': 'placed',
           'pending': 'placed',
-          'accepted': 'accepted',
-          'assigned': 'accepted',
-          'confirmed': 'accepted',
+          'accepted': 'assigned',
+          'assigned': 'assigned',
+          'confirmed': 'assigned',
           'picked': 'picked_up',
           'pickup': 'picked_up',
           'pickedup': 'picked_up',
           'picked_up': 'picked_up',
           'order picked up': 'picked_up',
+          'in_transit': 'picked_up',
+          'on_the_way': 'picked_up',
+          'on the way to delivery': 'picked_up',
+          'out_for_delivery': 'picked_up',
           'delivered': 'delivered',
           'completed': 'delivered',
         }.entries) {
@@ -40,11 +44,6 @@ void main() {
       for (final status in [
         'prepared',
         'ready',
-        'in_transit',
-        'on_the_way',
-        'on the way',
-        'out_for_delivery',
-        'arriving',
         'cancelled',
         'rejected',
         'failed',
@@ -58,17 +57,23 @@ void main() {
     });
 
     test(
-      'keeps only assigned picked-up and delivered package notifications',
+      'keeps only booked assigned picked-up and delivered package notifications',
       () {
         for (final entry in const {
-          'assigned': 'accepted',
-          'partner_assigned': 'accepted',
-          'delivery_partner_assigned': 'accepted',
-          'assigned to partner': 'accepted',
-          'accepted': 'accepted',
-          'confirmed': 'accepted',
+          'pending': 'booked',
+          'placed': 'booked',
+          'booked': 'booked',
+          'package booked': 'booked',
+          'assigned': 'assigned',
+          'partner_assigned': 'assigned',
+          'delivery_partner_assigned': 'assigned',
+          'assigned to partner': 'assigned',
+          'accepted': 'assigned',
+          'confirmed': 'assigned',
           'picked_up': 'picked_up',
           'package picked up': 'picked_up',
+          'on_the_way': 'picked_up',
+          'out_for_delivery': 'picked_up',
           'delivered': 'delivered',
           'completed': 'delivered',
         }.entries) {
@@ -87,26 +92,6 @@ void main() {
         }
       },
     );
-
-    test('suppresses package booked notifications', () {
-      for (final status in const [
-        'pending',
-        'placed',
-        'booked',
-        'package booked',
-      ]) {
-        expect(
-          shouldSuppressOrderStatusNotification(package: true, status: status),
-          isTrue,
-          reason: status,
-        );
-        expect(
-          notificationDisplayStatus(package: true, status: status),
-          isNull,
-          reason: status,
-        );
-      }
-    });
 
     test('suppresses generic notifications', () {
       expect(
@@ -131,7 +116,7 @@ void main() {
           package: false,
           text: const ['Order Accepted', 'Your order #123 has been accepted.'],
         ),
-        'accepted',
+        'assigned',
       );
       expect(
         notificationDisplayStatus(
@@ -155,23 +140,26 @@ void main() {
       );
     });
 
-    test('suppresses disallowed order status text when status is missing', () {
-      expect(
-        shouldSuppressOrderStatusNotification(
-          package: false,
-          text: const ['Order update', 'Your order is on the way.'],
-        ),
-        isTrue,
-      );
-    });
+    test(
+      'infers picked-up stage from on-the-way text when status is missing',
+      () {
+        expect(
+          notificationDisplayStatus(
+            package: false,
+            text: const ['Order update', 'Your order is on the way.'],
+          ),
+          'picked_up',
+        );
+      },
+    );
 
     test('infers package status from text when status is missing', () {
       expect(
         notificationDisplayStatus(
           package: true,
-          text: const ['Package Booked', 'Your package #123 has been booked.'],
+          text: const ['Package Booked', 'Your Package Has Been Booked.'],
         ),
-        isNull,
+        'booked',
       );
       expect(
         notificationDisplayStatus(
@@ -181,7 +169,7 @@ void main() {
             'A delivery partner has been assigned.',
           ],
         ),
-        'accepted',
+        'assigned',
       );
       expect(
         notificationDisplayStatus(
@@ -212,7 +200,15 @@ void main() {
           status: 'in_transit',
           text: const ['Order Picked Up', 'Your order has been picked up.'],
         ),
-        isTrue,
+        isFalse,
+      );
+      expect(
+        notificationDisplayStatus(
+          package: false,
+          status: 'in_transit',
+          text: const ['Order update', 'Your order is on the way.'],
+        ),
+        'picked_up',
       );
       expect(
         notificationDisplayStatus(
@@ -230,36 +226,57 @@ void main() {
           status: 'placed',
           orderNumber: '123',
         )?.title,
-        'Order #123 Placed',
+        'Order Placed',
+      );
+      expect(
+        orderStatusNotificationCopy(status: 'placed', orderNumber: '123')?.body,
+        'Your Order Has Been Placed.',
       );
       expect(
         orderStatusNotificationCopy(
           status: 'accepted',
           orderNumber: '123',
         )?.title,
-        'Order #123 Accepted',
+        'Partner Assigned',
+      );
+      expect(
+        orderStatusNotificationCopy(
+          status: 'accepted',
+          orderNumber: '123',
+        )?.body,
+        'A Delivery Partner Has Been Assigned.',
       );
       expect(
         orderStatusNotificationCopy(
           status: 'picked_up',
           orderNumber: '123',
         )?.title,
-        'Order #123 Picked Up',
+        'Order Picked Up',
+      );
+      expect(
+        orderStatusNotificationCopy(
+          status: 'on_the_way',
+          orderNumber: '123',
+        )?.title,
+        'Order Picked Up',
       );
       expect(
         orderStatusNotificationCopy(
           status: 'delivered',
           orderNumber: '123',
         )?.title,
-        'Order #123 Delivered',
+        'Order Delivered',
+      );
+      expect(
+        orderStatusNotificationCopy(
+          status: 'delivered',
+          orderNumber: '123',
+        )?.body,
+        'Your Order Has Been Delivered.',
       );
 
       expect(
         orderStatusNotificationCopy(status: 'prepared', orderNumber: '123'),
-        isNull,
-      );
-      expect(
-        orderStatusNotificationCopy(status: 'in_transit', orderNumber: '123'),
         isNull,
       );
       expect(
@@ -274,8 +291,16 @@ void main() {
           status: 'pending',
           orderNumber: '123',
           package: true,
-        ),
-        isNull,
+        )?.title,
+        'Package Booked',
+      );
+      expect(
+        orderStatusNotificationCopy(
+          status: 'pending',
+          orderNumber: '123',
+          package: true,
+        )?.body,
+        'Your Package Has Been Booked.',
       );
       expect(
         orderStatusNotificationCopy(
@@ -291,7 +316,15 @@ void main() {
           orderNumber: '123',
           package: true,
         )?.title,
-        'Package #123 Picked Up',
+        'Package Picked Up',
+      );
+      expect(
+        orderStatusNotificationCopy(
+          status: 'out_for_delivery',
+          orderNumber: '123',
+          package: true,
+        )?.title,
+        'Package Picked Up',
       );
       expect(
         orderStatusNotificationCopy(
@@ -299,12 +332,12 @@ void main() {
           orderNumber: '123',
           package: true,
         )?.title,
-        'Package #123 Delivered',
+        'Package Delivered',
       );
 
       expect(
         orderStatusNotificationCopy(
-          status: 'out_for_delivery',
+          status: 'cancelled',
           orderNumber: '123',
           package: true,
         ),

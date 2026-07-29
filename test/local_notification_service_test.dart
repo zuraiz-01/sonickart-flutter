@@ -19,6 +19,45 @@ void main() {
       expect(prefixed, numeric);
     });
 
+    test(
+      'normalizes order status aliases and display ids to one picked-up key',
+      () {
+        final numeric = LocalNotificationService.statusDedupeKey(
+          package: false,
+          status: 'picked_up',
+          trackingNumber: '717',
+        );
+        final prefixed = LocalNotificationService.statusDedupeKey(
+          package: false,
+          status: 'order_picked_up',
+          trackingNumber: 'ORDR00717',
+        );
+
+        expect(prefixed, isNotNull);
+        expect(prefixed, numeric);
+        expect(
+          LocalNotificationService.notificationIdForDedupeKey(prefixed),
+          LocalNotificationService.notificationIdForDedupeKey(numeric),
+        );
+        expect(
+          LocalNotificationService.statusDedupeKey(
+            package: false,
+            status: 'order_on_the_way',
+            trackingNumber: 'ORDR00717',
+          ),
+          numeric,
+        );
+        expect(
+          LocalNotificationService.statusDedupeKey(
+            package: false,
+            status: 'in_transit',
+            trackingNumber: '717',
+          ),
+          numeric,
+        );
+      },
+    );
+
     test('infers accepted status and order id from notification copy', () {
       final explicit = LocalNotificationService.statusDedupeKey(
         package: false,
@@ -96,5 +135,48 @@ void main() {
 
       expect(fromIdList, fromTracking);
     });
+
+    test('package booked aliases share one booked key', () {
+      final placed = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'placed',
+        trackingNumber: 'PKG000212',
+      );
+      final booked = LocalNotificationService.statusDedupeKey(
+        package: true,
+        status: 'package_booked',
+        trackingNumber: '212',
+      );
+
+      expect(placed, booked);
+      expect(placed, startsWith('package|booked|'));
+    });
+
+    test(
+      'recipient id separates the same entity status for different users',
+      () {
+        final firstUser = LocalNotificationService.statusDedupeKey(
+          package: false,
+          status: 'accepted',
+          trackingNumber: 'ORDR00717',
+          recipientId: 'customer-1',
+        );
+        final secondUser = LocalNotificationService.statusDedupeKey(
+          package: false,
+          status: 'partner_assigned',
+          trackingNumber: '717',
+          recipientId: 'customer-2',
+        );
+        final firstUserAlias = LocalNotificationService.statusDedupeKey(
+          package: false,
+          status: 'assigned',
+          trackingNumber: '717',
+          recipientId: 'customer-1',
+        );
+
+        expect(firstUser, firstUserAlias);
+        expect(firstUser, isNot(secondUser));
+      },
+    );
   });
 }

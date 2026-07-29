@@ -120,11 +120,13 @@ class ProfileController extends GetxController {
 
   String get dashboardPrimaryLabel {
     _profileRevision.value;
-    final selectedName = activeAddress?.fullName.trim() ?? '';
-    if (selectedName.isNotEmpty && !_isGenericCustomerName(selectedName)) {
-      return 'Hi, $selectedName';
-    }
-    if (hasBackendSession || _storage.read('isLoggedIn') == true) {
+    final isAuthenticated =
+        hasBackendSession || _storage.read('isLoggedIn') == true;
+    if (isAuthenticated) {
+      final selectedName = activeAddress?.fullName.trim() ?? '';
+      if (selectedName.isNotEmpty && !_isGenericCustomerName(selectedName)) {
+        return 'Hi, $selectedName';
+      }
       final displayName = _customerDisplayName(currentUser);
       if (displayName.isNotEmpty) {
         return 'Hi, $displayName';
@@ -1295,7 +1297,7 @@ class ProfileController extends GetxController {
     await _storage.remove(_selectedVendorIdStorageKey);
     await _storage.remove(_selectedServiceLocationSessionStorageKey);
     liveLocationAddress.value = address.address;
-    await _updateUserLocation(address);
+    unawaited(_updateUserLocation(address));
 
     final vendorId = await _tryResolveVendor(address);
     if (vendorId == null) {
@@ -1362,11 +1364,15 @@ class ProfileController extends GetxController {
         ? Get.find<CategoriesController>()
         : null;
     categoriesController?.invalidateProductScope();
+    final refreshes = <Future<void>>[];
     if (Get.isRegistered<DashboardController>()) {
-      await Get.find<DashboardController>().loadCatalog(force: true);
+      refreshes.add(Get.find<DashboardController>().loadCatalog(force: true));
     }
     if (categoriesController != null) {
-      await categoriesController.reloadSelectedCategory(force: true);
+      refreshes.add(categoriesController.reloadSelectedCategory(force: true));
+    }
+    if (refreshes.isNotEmpty) {
+      await Future.wait(refreshes);
     }
   }
 
