@@ -825,6 +825,12 @@ class OrderController extends GetxController {
 
   List<String> orderIdentifiers(OrderModel order) => _orderIdentifiers(order);
 
+  bool canCancelOrder(OrderModel order) {
+    if (order.isInactive) return false;
+    if (_hasAssignedDeliveryPartner(order)) return false;
+    return _cancellationWorkflowStatus(order) == 'placed';
+  }
+
   Future<void> handleRealtimeOrderPayload(Map<String, dynamic> payload) async {
     final existing = _findExistingOrderForPayload(payload);
     final order = OrderModel.fromJson(
@@ -1492,6 +1498,13 @@ class OrderController extends GetxController {
     OrderModel order, {
     String reason = 'Cancelled by customer',
   }) async {
+    if (!canCancelOrder(order)) {
+      debugPrint(
+        'OrderController.cancelOrder skipped: order ${order.id} is no longer cancellable',
+      );
+      return;
+    }
+
     try {
       await _api.post(
         endpoint: '${ApiConstants.orderById(order.id)}/cancel-items',
@@ -3009,6 +3022,106 @@ class OrderController extends GetxController {
       if (value is Map) return Map<String, dynamic>.from(value);
     }
     return const {};
+  }
+
+  bool _hasAssignedDeliveryPartner(OrderModel order) {
+    final partner = _deliveryPartnerMap(order);
+    return _firstNonEmpty([
+          partner['id'],
+          partner['_id'],
+          partner['partnerId'],
+          partner['partner_id'],
+          partner['deliveryPartnerId'],
+          partner['delivery_partner_id'],
+          partner['name'],
+          partner['fullName'],
+          partner['full_name'],
+          partner['phone'],
+          partner['mobile'],
+          order.raw['deliveryPartnerId'],
+          order.raw['delivery_partner_id'],
+          order.raw['deliveryPersonId'],
+          order.raw['delivery_person_id'],
+          order.raw['assignedDeliveryPartnerId'],
+          order.raw['assigned_delivery_partner_id'],
+          order.raw['riderId'],
+          order.raw['rider_id'],
+          order.raw['driverId'],
+          order.raw['driver_id'],
+          order.raw['deliveryPartnerName'],
+          order.raw['delivery_partner_name'],
+          order.raw['deliveryPartnerPhone'],
+          order.raw['delivery_partner_phone'],
+        ]) !=
+        null;
+  }
+
+  String _cancellationWorkflowStatus(OrderModel order) {
+    final deliveryOrder = _mapFrom(order.raw['deliveryOrder']);
+    final deliveryOrderSnake = _mapFrom(order.raw['delivery_order']);
+    final status = _firstNonEmpty([
+      order.raw['deliveryStatus'],
+      order.raw['delivery_status'],
+      deliveryOrder['deliveryStatus'],
+      deliveryOrder['delivery_status'],
+      deliveryOrder['status'],
+      deliveryOrderSnake['deliveryStatus'],
+      deliveryOrderSnake['delivery_status'],
+      deliveryOrderSnake['status'],
+      order.raw['orderStatus'],
+      order.raw['order_status'],
+      order.raw['status'],
+      order.status,
+    ]);
+    final normalized = (status ?? '').trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
+    final compact = normalized.replaceAll('_', '');
+    if (compact == 'orderplaced' ||
+        compact == 'placed' ||
+        compact == 'pending' ||
+        compact == 'waitingpickup' ||
+        compact == 'waitingforpickup') {
+      return 'placed';
+    }
+    if (compact == 'orderaccepted' ||
+        compact == 'accepted' ||
+        compact == 'assigned' ||
+        compact == 'confirmed' ||
+        compact == 'partnerassigned' ||
+        compact == 'deliverypartnerassigned' ||
+        compact == 'assignedtopartner' ||
+        compact == 'riderassigned' ||
+        compact == 'driverassigned' ||
+        compact == 'onthewaytopickup') {
+      return 'accepted';
+    }
+    if (compact == 'picked' ||
+        compact == 'pickup' ||
+        compact == 'pickedup' ||
+        compact == 'orderpickedup' ||
+        compact == 'intransit' ||
+        compact == 'transit' ||
+        compact == 'orderintransit' ||
+        compact == 'ontheway' ||
+        compact == 'orderontheway' ||
+        compact == 'onthewaytodelivery' ||
+        compact == 'outfordelivery' ||
+        compact == 'orderoutfordelivery' ||
+        compact == 'arriving') {
+      return 'picked_up';
+    }
+    if (compact == 'orderdelivered' ||
+        compact == 'delivered' ||
+        compact == 'completed' ||
+        compact == 'complete') {
+      return 'delivered';
+    }
+    if (compact == 'cancelled' || compact == 'canceled') {
+      return 'cancelled';
+    }
+    return normalized;
   }
 
   Future<void> _notifyAction(

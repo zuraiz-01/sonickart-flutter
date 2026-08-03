@@ -220,7 +220,6 @@ class LocalNotificationService extends GetxService {
     );
   }
 
-  @visibleForTesting
   static bool shouldDisplayRemoteMessageFromBackground(
     RemoteMessage message, {
     GetStorage? storage,

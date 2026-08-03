@@ -148,7 +148,7 @@ class _CustomerOrderDetailsViewState extends State<CustomerOrderDetailsView> {
       final statusLabel = _statusLabel(status);
       final etaText = _etaText(order, status);
       final itemCount = order.items.length;
-      final canCancel = !order.isInactive;
+      final canCancel = controller.canCancelOrder(order);
 
       return Scaffold(
         backgroundColor: AppColors.walletCard,

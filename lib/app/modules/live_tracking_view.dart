@@ -271,7 +271,7 @@ class _TrackingBody extends StatelessWidget {
         SizedBox(height: 16.hpx),
         _BillDetailsCard(order: order),
         SizedBox(height: 20.hpx),
-        if (!order.isInactive)
+        if (controller.canCancelOrder(order))
           Container(
             margin: EdgeInsets.symmetric(vertical: 8.hpx),
             child: FilledButton.icon(

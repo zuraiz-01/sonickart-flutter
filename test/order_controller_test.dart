@@ -114,6 +114,62 @@ void main() {
     });
   });
 
+  group('OrderController cancellation eligibility', () {
+    test('allows cancellation before a delivery partner is assigned', () {
+      final controller = OrderController(GetStorage(storageContainer));
+      addTearDown(controller.onClose);
+
+      for (final status in [
+        'placed',
+        'pending',
+        'order_placed',
+        'waiting_for_pickup',
+      ]) {
+        expect(
+          controller.canCancelOrder(_orderForCancellation(status: status)),
+          isTrue,
+          reason: status,
+        );
+      }
+    });
+
+    test('disables cancellation after delivery partner assignment', () {
+      final controller = OrderController(GetStorage(storageContainer));
+      addTearDown(controller.onClose);
+
+      for (final status in [
+        'accepted',
+        'assigned',
+        'confirmed',
+        'partner_assigned',
+        'delivery_partner_assigned',
+      ]) {
+        expect(
+          controller.canCancelOrder(_orderForCancellation(status: status)),
+          isFalse,
+          reason: status,
+        );
+      }
+    });
+
+    test(
+      'disables cancellation when partner data exists on a pending order',
+      () {
+        final controller = OrderController(GetStorage(storageContainer));
+        addTearDown(controller.onClose);
+
+        final order = _orderForCancellation(
+          status: 'pending',
+          raw: const {
+            'deliveryPartner': {'id': 'partner-1', 'name': 'Ahmed Rider'},
+          },
+        );
+
+        expect(controller.canCancelOrder(order), isFalse);
+      },
+    );
+  });
+
   group('OrderController realtime tracking updates', () {
     test(
       'keeps delivery destination when generic tracking coords arrive',
@@ -322,6 +378,17 @@ OrderModel _baseOrderWithDeliveryLocation() {
         'longitude': 67.0011,
       },
     },
+  );
+}
+
+OrderModel _orderForCancellation({
+  required String status,
+  Map<String, dynamic> raw = const {},
+}) {
+  final base = _baseOrderWithoutDeliveryLocation();
+  return base.copyWith(
+    status: status,
+    raw: {...base.raw, 'status': status, 'deliveryStatus': status, ...raw},
   );
 }
 
