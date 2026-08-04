@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -63,6 +64,11 @@ class ServiceAreaGateController extends GetxController {
       latitude: selectedAddress.latitude,
       longitude: selectedAddress.longitude,
     );
+
+    print(
+      'ServiceAreaGateController: preserved serviceable location: ${selectedAddress.latitude}, ${selectedAddress.longitude}',
+    );
+
     confirmedResult.value = preservedResult;
     evaluationState.value = preservedResult.state;
     statusMessage.value = null;
@@ -95,6 +101,7 @@ class ServiceAreaGateController extends GetxController {
     final requestVersion = _nextLocationRequestVersion();
     final check = _runCurrentLocationCheck(requestVersion);
     _activeCheck = check;
+
     try {
       await check;
     } finally {
@@ -108,11 +115,12 @@ class ServiceAreaGateController extends GetxController {
     isChecking.value = true;
     evaluationState.value = ServiceAreaGateState.checking;
     statusMessage.value = null;
-    debugPrint(
+    print(
       'ServiceAreaGateController: request=$requestVersion '
       'state=checking previous=${confirmedResult.value?.state.name ?? 'none'} '
       'overlay=$isBlocked',
     );
+
     try {
       final result = await _serviceAreaGateService.evaluate();
       if (!_isLatestLocationRequest(requestVersion)) return;
@@ -315,6 +323,9 @@ class ServiceAreaGateController extends GetxController {
         address: result.locationLabel,
         latitude: latitude,
         longitude: longitude,
+      );
+      print(
+        'ServiceAreaGateController: applied blocked location: ${result.locationLabel} ($latitude, $longitude)',
       );
     } else {
       await _persistGuestBlockedCatalogState();

@@ -80,6 +80,7 @@ class AuthRepository {
       authenticated: false,
       headers: headers,
     );
+    
   }
 
   Future<UserModel> _persistCustomerSession(

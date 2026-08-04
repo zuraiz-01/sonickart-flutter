@@ -293,7 +293,20 @@ class PushNotificationService extends GetxService {
       await _messaging.initialize();
       if (!await areNotificationsEnabled()) return;
 
-      final fcmToken = (token ?? await _messaging.getToken())?.trim();
+      String? fcmToken;
+      try {
+        fcmToken = (token ?? await _messaging.getToken())?.trim();
+      } catch (e) {
+        if (e.toString().contains('apns-token-not-set') ||
+            e.toString().contains('APNS token has not been set')) {
+          debugPrint(
+            'PushNotificationService: APNS token not ready, will retry token registration',
+          );
+          _tokenRegistrationRequested = true;
+          return;
+        }
+        rethrow;
+      }
       if (fcmToken == null || fcmToken.isEmpty) return;
       final apnsToken = await _currentApnsToken();
       if (_isRegistrationCurrent(

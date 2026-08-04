@@ -129,7 +129,7 @@ class ApiService {
               data: data,
             ),
           )
-          .timeout(const Duration(seconds: 18));
+          .timeout(const Duration(seconds: 60));
       final body = await response.stream.bytesToString();
       final decoded = _decodeBody(body);
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -295,7 +295,7 @@ class ApiService {
               data: {'refreshToken': refreshToken},
             ),
           )
-          .timeout(const Duration(seconds: 18));
+          .timeout(const Duration(seconds: 60));
       final body = await response.stream.bytesToString();
       final decoded = _decodeBody(body);
       if (response.statusCode < 200 || response.statusCode >= 300) {
